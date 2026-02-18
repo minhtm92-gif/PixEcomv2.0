@@ -313,7 +313,11 @@ export class SellpagesService {
 
   /**
    * Transitions a sellpage from DRAFT → PUBLISHED.
-   * Throws 400 if already PUBLISHED or ARCHIVED.
+   *
+   * Throws 400 if:
+   *   - already PUBLISHED or ARCHIVED
+   *   - a domainId is set but that domain is not VERIFIED
+   *     (Sellers must verify ownership before a domain goes live)
    */
   async publishSellpage(sellerId: string, id: string) {
     const sellpage = await this.assertSellpageBelongsToSeller(sellerId, id);
@@ -323,6 +327,21 @@ export class SellpagesService {
     }
     if (sellpage.status === 'ARCHIVED') {
       throw new BadRequestException('Cannot publish an archived sellpage');
+    }
+
+    // Domain verification gate: if a domain is linked it must be VERIFIED
+    if (sellpage.domainId) {
+      const domain = await this.prisma.sellerDomain.findUnique({
+        where: { id: sellpage.domainId },
+        select: { status: true, hostname: true },
+      });
+      if (!domain || domain.status !== 'VERIFIED') {
+        throw new BadRequestException(
+          `The linked domain "${domain?.hostname ?? sellpage.domainId}" ` +
+            'must be VERIFIED before publishing. ' +
+            'Use POST /api/domains/:id/verify to verify it first.',
+        );
+      }
     }
 
     const updated = await this.prisma.sellpage.update({
@@ -392,7 +411,7 @@ export class SellpagesService {
   ) {
     const sellpage = await this.prisma.sellpage.findUnique({
       where: { id },
-      select: { id: true, sellerId: true, status: true },
+      select: { id: true, sellerId: true, status: true, domainId: true },
     });
     if (!sellpage || sellpage.sellerId !== sellerId) {
       throw new NotFoundException('Sellpage not found');

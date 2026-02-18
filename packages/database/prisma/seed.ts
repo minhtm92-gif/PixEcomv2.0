@@ -1,5 +1,5 @@
 /**
- * Seed script for PixEcom v2 — Milestone 2.2.2
+ * Seed script for PixEcom v2 — Milestone 2.2.3
  *
  * Seeds:
  *   - 4 ProductLabels: bestseller, new-arrival, trending, limited-edition
@@ -249,6 +249,52 @@ async function main() {
 
   console.log('Sellpages seeded');
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // SEED DOMAINS (for Milestone 2.2.3 e2e / dev testing)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Domain 1: VERIFIED + isPrimary — used to test verified domain flow
+  const seedDomain1 = await prisma.sellerDomain.upsert({
+    where: { id: '00000000-0000-0000-0000-000000003001' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000003001',
+      sellerId: seedSeller.id,
+      hostname: 'seed-shop.example.com',
+      verificationMethod: 'TXT',
+      verificationToken: 'seed-verified-token-abc123xyz',
+      status: 'VERIFIED',
+      isPrimary: true,
+      verifiedAt: new Date('2026-02-01T00:00:00Z'),
+    },
+  });
+
+  // Domain 2: PENDING — used to test that publish fails on unverified domain
+  await prisma.sellerDomain.upsert({
+    where: { id: '00000000-0000-0000-0000-000000003002' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000003002',
+      sellerId: seedSeller.id,
+      hostname: 'seed-pending.example.com',
+      verificationMethod: 'TXT',
+      verificationToken: 'seed-pending-token-def456uvw',
+      status: 'PENDING',
+      isPrimary: false,
+    },
+  });
+
+  console.log('Seed domains seeded');
+
+  // Update sellpage 2 to use the verified domain
+  // urlPreview should now be: https://seed-shop.example.com/prostand-special
+  await prisma.sellpage.update({
+    where: { id: '00000000-0000-0000-0000-000000002002' },
+    data: { domainId: seedDomain1.id },
+  });
+
+  console.log('Sellpage 2 linked to verified domain');
+
   const pc = await prisma.product.count();
   const vc = await prisma.productVariant.count();
   const lc = await prisma.productLabel.count();
@@ -257,7 +303,8 @@ async function main() {
   const ac = await prisma.assetAdtext.count();
   const rc = await prisma.pricingRule.count();
   const sc = await prisma.sellpage.count();
-  console.log(`Summary: ${pc} products, ${vc} variants, ${lc} labels, ${mc} media, ${tc} thumbs, ${ac} adtexts, ${rc} pricing rules, ${sc} sellpages`);
+  const dc = await prisma.sellerDomain.count();
+  console.log(`Summary: ${pc} products, ${vc} variants, ${lc} labels, ${mc} media, ${tc} thumbs, ${ac} adtexts, ${rc} pricing rules, ${sc} sellpages, ${dc} domains`);
   console.log('Seeding complete.');
 }
 

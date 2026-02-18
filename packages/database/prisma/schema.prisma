@@ -144,6 +144,7 @@ model SellerDomain {
   seller    Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   sellpages Sellpage[]
 
+  @@unique([hostname], name: "uq_domain_hostname")
   @@unique([sellerId, hostname], name: "uq_seller_domain")
   @@index([sellerId])
   @@map("seller_domains")
