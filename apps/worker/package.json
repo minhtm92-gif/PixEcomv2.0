@@ -1,0 +1,25 @@
+{
+  "name": "@pixecom/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
+    "lint": "eslint \"src/**/*.ts\"",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@pixecom/database": "workspace:*",
+    "@pixecom/types": "workspace:*",
+    "bullmq": "^5.1.0",
+    "ioredis": "^5.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "rimraf": "^5.0.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
