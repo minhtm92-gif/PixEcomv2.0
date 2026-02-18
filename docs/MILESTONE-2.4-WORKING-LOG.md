@@ -234,3 +234,218 @@ File: `apps/api/test/asset-registry.e2e-spec.ts`
 ---
 
 *Working log generated post-implementation.*
+
+---
+
+# Milestone 2.4.1 — Pre-v2.3 Hardening
+**Branch:** `feature/2.4-asset-creative-layer`
+**Status:** ✅ Complete
+**Date:** 2026-02-19
+**Tests:** 179 E2E + 7 unit = 186 total ✅
+
+---
+
+## Objective
+
+Five targeted hardening tasks before starting Milestone 2.3 (Ads/Campaign/Worker):
+
+1. Add `creativeType` enum + type-aware READY validation
+2. Add `GET /api/creatives/:id/render` endpoint
+3. Refactor ingest de-dup into single `resolveExistingAssetOrCreate` helper
+4. Fix `creative_assets` EXTRA multi-slot (allow multiple EXTRA rows per creative)
+5. Dual API key rotation + per-IP rate limiting + structured logging on ingest
+
+---
+
+## Task 1 — `creativeType` Enum + READY Validation
+
+### Schema Changes
+Added to `packages/database/prisma/schema.prisma`:
+```prisma
+enum CreativeType {
+  VIDEO_AD
+  IMAGE_AD
+  TEXT_ONLY
+  UGC_BUNDLE
+  @@map("creative_type")
+}
+```
+Added `creativeType CreativeType @default(VIDEO_AD)` field to `Creative` model.
+
+### Migration `20260218210000_hardening_241`
+```sql
+CREATE TYPE "creative_type" AS ENUM ('VIDEO_AD', 'IMAGE_AD', 'TEXT_ONLY', 'UGC_BUNDLE');
+ALTER TABLE "creatives" ADD COLUMN "creative_type" "creative_type" NOT NULL DEFAULT 'VIDEO_AD';
+```
+Applied directly via `docker exec psql` (Prisma migrate dev advisory lock workaround).
+
+### READY Validation Rules (by type)
+| Type | Required Slots |
+|------|---------------|
+| `VIDEO_AD` (default) | THUMBNAIL + PRIMARY_TEXT |
+| `IMAGE_AD` | THUMBNAIL + PRIMARY_TEXT |
+| `TEXT_ONLY` | PRIMARY_TEXT only |
+| `UGC_BUNDLE` | PRIMARY_VIDEO only |
+
+Implemented as `READY_RULES: Record<string, (roles: Set<string>) => { pass: boolean; missing: string[] }>` in `creatives.service.ts`. Falls back to `VIDEO_AD` rules for unknown types.
+
+### DTOs Updated
+- `create-creative.dto.ts` — added optional `creativeType?: CreativeTypeValue`
+- `update-creative.dto.ts` — added optional `creativeType?` (allows type change on PATCH)
+
+---
+
+## Task 2 — `GET /api/creatives/:id/render` Endpoint
+
+### New Endpoint
+```
+GET /api/creatives/:id/render  [JWT seller]
+```
+
+### Response Shape
+```json
+{
+  "id": "uuid",
+  "creativeType": "IMAGE_AD",
+  "status": "READY",
+  "videoUrl": "https://...",
+  "imageUrl": "https://...",
+  "thumbnailUrl": "https://...",
+  "primaryText": "Buy now! Best deal.",
+  "headline": null,
+  "description": null,
+  "extras": [{ "url": "...", "mediaType": "IMAGE" }]
+}
+```
+
+### Key Behaviors
+- Tenant isolation: returns 404 if creative belongs to another seller
+- `primaryText` / `headline` / `description` resolve from `asset.metadata.content` first, then fall back to `asset.url`
+- `imageUrl` and `thumbnailUrl` both map to the THUMBNAIL slot (for ad delivery flexibility)
+- `extras[]` lists all EXTRA-role assets
+
+---
+
+## Task 3 — `resolveExistingAssetOrCreate` Helper Refactor
+
+Extracted common de-dup logic shared by `registerAsset` (seller upload) and `ingestAsset` (pipeline) into a single private method:
+
+```typescript
+private async resolveExistingAssetOrCreate(input: DedupeAndCreateInput) {
+  // Rule 1: ingestionId → findFirst by (sourceType, ingestionId)
+  // Rule 2: checksum → findFirst by (ownerSellerId, checksum)
+  // Rule 3: create fresh
+}
+```
+
+**Fix included:** `registerAsset` was hardcoding `metadata: {}`, ignoring `dto.metadata`.
+**Fix:** Changed to `metadata: (dto.metadata as object) ?? {}`.
+
+Also added `metadata?: Record<string, unknown>` to `RegisterAssetDto` (previously missing, causing `forbidNonWhitelisted` rejection for text assets with content metadata).
+
+---
+
+## Task 4 — EXTRA Multi-Slot Fix
+
+### Problem
+`@@unique([creativeId, role])` in `creative_assets` prevented multiple EXTRA rows per creative. EXTRA must be multi-slot (supplementary assets — sidecards, variants).
+
+### Solution
+- Removed `@@unique([creativeId, role])` from Prisma schema
+- Added `@@index([creativeId, role])` for query performance
+- Added SQL conditional unique index (partial index, not expressible in Prisma):
+  ```sql
+  DROP INDEX IF EXISTS "creative_assets_uq_creative_asset_role";
+  CREATE UNIQUE INDEX "creative_assets_uq_single_slot_role"
+    ON "creative_assets" ("creative_id", "role")
+    WHERE "role" != 'EXTRA';
+  CREATE INDEX IF NOT EXISTS "creative_assets_creative_id_role_idx"
+    ON "creative_assets" ("creative_id", "role");
+  ```
+- `attachAsset()` service method: EXTRA role creates new row; single-slot roles use `deleteMany` + `create` in a `$transaction` (atomic upsert without requiring `@@unique`).
+
+---
+
+## Task 5 — Ingest Security Hardening
+
+### Dual API Key Rotation
+`ApiKeyOrSuperadminGuard` now accepts any of three env vars:
+| Env Var | Purpose |
+|---------|---------|
+| `INGEST_API_KEY_CURRENT` | Active key (primary) |
+| `INGEST_API_KEY_NEXT` | Rotation candidate (promoted next) |
+| `INGEST_API_KEY` | Legacy key (backwards compat, fallback) |
+
+All non-empty matching keys are accepted. Auth path logged for auditing.
+
+### Per-IP Rate Limiting
+- In-memory sliding window: `Map<string, { count: number; resetAt: number }>`
+- Default: 60 requests per 60-second window
+- Returns `HttpException('Rate limit exceeded...', HttpStatus.TOO_MANY_REQUESTS)` (429)
+- Configurable via `INGEST_RATE_LIMIT_MAX` / `INGEST_RATE_LIMIT_WINDOW_MS` env vars
+
+### Structured Logging
+NestJS `Logger` output per ingest request:
+```json
+{ "message": "ingest ok", "authPath": "api-key", "ip": "::1", "sourceType": "SYSTEM", "sourceRef": "abc-123" }
+```
+Note: URL is **never** logged (avoids leaking CDN/presigned paths).
+
+---
+
+## Issues & Fixes
+
+### 1. Prisma `--no-engine` causes E2E DataProxy error
+**Problem:** After `prisma generate --no-engine`, the `.prisma/client/` directory lacks `query_engine-windows.dll.node`. Prisma falls back to DataProxy engine (class `Dr`), which expects `DATABASE_URL` to start with `prisma://` — throwing `InvalidDatasourceError`.
+**Root cause:** In `library.js`, engine selection: `o = n || !e` where `e` = engine binary exists. `!e = true` when DLL missing → DataProxy selected regardless of `engineType: "library"` in config.
+**Fix:** Ran `pnpm --filter @pixecom/database exec prisma generate` (without `--no-engine`). DLL is regenerated in `.prisma/client/`. Also copied to `packages/database/node_modules/.prisma/client/` for test resolution.
+
+### 2. `TooManyRequestsException` not in NestJS 10
+**Problem:** `TooManyRequestsException` is not exported from `@nestjs/common` in NestJS 10.
+**Fix:** Used `new HttpException('Rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS)`.
+
+### 3. `RegisterAssetDto` missing `metadata` field
+**Problem:** `POST /api/assets` with `metadata: {...}` rejected with 400 (`forbidNonWhitelisted`). Text assets created in tests had `undefined` IDs. Caused cascade: PRIMARY_TEXT never attached → IMAGE_AD validate 400, TEXT_ONLY validate 400, render primaryText=null.
+**Fix:** Added `@IsOptional() metadata?: Record<string, unknown>` to `RegisterAssetDto` and changed `registerAsset()` to pass `dto.metadata` instead of hardcoded `{}`.
+
+### 4. Asset list pagination — seed asset not on page 1
+**Problem:** `asset-registry.e2e-spec.ts` test checking for `PLATFORM_ASSET_SEED_ID` on default page (limit=20) failed as test runs accumulated >20 assets. Seed asset (oldest) is pushed off page 1.
+**Fix:** Changed test query to `GET /api/assets?limit=100`.
+
+---
+
+## Files Changed (v2.4.1)
+
+### Created
+- `packages/database/prisma/migrations/20260218210000_hardening_241/migration.sql`
+- `apps/api/test/hardening-241.e2e-spec.ts` — 18 E2E tests (Tasks 1, 2, 4, 5)
+- `apps/api/src/asset-registry/asset-registry.service.spec.ts` — 7 unit tests (Task 3)
+- `apps/api/jest.config.json` — ts-jest unit test config
+
+### Modified
+- `packages/database/prisma/schema.prisma` — `CreativeType` enum + `creativeType` field on `Creative`, removed `@@unique` on `CreativeAsset`
+- `apps/api/src/creatives/creatives.service.ts` — `READY_RULES`, `attachAsset` EXTRA logic, `renderCreative`, `creativeType` in all selects
+- `apps/api/src/creatives/creatives.controller.ts` — added `GET(':id/render')` endpoint
+- `apps/api/src/creatives/dto/create-creative.dto.ts` — added `creativeType?`
+- `apps/api/src/creatives/dto/update-creative.dto.ts` — added `creativeType?`
+- `apps/api/src/asset-registry/asset-registry.service.ts` — `resolveExistingAssetOrCreate` refactor, `metadata` passthrough fix
+- `apps/api/src/asset-registry/dto/register-asset.dto.ts` — added `metadata?` field
+- `apps/api/src/asset-registry/guards/api-key-or-superadmin.guard.ts` — dual-key rotation, rate limiting, structured logging
+- `apps/api/test/asset-registry.e2e-spec.ts` — pagination fix (`?limit=100`)
+- `apps/api/package.json` — test script updated to use `jest.config.json`
+
+---
+
+## Test Results (v2.4.1)
+
+| Suite | Tests | Result |
+|-------|-------|--------|
+| `hardening-241.e2e-spec.ts` | 18 | ✅ |
+| `asset-registry.e2e-spec.ts` | 25 | ✅ |
+| `auth.e2e-spec.ts` | 38 | ✅ |
+| `seller.e2e-spec.ts` | 28 | ✅ |
+| `products.e2e-spec.ts` | 33 | ✅ |
+| `domains.e2e-spec.ts` | 18 | ✅ |
+| `sellpages.e2e-spec.ts` | 19 | ✅ |
+| `asset-registry.service.spec.ts` (unit) | 7 | ✅ |
+| **Total** | **186** | **✅ All passing** |

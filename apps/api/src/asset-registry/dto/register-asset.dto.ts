@@ -78,4 +78,8 @@ export class RegisterAssetDto {
   @IsString()
   @MaxLength(255)
   ingestionId?: string;
+
+  /** Arbitrary metadata blob (e.g. { content: '...' } for TEXT assets) */
+  @IsOptional()
+  metadata?: Record<string, unknown>;
 }

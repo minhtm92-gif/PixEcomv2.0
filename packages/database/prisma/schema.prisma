@@ -266,6 +266,15 @@ enum CreativeStatus {
   @@map("creative_status")
 }
 
+enum CreativeType {
+  VIDEO_AD
+  IMAGE_AD
+  TEXT_ONLY
+  UGC_BUNDLE
+
+  @@map("creative_type")
+}
+
 enum CreativeAssetRole {
   PRIMARY_VIDEO
   THUMBNAIL
@@ -814,15 +823,17 @@ model Asset {
 
 // Seller-owned creative bundle. Links to a product for BI context.
 // Status lifecycle: DRAFT → READY (via validate endpoint) → ARCHIVED
+// creativeType drives which asset slots are required for READY validation.
 model Creative {
-  id          String         @id @default(uuid()) @db.Uuid
-  sellerId    String         @map("seller_id") @db.Uuid
-  productId   String?        @map("product_id") @db.Uuid
-  name        String         @db.VarChar(255)
-  status      CreativeStatus @default(DRAFT)
-  metadata    Json           @default("{}") @db.JsonB
-  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id             String         @id @default(uuid()) @db.Uuid
+  sellerId       String         @map("seller_id") @db.Uuid
+  productId      String?        @map("product_id") @db.Uuid
+  name           String         @db.VarChar(255)
+  status         CreativeStatus @default(DRAFT)
+  creativeType   CreativeType   @default(VIDEO_AD) @map("creative_type")
+  metadata       Json           @default("{}") @db.JsonB
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   seller    Seller            @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   product   Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
@@ -834,8 +845,12 @@ model Creative {
 }
 
 // Join table: Creative ↔ Asset with role slot.
-// One slot per role per creative (uq_creative_asset_role).
-// Attaching to an existing role replaces the slot (upsert in service layer).
+// Single-slot roles (all except EXTRA) are unique per creative.
+// EXTRA allows multiple rows per creative.
+// Uniqueness for single-slot roles is enforced by a conditional SQL index:
+//   CREATE UNIQUE INDEX ... WHERE role != 'EXTRA'
+// The Prisma @@unique is removed so EXTRA can repeat.
+// Service uses upsert via a named unique index for single-slot roles.
 model CreativeAsset {
   id         String            @id @default(uuid()) @db.Uuid
   creativeId String            @map("creative_id") @db.Uuid
@@ -845,7 +860,9 @@ model CreativeAsset {
   creative Creative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
   asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
 
-  @@unique([creativeId, role], name: "uq_creative_asset_role")
+  // NOTE: Single-slot role uniqueness is enforced by a conditional SQL index in migration:
+  //   creative_assets_uq_single_slot_role  ON (creative_id, role) WHERE role != 'EXTRA'
+  @@index([creativeId, role])
   @@index([assetId])
   @@map("creative_assets")
 }

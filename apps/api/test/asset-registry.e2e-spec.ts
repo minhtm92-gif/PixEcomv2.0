@@ -288,9 +288,9 @@ describe('Asset Registry + Creatives (e2e)', () => {
       expect(bRes.status).toBe(201);
       const sellerBAssetId = bRes.body.id;
 
-      // List seller A's assets
+      // List seller A's assets (use high limit to ensure seed asset included)
       const res = await request(app.getHttpServer())
-        .get('/api/assets')
+        .get('/api/assets?limit=100')
         .set('Authorization', auth(sellerAToken));
 
       expect(res.status).toBe(200);

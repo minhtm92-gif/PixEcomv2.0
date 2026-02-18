@@ -86,7 +86,7 @@ export class CreativesController {
   // ─── POST /api/creatives/:id/validate ────────────────────────────────────
   /**
    * Validate the creative and transition DRAFT → READY.
-   * Requires: (PRIMARY_VIDEO OR THUMBNAIL) + PRIMARY_TEXT
+   * Required slots depend on creativeType.
    */
   @Post(':id/validate')
   validateCreative(
@@ -94,5 +94,18 @@ export class CreativesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.service.validateCreative(user.sellerId, id);
+  }
+
+  // ─── GET /api/creatives/:id/render ───────────────────────────────────────
+  /**
+   * Returns compiled render payload for ad delivery.
+   * Resolves slots → typed fields (videoUrl, imageUrl, primaryText, etc.)
+   */
+  @Get(':id/render')
+  renderCreative(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.renderCreative(user.sellerId, id);
   }
 }

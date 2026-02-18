@@ -52,6 +52,24 @@ type AssetRow = {
 
 const MAX_PAGE_LIMIT = 100;
 
+// ─── De-dup input shape ────────────────────────────────────────────────────
+
+interface DedupeAndCreateInput {
+  ownerSellerId: string | null;
+  sourceType: string;
+  ingestionId: string | null;
+  mediaType: string;
+  url: string;
+  storageKey?: string | null;
+  mimeType?: string | null;
+  fileSizeBytes?: number | null;
+  durationSec?: number | null;
+  width?: number | null;
+  height?: number | null;
+  checksum?: string | null;
+  metadata?: object;
+}
+
 @Injectable()
 export class AssetRegistryService {
   constructor(
@@ -83,52 +101,27 @@ export class AssetRegistryService {
 
   /**
    * Seller self-registers an asset after uploading to R2.
-   * De-duplicates by:
-   *   1. (sourceType=USER_UPLOAD, ingestionId) if ingestionId provided
-   *   2. (ownerSellerId, checksum) if checksum provided
+   * De-duplication rules:
+   *   1. If ingestionId present → unique by (sourceType=USER_UPLOAD, ingestionId)
+   *   2. Else if checksum present → unique by (ownerSellerId, checksum)
+   *   3. Else → create new record
    */
   async registerAsset(sellerId: string, dto: RegisterAssetDto) {
-    // De-dup check 1: ingestionId uniqueness
-    if (dto.ingestionId) {
-      const existing = await this.prisma.asset.findFirst({
-        where: { sourceType: 'USER_UPLOAD', ingestionId: dto.ingestionId },
-        select: ASSET_SELECT,
-      });
-      if (existing) {
-        return mapToAssetDto(existing as AssetRow);
-      }
-    }
-
-    // De-dup check 2: checksum uniqueness within this seller
-    if (dto.checksum) {
-      const existing = await this.prisma.asset.findFirst({
-        where: { ownerSellerId: sellerId, checksum: dto.checksum },
-        select: ASSET_SELECT,
-      });
-      if (existing) {
-        return mapToAssetDto(existing as AssetRow);
-      }
-    }
-
-    const asset = await this.prisma.asset.create({
-      data: {
-        ownerSellerId: sellerId,
-        sourceType: 'USER_UPLOAD',
-        ingestionId: dto.ingestionId ?? null,
-        mediaType: dto.mediaType,
-        url: dto.url,
-        storageKey: dto.storageKey ?? null,
-        mimeType: dto.mimeType ?? null,
-        fileSizeBytes: dto.fileSizeBytes != null ? BigInt(dto.fileSizeBytes) : null,
-        durationSec: dto.durationSec ?? null,
-        width: dto.width ?? null,
-        height: dto.height ?? null,
-        checksum: dto.checksum ?? null,
-      },
-      select: ASSET_SELECT,
+    return this.resolveExistingAssetOrCreate({
+      ownerSellerId: sellerId,
+      sourceType: 'USER_UPLOAD',
+      ingestionId: dto.ingestionId ?? null,
+      mediaType: dto.mediaType,
+      url: dto.url,
+      storageKey: dto.storageKey ?? null,
+      mimeType: dto.mimeType ?? null,
+      fileSizeBytes: dto.fileSizeBytes ?? null,
+      durationSec: dto.durationSec ?? null,
+      width: dto.width ?? null,
+      height: dto.height ?? null,
+      checksum: dto.checksum ?? null,
+      metadata: (dto.metadata as object) ?? {},
     });
-
-    return mapToAssetDto(asset as AssetRow);
   }
 
   // ─── List ────────────────────────────────────────────────────────────────
@@ -144,8 +137,7 @@ export class AssetRegistryService {
     const skip = (page - 1) * limit;
 
     const platformOnly =
-      dto.platformOnly === true ||
-      dto.platformOnly === 'true';
+      dto.platformOnly === true || dto.platformOnly === 'true';
 
     const where = buildListWhere(sellerId, dto.mediaType, platformOnly);
 
@@ -182,9 +174,7 @@ export class AssetRegistryService {
       select: ASSET_SELECT,
     });
 
-    if (!asset) {
-      throw new NotFoundException('Asset not found');
-    }
+    if (!asset) throw new NotFoundException('Asset not found');
 
     const isOwn = asset.ownerSellerId === sellerId;
     const isPlatform = asset.ownerSellerId === null;
@@ -200,50 +190,76 @@ export class AssetRegistryService {
 
   /**
    * Internal ingestion endpoint for pipelines (PIXCON, partner API, migration).
-   * Fully idempotent: returns existing asset if (sourceType, ingestionId) matches.
-   * Also de-dups by (ownerSellerId, checksum).
+   * De-duplication rules (deterministic, single helper):
+   *   1. If ingestionId present → unique by (sourceType, ingestionId)
+   *   2. Else if checksum present → unique by (ownerSellerId, checksum)
+   *   3. Else → create new record
    */
   async ingestAsset(dto: IngestAssetDto) {
-    // De-dup 1: (sourceType, ingestionId)
-    if (dto.ingestionId) {
+    return this.resolveExistingAssetOrCreate({
+      ownerSellerId: dto.ownerSellerId ?? null,
+      sourceType: dto.sourceType,
+      ingestionId: dto.ingestionId ?? null,
+      mediaType: dto.mediaType,
+      url: dto.url,
+      storageKey: dto.storageKey ?? null,
+      mimeType: dto.mimeType ?? null,
+      fileSizeBytes: dto.fileSizeBytes ?? null,
+      durationSec: dto.durationSec ?? null,
+      width: dto.width ?? null,
+      height: dto.height ?? null,
+      checksum: dto.checksum ?? null,
+      metadata: (dto.metadata as object) ?? {},
+    });
+  }
+
+  // ─── PRIVATE: De-dup helper ───────────────────────────────────────────────
+
+  /**
+   * Single deterministic de-duplication + create helper.
+   *
+   * Rules (applied in order):
+   *   1. ingestionId present  → findFirst by (sourceType, ingestionId); return if found
+   *   2. checksum present     → findFirst by (ownerSellerId, checksum); return if found
+   *   3. neither              → create fresh record
+   */
+  private async resolveExistingAssetOrCreate(
+    input: DedupeAndCreateInput,
+  ): Promise<ReturnType<typeof mapToAssetDto>> {
+    // Rule 1: ingestionId-based de-dup
+    if (input.ingestionId) {
       const existing = await this.prisma.asset.findFirst({
-        where: { sourceType: dto.sourceType, ingestionId: dto.ingestionId },
+        where: { sourceType: input.sourceType as any, ingestionId: input.ingestionId },
         select: ASSET_SELECT,
       });
-      if (existing) {
-        return mapToAssetDto(existing as AssetRow);
-      }
+      if (existing) return mapToAssetDto(existing as AssetRow);
     }
 
-    // De-dup 2: (ownerSellerId, checksum)
-    if (dto.checksum) {
+    // Rule 2: checksum-based de-dup
+    if (input.checksum) {
       const existing = await this.prisma.asset.findFirst({
-        where: {
-          ownerSellerId: dto.ownerSellerId ?? null,
-          checksum: dto.checksum,
-        },
+        where: { ownerSellerId: input.ownerSellerId, checksum: input.checksum },
         select: ASSET_SELECT,
       });
-      if (existing) {
-        return mapToAssetDto(existing as AssetRow);
-      }
+      if (existing) return mapToAssetDto(existing as AssetRow);
     }
 
+    // Rule 3: create
     const asset = await this.prisma.asset.create({
       data: {
-        ownerSellerId: dto.ownerSellerId ?? null,
-        sourceType: dto.sourceType,
-        ingestionId: dto.ingestionId ?? null,
-        mediaType: dto.mediaType,
-        url: dto.url,
-        storageKey: dto.storageKey ?? null,
-        mimeType: dto.mimeType ?? null,
-        fileSizeBytes: dto.fileSizeBytes != null ? BigInt(dto.fileSizeBytes) : null,
-        durationSec: dto.durationSec ?? null,
-        width: dto.width ?? null,
-        height: dto.height ?? null,
-        checksum: dto.checksum ?? null,
-        metadata: (dto.metadata as object) ?? {},
+        ownerSellerId: input.ownerSellerId,
+        sourceType: input.sourceType as any,
+        ingestionId: input.ingestionId,
+        mediaType: input.mediaType as any,
+        url: input.url,
+        storageKey: input.storageKey ?? null,
+        mimeType: input.mimeType ?? null,
+        fileSizeBytes: input.fileSizeBytes != null ? BigInt(input.fileSizeBytes) : null,
+        durationSec: input.durationSec ?? null,
+        width: input.width ?? null,
+        height: input.height ?? null,
+        checksum: input.checksum ?? null,
+        metadata: input.metadata ?? {},
       },
       select: ASSET_SELECT,
     });

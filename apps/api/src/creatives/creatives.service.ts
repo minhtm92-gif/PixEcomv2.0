@@ -9,6 +9,51 @@ import { AttachAssetDto } from './dto/attach-asset.dto';
 import { CreateCreativeDto } from './dto/create-creative.dto';
 import { UpdateCreativeDto } from './dto/update-creative.dto';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Roles that are single-slot (only one per creative). EXTRA is multi-slot. */
+const SINGLE_SLOT_ROLES = new Set([
+  'PRIMARY_VIDEO',
+  'THUMBNAIL',
+  'PRIMARY_TEXT',
+  'HEADLINE',
+  'DESCRIPTION',
+] as const);
+
+/** READY validation rules by creativeType */
+const READY_RULES: Record<
+  string,
+  (roles: Set<string>) => { pass: boolean; missing: string[] }
+> = {
+  VIDEO_AD: (roles) => {
+    const missing: string[] = [];
+    if (!roles.has('PRIMARY_VIDEO') && !roles.has('THUMBNAIL')) {
+      missing.push('PRIMARY_VIDEO or THUMBNAIL');
+    }
+    if (!roles.has('THUMBNAIL')) missing.push('THUMBNAIL');
+    if (!roles.has('PRIMARY_TEXT')) missing.push('PRIMARY_TEXT');
+    // De-dup — if both media and thumbnail are missing, report once
+    const dedupMissing = Array.from(new Set(missing));
+    return { pass: dedupMissing.length === 0, missing: dedupMissing };
+  },
+  IMAGE_AD: (roles) => {
+    const missing: string[] = [];
+    if (!roles.has('THUMBNAIL')) missing.push('IMAGE (THUMBNAIL role)');
+    if (!roles.has('PRIMARY_TEXT')) missing.push('PRIMARY_TEXT');
+    return { pass: missing.length === 0, missing };
+  },
+  TEXT_ONLY: (roles) => {
+    const missing: string[] = [];
+    if (!roles.has('PRIMARY_TEXT')) missing.push('PRIMARY_TEXT');
+    return { pass: missing.length === 0, missing };
+  },
+  UGC_BUNDLE: (roles) => {
+    const missing: string[] = [];
+    if (!roles.has('PRIMARY_VIDEO')) missing.push('PRIMARY_VIDEO');
+    return { pass: missing.length === 0, missing };
+  },
+};
+
 // ─── Prisma select shapes ─────────────────────────────────────────────────────
 
 const CREATIVE_CARD_SELECT = {
@@ -17,6 +62,7 @@ const CREATIVE_CARD_SELECT = {
   productId: true,
   name: true,
   status: true,
+  creativeType: true,
   metadata: true,
   createdAt: true,
   updatedAt: true,
@@ -28,6 +74,7 @@ const CREATIVE_DETAIL_SELECT = {
   productId: true,
   name: true,
   status: true,
+  creativeType: true,
   metadata: true,
   createdAt: true,
   updatedAt: true,
@@ -47,6 +94,7 @@ const CREATIVE_DETAIL_SELECT = {
           durationSec: true,
           width: true,
           height: true,
+          metadata: true,
           createdAt: true,
         },
       },
@@ -60,34 +108,32 @@ type CreativeCardRow = {
   productId: string | null;
   name: string;
   status: string;
+  creativeType: string;
   metadata: unknown;
   createdAt: Date;
   updatedAt: Date;
 };
 
-type CreativeDetailRow = CreativeCardRow & {
-  assets: Array<{
+type AssetSlotRow = {
+  id: string;
+  role: string;
+  asset: {
     id: string;
-    role: string;
-    asset: {
-      id: string;
-      ownerSellerId: string | null;
-      sourceType: string;
-      mediaType: string;
-      url: string;
-      mimeType: string | null;
-      fileSizeBytes: bigint | null;
-      durationSec: number | null;
-      width: number | null;
-      height: number | null;
-      createdAt: Date;
-    };
-  }>;
+    ownerSellerId: string | null;
+    sourceType: string;
+    mediaType: string;
+    url: string;
+    mimeType: string | null;
+    fileSizeBytes: bigint | null;
+    durationSec: number | null;
+    width: number | null;
+    height: number | null;
+    metadata: unknown;
+    createdAt: Date;
+  };
 };
 
-/** Roles required for a creative to be considered READY */
-const READY_MEDIA_ROLES = ['PRIMARY_VIDEO', 'THUMBNAIL'] as const;
-const READY_TEXT_ROLES = ['PRIMARY_TEXT'] as const;
+type CreativeDetailRow = CreativeCardRow & { assets: AssetSlotRow[] };
 
 @Injectable()
 export class CreativesService {
@@ -96,21 +142,19 @@ export class CreativesService {
   // ─── CREATE ────────────────────────────────────────────────────────────────
 
   async createCreative(sellerId: string, dto: CreateCreativeDto) {
-    // Validate productId if provided
     if (dto.productId) {
       const product = await this.prisma.product.findUnique({
         where: { id: dto.productId },
         select: { id: true },
       });
-      if (!product) {
-        throw new NotFoundException('Product not found');
-      }
+      if (!product) throw new NotFoundException('Product not found');
     }
 
     const creative = await this.prisma.creative.create({
       data: {
         sellerId,
         name: dto.name,
+        creativeType: (dto.creativeType ?? 'VIDEO_AD') as any,
         productId: dto.productId ?? null,
         metadata: (dto.metadata as object) ?? {},
       },
@@ -128,7 +172,6 @@ export class CreativesService {
       orderBy: { createdAt: 'desc' },
       select: CREATIVE_CARD_SELECT,
     });
-
     return creatives.map((c) => mapToCardDto(c as CreativeCardRow));
   }
 
@@ -139,11 +182,9 @@ export class CreativesService {
       where: { id },
       select: CREATIVE_DETAIL_SELECT,
     });
-
     if (!creative || creative.sellerId !== sellerId) {
       throw new NotFoundException('Creative not found');
     }
-
     return mapToDetailDto(creative as unknown as CreativeDetailRow);
   }
 
@@ -154,6 +195,7 @@ export class CreativesService {
       dto.name !== undefined ||
       dto.productId !== undefined ||
       dto.status !== undefined ||
+      dto.creativeType !== undefined ||
       dto.metadata !== undefined;
 
     if (!hasFields) {
@@ -167,9 +209,7 @@ export class CreativesService {
         where: { id: dto.productId },
         select: { id: true },
       });
-      if (!product) {
-        throw new NotFoundException('Product not found');
-      }
+      if (!product) throw new NotFoundException('Product not found');
     }
 
     const updated = await this.prisma.creative.update({
@@ -177,7 +217,8 @@ export class CreativesService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.productId !== undefined && { productId: dto.productId }),
-        ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.status !== undefined && { status: dto.status as any }),
+        ...(dto.creativeType !== undefined && { creativeType: dto.creativeType as any }),
         ...(dto.metadata !== undefined && { metadata: dto.metadata as object }),
       },
       select: CREATIVE_CARD_SELECT,
@@ -190,7 +231,9 @@ export class CreativesService {
 
   /**
    * Attaches (or replaces) an asset slot in the creative.
-   * Uses upsert so attaching to an existing role replaces it.
+   *
+   * - Single-slot roles (non-EXTRA): upsert via conditional unique index.
+   * - EXTRA role: always creates a new row (multi-slot).
    *
    * Validates:
    *  - creative belongs to seller
@@ -200,17 +243,28 @@ export class CreativesService {
     await this.assertCreativeBelongsToSeller(sellerId, creativeId);
     await this.assertAssetAccessible(sellerId, dto.assetId);
 
-    // Upsert the slot — replace if role already occupied
-    const slot = await this.prisma.creativeAsset.upsert({
-      where: { uq_creative_asset_role: { creativeId, role: dto.role } },
-      create: { creativeId, assetId: dto.assetId, role: dto.role },
-      update: { assetId: dto.assetId },
-      select: {
-        id: true,
-        creativeId: true,
-        assetId: true,
-        role: true,
-      },
+    if (dto.role === 'EXTRA') {
+      // Multi-slot: always insert a new row
+      const slot = await this.prisma.creativeAsset.create({
+        data: { creativeId, assetId: dto.assetId, role: 'EXTRA' },
+        select: { id: true, creativeId: true, assetId: true, role: true },
+      });
+      return slot;
+    }
+
+    // Single-slot: use raw upsert via ON CONFLICT
+    // Prisma upsert requires the named unique index — but we removed @@unique from schema.
+    // Instead we use deleteFirst + create in a transaction (atomic, simple).
+    const slot = await this.prisma.$transaction(async (tx) => {
+      // Delete existing slot for this role if present
+      await tx.creativeAsset.deleteMany({
+        where: { creativeId, role: dto.role as any },
+      });
+      // Insert fresh
+      return tx.creativeAsset.create({
+        data: { creativeId, assetId: dto.assetId, role: dto.role as any },
+        select: { id: true, creativeId: true, assetId: true, role: true },
+      });
     });
 
     return slot;
@@ -219,35 +273,38 @@ export class CreativesService {
   // ─── DETACH ASSET ──────────────────────────────────────────────────────────
 
   /**
-   * Removes an asset slot from the creative by role name.
+   * For single-slot roles: removes the slot by role name.
+   * For EXTRA: removes ALL EXTRA slots (or callers pass assetId to target one).
    */
   async detachAsset(sellerId: string, creativeId: string, role: string) {
     await this.assertCreativeBelongsToSeller(sellerId, creativeId);
 
-    const existing = await this.prisma.creativeAsset.findUnique({
-      where: { uq_creative_asset_role: { creativeId, role: role as any } },
+    const slots = await this.prisma.creativeAsset.findMany({
+      where: { creativeId, role: role as any },
       select: { id: true },
     });
 
-    if (!existing) {
+    if (slots.length === 0) {
       throw new NotFoundException(`No asset attached for role "${role}"`);
     }
 
-    await this.prisma.creativeAsset.delete({
-      where: { uq_creative_asset_role: { creativeId, role: role as any } },
+    await this.prisma.creativeAsset.deleteMany({
+      where: { creativeId, role: role as any },
     });
 
-    return { detached: true, creativeId, role };
+    return { detached: true, creativeId, role, count: slots.length };
   }
 
   // ─── VALIDATE → READY ──────────────────────────────────────────────────────
 
   /**
-   * Transitions a creative from DRAFT → READY if it meets the requirements:
-   *   - Has at least one of: PRIMARY_VIDEO or THUMBNAIL
-   *   - Has PRIMARY_TEXT
+   * Transitions a creative from DRAFT → READY based on creativeType rules.
    *
-   * Throws 400 if requirements not met, or if already READY/ARCHIVED.
+   * Rules by type:
+   *   VIDEO_AD:   PRIMARY_VIDEO (or THUMBNAIL as fallback) + THUMBNAIL + PRIMARY_TEXT
+   *   IMAGE_AD:   THUMBNAIL + PRIMARY_TEXT
+   *   TEXT_ONLY:  PRIMARY_TEXT
+   *   UGC_BUNDLE: PRIMARY_VIDEO
    */
   async validateCreative(sellerId: string, id: string) {
     const creative = await this.assertCreativeBelongsToSeller(sellerId, id);
@@ -263,17 +320,12 @@ export class CreativesService {
       where: { creativeId: id },
       select: { role: true },
     });
-
     const roles = new Set(slots.map((s) => s.role));
 
-    const hasMedia =
-      roles.has('PRIMARY_VIDEO') || roles.has('THUMBNAIL');
-    const hasText = roles.has('PRIMARY_TEXT');
+    const rule = READY_RULES[creative.creativeType] ?? READY_RULES['VIDEO_AD'];
+    const { pass, missing } = rule(roles);
 
-    if (!hasMedia || !hasText) {
-      const missing: string[] = [];
-      if (!hasMedia) missing.push('PRIMARY_VIDEO or THUMBNAIL');
-      if (!hasText) missing.push('PRIMARY_TEXT');
+    if (!pass) {
       throw new BadRequestException(
         `Creative is missing required assets: ${missing.join(', ')}`,
       );
@@ -288,12 +340,69 @@ export class CreativesService {
     return mapToCardDto(updated as CreativeCardRow);
   }
 
+  // ─── RENDER ────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns a compiled render payload for ad delivery:
+   * Resolves asset slots to typed fields, reads text content from metadata.
+   */
+  async renderCreative(sellerId: string, id: string) {
+    const creative = await this.prisma.creative.findUnique({
+      where: { id },
+      select: CREATIVE_DETAIL_SELECT,
+    });
+
+    if (!creative || creative.sellerId !== sellerId) {
+      throw new NotFoundException('Creative not found');
+    }
+
+    const detail = creative as unknown as CreativeDetailRow;
+
+    // Build role → asset map (for single-slot roles, last write wins)
+    const slotMap = new Map<string, AssetSlotRow['asset']>();
+    const extraSlots: AssetSlotRow['asset'][] = [];
+
+    for (const slot of detail.assets) {
+      if (slot.role === 'EXTRA') {
+        extraSlots.push(slot.asset);
+      } else {
+        slotMap.set(slot.role, slot.asset);
+      }
+    }
+
+    const primaryVideo = slotMap.get('PRIMARY_VIDEO');
+    const thumbnail = slotMap.get('THUMBNAIL');
+    const primaryText = slotMap.get('PRIMARY_TEXT');
+    const headline = slotMap.get('HEADLINE');
+    const description = slotMap.get('DESCRIPTION');
+
+    // Resolve text content: prefer asset.metadata.content, fall back to asset.url
+    const resolveText = (asset?: AssetSlotRow['asset']): string | undefined => {
+      if (!asset) return undefined;
+      const meta = asset.metadata as Record<string, unknown> | null;
+      return (meta?.content as string) ?? asset.url;
+    };
+
+    return {
+      id: detail.id,
+      creativeType: detail.creativeType,
+      status: detail.status,
+      videoUrl: primaryVideo?.url ?? null,
+      imageUrl: thumbnail?.url ?? null,
+      thumbnailUrl: thumbnail?.url ?? null,
+      primaryText: resolveText(primaryText) ?? null,
+      headline: resolveText(headline) ?? null,
+      description: resolveText(description) ?? null,
+      extras: extraSlots.map((a) => ({ url: a.url, mediaType: a.mediaType })),
+    };
+  }
+
   // ─── PRIVATE HELPERS ───────────────────────────────────────────────────────
 
   private async assertCreativeBelongsToSeller(sellerId: string, id: string) {
     const creative = await this.prisma.creative.findUnique({
       where: { id },
-      select: { id: true, sellerId: true, status: true },
+      select: { id: true, sellerId: true, status: true, creativeType: true },
     });
     if (!creative || creative.sellerId !== sellerId) {
       throw new NotFoundException('Creative not found');
@@ -301,20 +410,12 @@ export class CreativesService {
     return creative;
   }
 
-  /**
-   * Asserts asset is accessible by this seller:
-   *   - ownerSellerId = sellerId (own asset), OR
-   *   - ownerSellerId = null     (platform asset)
-   */
   private async assertAssetAccessible(sellerId: string, assetId: string) {
     const asset = await this.prisma.asset.findUnique({
       where: { id: assetId },
       select: { id: true, ownerSellerId: true },
     });
-
-    if (!asset) {
-      throw new NotFoundException(`Asset ${assetId} not found`);
-    }
+    if (!asset) throw new NotFoundException(`Asset ${assetId} not found`);
 
     const isOwn = asset.ownerSellerId === sellerId;
     const isPlatform = asset.ownerSellerId === null;
@@ -322,7 +423,6 @@ export class CreativesService {
     if (!isOwn && !isPlatform) {
       throw new ForbiddenException('Asset does not belong to this seller');
     }
-
     return asset;
   }
 }
@@ -336,6 +436,7 @@ function mapToCardDto(creative: CreativeCardRow) {
     productId: creative.productId,
     name: creative.name,
     status: creative.status,
+    creativeType: creative.creativeType,
     metadata: creative.metadata,
     createdAt: creative.createdAt.toISOString(),
     updatedAt: creative.updatedAt.toISOString(),
@@ -344,7 +445,6 @@ function mapToCardDto(creative: CreativeCardRow) {
 
 function mapToDetailDto(creative: CreativeDetailRow) {
   const card = mapToCardDto(creative);
-
   return {
     ...card,
     assets: creative.assets.map((slot) => ({
