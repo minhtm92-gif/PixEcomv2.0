@@ -91,7 +91,8 @@ export class AuthService {
       return { user, seller };
     });
 
-    const tokens = await this.generateTokens(user.id, seller.id, 'OWNER');
+    // New users are never superadmin
+    const tokens = await this.generateTokens(user.id, seller.id, 'OWNER', false);
 
     return {
       ...tokens,
@@ -105,6 +106,14 @@ export class AuthService {
   async login(dto: LoginDto): Promise<AuthPayload> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        passwordHash: true,
+        isActive: true,
+        isSuperadmin: true,
+      },
     });
 
     if (!user || !user.passwordHash) {
@@ -134,6 +143,7 @@ export class AuthService {
       user.id,
       sellerUser.sellerId,
       sellerUser.role,
+      user.isSuperadmin,
     );
 
     return {
@@ -182,10 +192,16 @@ export class AuthService {
       throw new UnauthorizedException('No active seller account found');
     }
 
+    const user = await this.prisma.user.findUnique({
+      where: { id: stored.userId },
+      select: { isSuperadmin: true },
+    });
+
     return this.generateTokens(
       stored.userId,
       sellerUser.sellerId,
       sellerUser.role,
+      user?.isSuperadmin ?? false,
     );
   }
 
@@ -235,9 +251,10 @@ export class AuthService {
     userId: string,
     sellerId: string,
     role: string,
+    isSuperadmin = false,
   ): Promise<TokenPair> {
     const accessToken = this.jwt.sign(
-      { sub: userId, sellerId, role },
+      { sub: userId, sellerId, role, isSuperadmin },
       { expiresIn: this.config.get<string>('JWT_EXPIRES_IN', '15m') },
     );
 

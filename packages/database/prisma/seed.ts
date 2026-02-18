@@ -295,6 +295,152 @@ async function main() {
 
   console.log('Sellpage 2 linked to verified domain');
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // SEED ASSETS + CREATIVES (for Milestone 2.4 e2e / dev testing)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Platform asset 1: VIDEO (ownerSellerId = null → visible to all sellers)
+  const platformAsset1 = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-0000-000000004001' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000004001',
+      ownerSellerId: null,
+      sourceType: 'SYSTEM',
+      ingestionId: 'platform-video-001',
+      mediaType: 'VIDEO',
+      url: 'https://cdn.pixelxlab.com/platform/v1-demo-video.mp4',
+      storageKey: 'platform/v1-demo-video.mp4',
+      mimeType: 'video/mp4',
+      fileSizeBytes: BigInt(12000000),
+      durationSec: 30,
+      width: 1080,
+      height: 1080,
+    },
+  });
+
+  // Platform asset 2: IMAGE (ownerSellerId = null → visible to all sellers)
+  const platformAsset2 = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-0000-000000004002' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000004002',
+      ownerSellerId: null,
+      sourceType: 'SYSTEM',
+      ingestionId: 'platform-image-001',
+      mediaType: 'IMAGE',
+      url: 'https://cdn.pixelxlab.com/platform/v1-product-thumb.jpg',
+      storageKey: 'platform/v1-product-thumb.jpg',
+      mimeType: 'image/jpeg',
+      fileSizeBytes: BigInt(250000),
+      width: 800,
+      height: 800,
+    },
+  });
+
+  // Seller asset 1: USER_UPLOAD VIDEO (owned by seed seller)
+  const sellerAsset1 = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-0000-000000004003' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000004003',
+      ownerSellerId: SEED_SELLER_ID,
+      sourceType: 'USER_UPLOAD',
+      ingestionId: null,
+      mediaType: 'VIDEO',
+      url: 'https://cdn.pixelxlab.com/sellers/seed/mouse-ad-video.mp4',
+      storageKey: 'sellers/seed/mouse-ad-video.mp4',
+      mimeType: 'video/mp4',
+      fileSizeBytes: BigInt(5200000),
+      durationSec: 15,
+      width: 1080,
+      height: 1920,
+      checksum: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    },
+  });
+
+  // Seller asset 2: USER_UPLOAD TEXT (owned by seed seller)
+  const sellerAsset2 = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-0000-000000004004' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000004004',
+      ownerSellerId: SEED_SELLER_ID,
+      sourceType: 'USER_UPLOAD',
+      ingestionId: null,
+      mediaType: 'TEXT',
+      url: 'https://cdn.pixelxlab.com/sellers/seed/mouse-ad-copy.txt',
+      storageKey: 'sellers/seed/mouse-ad-copy.txt',
+      mimeType: 'text/plain',
+    },
+  });
+
+  console.log('Assets seeded (2 platform + 2 seller)');
+
+  // Creative 1: DRAFT — mouse ad (seed seller, linked to product 1)
+  // Has PRIMARY_VIDEO + THUMBNAIL + PRIMARY_TEXT → can be validated to READY
+  const seedCreative1 = await prisma.creative.upsert({
+    where: { id: '00000000-0000-0000-0000-000000005001' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000005001',
+      sellerId: SEED_SELLER_ID,
+      productId: product1.id,
+      name: 'Mouse Ad — Seed Creative',
+      status: 'DRAFT',
+    },
+  });
+
+  // CreativeAsset slot 1: PRIMARY_VIDEO (seller asset 1 — own video)
+  await prisma.creativeAsset.upsert({
+    where: {
+      uq_creative_asset_role: {
+        creativeId: seedCreative1.id,
+        role: 'PRIMARY_VIDEO',
+      },
+    },
+    update: {},
+    create: {
+      creativeId: seedCreative1.id,
+      assetId: sellerAsset1.id,
+      role: 'PRIMARY_VIDEO',
+    },
+  });
+
+  // CreativeAsset slot 2: THUMBNAIL (platform image asset 2)
+  await prisma.creativeAsset.upsert({
+    where: {
+      uq_creative_asset_role: {
+        creativeId: seedCreative1.id,
+        role: 'THUMBNAIL',
+      },
+    },
+    update: {},
+    create: {
+      creativeId: seedCreative1.id,
+      assetId: platformAsset2.id,
+      role: 'THUMBNAIL',
+    },
+  });
+
+  // CreativeAsset slot 3: PRIMARY_TEXT (seller text asset)
+  await prisma.creativeAsset.upsert({
+    where: {
+      uq_creative_asset_role: {
+        creativeId: seedCreative1.id,
+        role: 'PRIMARY_TEXT',
+      },
+    },
+    update: {},
+    create: {
+      creativeId: seedCreative1.id,
+      assetId: sellerAsset2.id,
+      role: 'PRIMARY_TEXT',
+    },
+  });
+
+  console.log('Creative seeded with 3 asset slots (ready to validate)');
+
   const pc = await prisma.product.count();
   const vc = await prisma.productVariant.count();
   const lc = await prisma.productLabel.count();
@@ -304,7 +450,10 @@ async function main() {
   const rc = await prisma.pricingRule.count();
   const sc = await prisma.sellpage.count();
   const dc = await prisma.sellerDomain.count();
-  console.log(`Summary: ${pc} products, ${vc} variants, ${lc} labels, ${mc} media, ${tc} thumbs, ${ac} adtexts, ${rc} pricing rules, ${sc} sellpages, ${dc} domains`);
+  const assetCount = await prisma.asset.count();
+  const creativeCount = await prisma.creative.count();
+  const creativeAssetCount = await prisma.creativeAsset.count();
+  console.log(`Summary: ${pc} products, ${vc} variants, ${lc} labels, ${mc} media, ${tc} thumbs, ${ac} adtexts, ${rc} pricing rules, ${sc} sellpages, ${dc} domains, ${assetCount} assets, ${creativeCount} creatives, ${creativeAssetCount} creative_assets`);
   console.log('Seeding complete.');
 }
 
