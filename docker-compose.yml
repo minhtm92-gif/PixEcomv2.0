@@ -6,7 +6,7 @@ services:
     container_name: pixecom-postgres
     restart: unless-stopped
     ports:
-      - '5432:5432'
+      - '5434:5432'
     environment:
       POSTGRES_USER: pixecom
       POSTGRES_PASSWORD: pixecom_dev

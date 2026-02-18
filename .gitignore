@@ -26,6 +26,8 @@ Thumbs.db
 
 # Prisma
 packages/database/prisma/migrations/*_migration_lock.toml
+*.tsbuildinfo
+packages/database/.env
 
 # Test coverage
 coverage/
