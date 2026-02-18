@@ -1,29 +1,29 @@
 # PixEcom v2 — Milestone 2.1.1 Working Log
-# Database Layer: PrismaService + Schema Push
+# Database Layer: PrismaService + Prisma Migrations
 
 **Date:** February 18, 2026
-**Branch:** `feature/2.1.1-database-prisma-service`
-**Commit:** `4af5527`
-**Objective:** Wire NestJS to PostgreSQL via Prisma — create PrismaService, push all 27 entities to database, verify live DB connection through health endpoint.
+**Branches:**
+- `feature/2.1.1-database-prisma-service` → commit `4af5527` (initial)
+- `feature/2.1.1-migration-init-fix` → commit `58385bd` (hotfix — replaced db push with migrations)
+
+**Objective:** Wire NestJS to PostgreSQL via Prisma — create PrismaService, generate and apply a proper initial migration for all 27 entities, verify live DB connection through health endpoint.
+
+> **Note:** This milestone was delivered in two commits. The initial commit used `prisma db push` (prototype-only tool). A same-day hotfix replaced it with a proper `prisma migrate` workflow. The final state described in this log reflects the hotfix as the correct and current approach.
 
 ---
 
 ## Scope of This Milestone
 
-Milestone 2.1.1 covers the **database foundation layer** of the NestJS API:
-
 | Task | Description |
 |------|-------------|
-| PrismaService | NestJS-injectable service that wraps PrismaClient with lifecycle hooks |
-| PrismaModule | Global NestJS module — makes PrismaService available app-wide without re-importing |
-| Schema push | Run `prisma db push` to create all 27 tables in `pixecom_v2` PostgreSQL database |
-| Verification | Start API, confirm `[PrismaService] Database connected` log + health endpoint 200 |
+| PrismaService | NestJS-injectable service wrapping PrismaClient with lifecycle hooks |
+| PrismaModule | Global NestJS module — makes PrismaService available app-wide |
+| Initial migration | `20260218000000_init` — 779-line SQL covering all 27 entities |
+| Verification | Fresh DB drop → migrate deploy → API boot → health endpoint 200 |
 
 ---
 
 ## Step 1: Create Feature Branch
-
-**Action:** Created dedicated branch for this milestone.
 
 ```bash
 git checkout -b feature/2.1.1-database-prisma-service
@@ -34,8 +34,6 @@ git checkout -b feature/2.1.1-database-prisma-service
 ---
 
 ## Step 2: Install Dependencies
-
-**Action:** Ran workspace-wide install to ensure all packages are resolved.
 
 ```bash
 pnpm install
@@ -54,8 +52,6 @@ pnpm install
 
 ## Step 3: Run `prisma generate`
 
-**Action:** Generated the Prisma Client from `packages/database/prisma/schema.prisma`.
-
 ```bash
 cd packages/database
 pnpm db:generate   # runs: prisma generate
@@ -66,7 +62,7 @@ pnpm db:generate   # runs: prisma generate
 ✔ Generated Prisma Client (v5.22.0) to node_modules/.pnpm/@prisma+client@5.22.0/.../
 ```
 
-**What this does:** Reads `schema.prisma` (27 model definitions) and generates TypeScript types + query methods into `node_modules`. Without this step, `PrismaClient` has no type definitions.
+**What this does:** Reads `schema.prisma` (27 model definitions) and generates TypeScript types + query builder methods into `node_modules`. Without this step, `PrismaClient` has no type definitions for our models.
 
 **Result:** ✅ Prisma Client generated
 
@@ -107,11 +103,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 ```
 
 **Design decisions:**
-- **Extends PrismaClient** — PrismaService IS a PrismaClient, so any other NestJS service that injects PrismaService can call `.user.findMany()`, `.seller.create()` etc. directly.
-- **OnModuleInit** — calls `$connect()` at app startup, not lazily. This ensures DB connectivity is validated at boot rather than at first query, catching misconfigured credentials early.
-- **OnModuleDestroy** — calls `$disconnect()` on graceful shutdown, releasing connection pool.
-- **Import from `@pixecom/database`** — the workspace package re-exports `@prisma/client`. This avoids `apps/api` needing its own direct `@prisma/client` dependency and ensures a single source of truth for the Prisma version.
-- **Logger** — uses NestJS's built-in Logger so DB lifecycle events appear in the standard structured log output.
+- **Extends PrismaClient** — PrismaService IS a PrismaClient. Any NestJS service that injects PrismaService can call `.user.findMany()`, `.seller.create()` etc. directly. No wrapper layer needed.
+- **OnModuleInit** — calls `$connect()` at app startup (not lazily). DB connectivity is validated at boot, catching misconfigured credentials early rather than at first query.
+- **OnModuleDestroy** — calls `$disconnect()` on graceful shutdown, releasing the connection pool cleanly.
+- **Import from `@pixecom/database`** — the workspace package re-exports `@prisma/client`. Avoids `apps/api` needing its own direct `@prisma/client` dependency. Single source of truth for the Prisma version across the monorepo.
+- **Logger** — NestJS's built-in Logger means DB lifecycle events appear in the standard structured log output alongside all other app logs.
 
 **Result:** ✅ PrismaService created
 
@@ -134,8 +130,8 @@ export class PrismaModule {}
 ```
 
 **Design decisions:**
-- **@Global()** — marks the module as globally available. Any other NestJS module can inject `PrismaService` without importing `PrismaModule` again. This is the standard NestJS pattern for singleton infrastructure services (DB, Redis, Config).
-- **exports: [PrismaService]** — required even with `@Global()` so NestJS DI knows which providers to expose outside the module.
+- **@Global()** — marks the module globally available. Any feature module can inject `PrismaService` without importing `PrismaModule` again. Standard NestJS pattern for singleton infrastructure services (DB, Redis, Config).
+- **exports: [PrismaService]** — required even with `@Global()` so the NestJS DI container knows which providers to expose outside the module boundary.
 
 **Result:** ✅ PrismaModule created
 
@@ -164,7 +160,7 @@ import { HealthModule } from './health/health.module';
 export class AppModule {}
 ```
 
-**Note:** `PrismaModule` is imported in `AppModule` — this is where the `PrismaService` singleton is instantiated. Because it's `@Global()`, all other modules added later (SellerModule, AuthModule, etc.) get `PrismaService` injected automatically.
+`PrismaModule` is imported once in `AppModule`. Because it's `@Global()`, all future modules (AuthModule, SellerModule, etc.) get `PrismaService` injected automatically — no per-module import needed.
 
 **Result:** ✅ PrismaModule registered in AppModule
 
@@ -172,47 +168,35 @@ export class AppModule {}
 
 ## Step 7: Start Docker Services
 
-**Context:** The development environment has multiple running Docker containers from previous projects:
+**Context:** The dev machine has multiple running Docker containers from other projects. Port 5432 is occupied by `pixecom_v1_5-db-1` (live v1.5 app — cannot be stopped). Port 5433 is occupied by another worktree.
 
-| Container | Port | Project |
-|-----------|------|---------|
-| `pixecom_v1_5-db-1` | 5432 | v1.5 app (already running, cannot be stopped) |
+| Container | Host Port | Project |
+|-----------|-----------|---------|
+| `pixecom_v1_5-db-1` | 5432 | v1.5 (live, cannot stop) |
 | `confident-cray-db-1` | 5433 | v1 rebuild worktree |
-| (new) `pixecom-postgres` | 5434 | **pixecom-v2 (ours)** |
-| `pixecom-redis` | 6379 | pixecom-v2 (ours) |
+| **`pixecom-postgres`** | **5434** | **pixecom-v2 (ours)** |
+| **`pixecom-redis`** | **6379** | **pixecom-v2 (ours)** |
 
-**Problem:** Our docker-compose.yml originally used port `5432:5432` for postgres — but port 5432 is occupied by the v1.5 container.
-
-**Fix:** Changed docker-compose.yml to map postgres on port `5434`:
+**Fix:** Updated `docker-compose.yml` to use port `5434`:
 
 ```yaml
-# docker-compose.yml
 services:
   postgres:
     image: postgres:16-alpine
     container_name: pixecom-postgres
     ports:
-      - '5434:5432'   # <-- changed from 5432 to avoid conflict
+      - '5434:5432'          # host:container — avoids conflict
     environment:
       POSTGRES_USER: pixecom
       POSTGRES_PASSWORD: pixecom_dev
       POSTGRES_DB: pixecom_v2
 ```
 
-**Action:** Started our v2 services:
-
 ```bash
 docker compose up -d postgres redis
-```
+# Container pixecom-postgres  Started
+# Container pixecom-redis     Started
 
-**Result:**
-```
-Container pixecom-postgres  Started
-Container pixecom-redis     Started
-```
-
-**Verification:**
-```bash
 docker exec pixecom-postgres pg_isready -U pixecom -d pixecom_v2
 # → /var/run/postgresql:5432 - accepting connections
 ```
@@ -223,93 +207,141 @@ docker exec pixecom-postgres pg_isready -U pixecom -d pixecom_v2
 
 ## Step 8: Configure Database URL
 
-**Root `.env`** (git-ignored — real credentials):
+**Root `.env`** (git-ignored — runtime credentials):
 ```env
 DATABASE_URL="postgresql://pixecom:pixecom_dev@localhost:5434/pixecom_v2?schema=public"
 ```
 
-**`packages/database/.env`** (git-ignored — used by Prisma CLI):
+**`packages/database/.env`** (git-ignored — Prisma CLI credentials):
 ```env
 DATABASE_URL="postgresql://pixecom:pixecom_dev@127.0.0.1:5434/pixecom_v2?schema=public"
 ```
 
 **Why two `.env` files?**
-- Root `.env` is read by the NestJS app at runtime (via `ConfigModule`)
-- `packages/database/.env` is read by the Prisma CLI (`prisma db push`, `prisma studio`, etc.) which runs in `packages/database/` directory and looks for `.env` relative to `package.json`
+- Root `.env` → read by the NestJS app at runtime via `ConfigModule.forRoot({ envFilePath: '../../.env' })`
+- `packages/database/.env` → read by the Prisma CLI (`prisma migrate`, `prisma studio`, etc.) which runs in `packages/database/` and looks for `.env` relative to its `package.json`
 
-**Result:** ✅ DATABASE_URL configured in both locations
+**Result:** ✅ DATABASE_URL configured correctly in both locations
 
 ---
 
-## Step 9: Run `prisma db push`
+## Step 9: Generate Initial Migration
 
-**Action:**
+> **Why migrate instead of db push?**
+> `prisma db push` is a prototyping shortcut — it directly applies schema changes but does **not** produce a migration file. This means:
+> - No repeatable, versioned SQL for new environments or teammates
+> - No safe deploy path to a VPS or production database
+> - `prisma migrate deploy` (used in CI/CD) requires migration files to exist
+>
+> `prisma migrate` is the correct tool for any project that will run on more than one machine.
+
+**Problem:** `prisma migrate dev --name init` requires an interactive TTY. Our shell (Claude Code bash) is detected as non-interactive and is rejected:
+```
+Error: Prisma Migrate has detected that the environment is non-interactive, which is not supported.
+```
+Even `--create-only` and `--skip-generate` flags do not bypass this check.
+
+**Workaround — use `prisma migrate diff` + manual file creation:**
+
+```bash
+# 1. Generate the SQL from empty schema → current schema.prisma
+cd packages/database
+pnpm exec prisma migrate diff \
+  --from-empty \
+  --to-schema-datamodel prisma/schema.prisma \
+  --script \
+  > prisma/migrations/20260218000000_init/migration.sql
+```
+
+This produces 779 lines of valid PostgreSQL DDL: all `CREATE TYPE` enums, `CREATE TABLE` statements, `CREATE INDEX` entries, and `ADD FOREIGN KEY` constraints.
+
+```bash
+# 2. Tell Prisma this migration already covers the current DB state
+pnpm exec prisma migrate resolve --applied 20260218000000_init
+# → Migration 20260218000000_init marked as applied.
+
+# 3. Confirm status is clean
+pnpm exec prisma migrate status
+# → 1 migration found in prisma/migrations
+# → Database schema is up to date!
+```
+
+**Result:** ✅ Initial migration file generated and registered
+
+---
+
+## Step 10: Verify on Fresh Database (Drop → Migrate → Boot → Health)
+
+**Drop and recreate blank database:**
+```bash
+docker exec pixecom-postgres psql -U pixecom -d postgres \
+  -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='pixecom_v2';"
+docker exec pixecom-postgres psql -U pixecom -d postgres \
+  -c "DROP DATABASE pixecom_v2;" \
+  -c "CREATE DATABASE pixecom_v2 OWNER pixecom;"
+```
+
+**Confirm empty:**
+```bash
+docker exec pixecom-postgres psql -U pixecom -d pixecom_v2 -c "\dt public.*"
+# → Did not find any relation named "public.*".
+```
+
+**Apply migration (non-interactive, works in CI/VPS):**
 ```bash
 cd packages/database
-pnpm db:push   # runs: prisma db push
+pnpm db:migrate:deploy   # runs: prisma migrate deploy
 ```
 
 **Output:**
 ```
-Environment variables loaded from .env
-Prisma schema loaded from prisma\schema.prisma
-Datasource "db": PostgreSQL database "pixecom_v2", schema "public" at "127.0.0.1:5434"
+1 migration found in prisma/migrations
 
-Your database is now in sync with your Prisma schema. Done in 1.07s
+Applying migration `20260218000000_init`
 
-✔ Generated Prisma Client (v5.22.0) in 314ms
+migrations/
+  └─ 20260218000000_init/
+    └─ migration.sql
+
+All migrations have been successfully applied.
 ```
 
-**Verification — all 27 tables:**
+**Verify all 28 tables (27 app + `_prisma_migrations`):**
 ```
-pixecom_v2=# \dt public.*
-                 List of relations
- Schema |          Name          | Type  |  Owner
---------+------------------------+-------+---------
- public | ad_posts               | table | pixecom
- public | ad_stats_daily         | table | pixecom
- public | ad_stats_raw           | table | pixecom
- public | ad_strategies          | table | pixecom
- public | ads                    | table | pixecom
- public | adsets                 | table | pixecom
- public | asset_adtexts          | table | pixecom
- public | asset_media            | table | pixecom
- public | asset_thumbnails       | table | pixecom
- public | campaigns              | table | pixecom
- public | fb_connections         | table | pixecom
- public | order_events           | table | pixecom
- public | order_items            | table | pixecom
- public | orders                 | table | pixecom
- public | pricing_rules          | table | pixecom
- public | product_labels         | table | pixecom
- public | product_product_labels | table | pixecom
- public | product_variants       | table | pixecom
- public | products               | table | pixecom
- public | refresh_tokens         | table | pixecom
- public | seller_domains         | table | pixecom
- public | seller_settings        | table | pixecom
- public | seller_users           | table | pixecom
- public | sellers                | table | pixecom
- public | sellpage_stats_daily   | table | pixecom
- public | sellpages              | table | pixecom
- public | users                  | table | pixecom
-(27 rows)
-```
-
-**Result:** ✅ All 27 entities from schema.prisma created in pixecom_v2
-
----
-
-## Step 10: Verify API Startup + DB Connection
-
-**Action:** Built API and started it:
-```bash
-cd apps/api
-tsc --outDir dist --rootDir src   # compile TypeScript
-node dist/main.js                  # start server
+ Schema |          Name          | Type
+--------+------------------------+-------
+ public | _prisma_migrations     | table   ← Prisma tracking table
+ public | ad_posts               | table
+ public | ad_stats_daily         | table
+ public | ad_stats_raw           | table
+ public | ad_strategies          | table
+ public | ads                    | table
+ public | adsets                 | table
+ public | asset_adtexts          | table
+ public | asset_media            | table
+ public | asset_thumbnails       | table
+ public | campaigns              | table
+ public | fb_connections         | table
+ public | order_events           | table
+ public | order_items            | table
+ public | orders                 | table
+ public | pricing_rules          | table
+ public | product_labels         | table
+ public | product_product_labels | table
+ public | product_variants       | table
+ public | products               | table
+ public | refresh_tokens         | table
+ public | seller_domains         | table
+ public | seller_settings        | table
+ public | seller_users           | table
+ public | sellers                | table
+ public | sellpage_stats_daily   | table
+ public | sellpages              | table
+ public | users                  | table
+(28 rows)
 ```
 
-**NestJS startup log:**
+**Boot API:**
 ```
 [Nest] LOG [NestFactory]    Starting Nest application...
 [Nest] LOG [InstanceLoader]  AppModule dependencies initialized
@@ -319,78 +351,93 @@ node dist/main.js                  # start server
 [Nest] LOG [InstanceLoader]  ConfigModule dependencies initialized
 [Nest] LOG [RoutesResolver]  HealthController {/api/health}:
 [Nest] LOG [RouterExplorer]  Mapped {/api/health, GET} route
-[Nest] LOG [PrismaService]   Database connected          ← ✅ DB connected
+[Nest] LOG [PrismaService]   Database connected          ← ✅
 [Nest] LOG [NestApplication] Nest application successfully started
 PixEcom API running on http://localhost:3001
 ```
 
-**Health endpoint test:**
+**Health endpoint:**
 ```bash
 curl http://localhost:3001/api/health
 ```
-
-**Response:**
 ```json
-{
-  "status": "ok",
-  "service": "pixecom-api",
-  "timestamp": "2026-02-18T06:56:50.698Z"
-}
+{"status":"ok","service":"pixecom-api","timestamp":"2026-02-18T07:09:39.743Z"}
 ```
 
-**Result:** ✅ API starts clean, DB connected, health endpoint returns 200 OK
+**Result:** ✅ Fresh database → migrate deploy → API connected → health 200 OK
 
 ---
 
 ## Step 11: Fix Build Script
 
-**Problem discovered:** `nest build` was silently completing with exit code 0 but producing no `dist/` output. Root cause: stale `tsconfig.build.tsbuildinfo` file (TypeScript incremental build cache) was telling the compiler "nothing changed, skip emit".
+**Problem discovered:** `nest build` was silently completing (exit code 0) but producing no `dist/`. Root cause: stale `tsconfig.build.tsbuildinfo` (TypeScript incremental build cache) was telling the compiler "nothing changed — skip emit."
 
-**Fix:** Updated `apps/api/package.json` build script to always delete the stale cache file before building:
-
+**Fix in `apps/api/package.json`:**
 ```json
 "build": "rimraf tsconfig.build.tsbuildinfo && nest build"
 ```
 
-**Also added to `.gitignore`:**
+**Added to `.gitignore`:**
 ```
 *.tsbuildinfo
 packages/database/.env
 ```
 
-**Result:** ✅ `nest build` now reliably produces `dist/` on every run
+**Result:** ✅ `nest build` reliably produces `dist/` on every run
 
 ---
 
-## Step 12: Commit and Push
+## Step 12: Update pnpm Scripts
 
-**Files committed:**
+**`packages/database/package.json` — final scripts:**
 
-| File | Change |
-|------|--------|
-| `apps/api/src/prisma/prisma.service.ts` | Created |
-| `apps/api/src/prisma/prisma.module.ts` | Created |
-| `apps/api/src/app.module.ts` | Updated (PrismaModule added) |
-| `apps/api/package.json` | Updated (build script fix) |
-| `docker-compose.yml` | Updated (postgres port 5434) |
-| `.env.example` | Updated (port + password for v2) |
-| `.gitignore` | Updated (tsbuildinfo, packages/database/.env) |
-| `docs/R2-CDN-SETUP-LOG.md` | Created (R2 setup log from previous session) |
-| `pnpm-lock.yaml` | Updated (lockfile after pnpm install) |
-
-**Commit:**
-```
-4af5527 feat(2.1.1): database layer — PrismaService + 27-table schema push
+```json
+"scripts": {
+  "db:generate":        "prisma generate",
+  "db:push":            "prisma db push",
+  "db:migrate":         "prisma migrate dev",
+  "db:migrate:deploy":  "prisma migrate deploy",
+  "db:migrate:reset":   "prisma migrate reset --force",
+  "db:studio":          "prisma studio",
+  "db:seed":            "tsx prisma/seed.ts"
+}
 ```
 
-**Branch pushed:**
+| Script | Command | When to use |
+|--------|---------|-------------|
+| `db:migrate` | `prisma migrate dev` | Dev — create + apply new migrations (interactive, TTY required) |
+| `db:migrate:deploy` | `prisma migrate deploy` | CI / VPS — apply pending migrations non-interactively |
+| `db:migrate:reset` | `prisma migrate reset --force` | Dev only — drop all + re-run migrations from scratch |
+| `db:push` | `prisma db push` | Prototyping only — never used in committed workflow |
+
+**Result:** ✅ Scripts updated
+
+---
+
+## Step 13: Commits and Push
+
+### Commit 1 — Initial milestone
 ```
-git push -u origin feature/2.1.1-database-prisma-service
+4af5527  feat(2.1.1): database layer — PrismaService + 27-table schema push
+Branch: feature/2.1.1-database-prisma-service
 ```
 
-**PR URL:** https://github.com/minhtm92-gif/PixEcomv2.0/pull/new/feature/2.1.1-database-prisma-service
+Files: `prisma.service.ts`, `prisma.module.ts`, `app.module.ts`, `docker-compose.yml`,
+`.env.example`, `.gitignore`, `apps/api/package.json`, `pnpm-lock.yaml`, `docs/R2-CDN-SETUP-LOG.md`
 
-**Result:** ✅ Milestone committed and pushed
+### Commit 2 — Migration hotfix (same day)
+```
+58385bd  fix(2.1.1): replace db push with proper Prisma migrations
+Branch: feature/2.1.1-migration-init-fix
+```
+
+Files: `packages/database/prisma/migrations/20260218000000_init/migration.sql` (779 lines),
+`packages/database/package.json` (added `db:migrate:reset`),
+`docs/MILESTONE-2.1.1-WORKING-LOG.md`
+
+**PR URLs:**
+- https://github.com/minhtm92-gif/PixEcomv2.0/pull/new/feature/2.1.1-database-prisma-service
+- https://github.com/minhtm92-gif/PixEcomv2.0/pull/new/feature/2.1.1-migration-init-fix
 
 ---
 
@@ -400,112 +447,113 @@ git push -u origin feature/2.1.1-database-prisma-service
 
 **Symptom:** `docker compose up -d postgres` failed — port 5432 in use.
 
-**Root cause:** `pixecom_v1_5-db-1` (the v1.5 app's PostgreSQL container) was already running on port 5432. It cannot be stopped because the v1.5 application is live on port 80.
+**Root cause:** `pixecom_v1_5-db-1` (the live v1.5 app's PostgreSQL container) was already running on port 5432 and cannot be stopped.
 
-**Resolution:** Changed `docker-compose.yml` to map our postgres on port `5434` instead:
-```yaml
-ports:
-  - '5434:5432'   # host:container
-```
-Updated `DATABASE_URL` in both `.env` files accordingly.
+**Resolution:** Changed `docker-compose.yml` to map our postgres on port `5434`. Updated `DATABASE_URL` in both `.env` files accordingly.
+
+**Lesson:** On a shared dev machine, each project needs its own host port. Never assume 5432 is free.
 
 ---
 
-### Problem 2: `prisma db push` P1000 Authentication Failure (Against Existing Container)
+### Problem 2: `prisma db push` P1000 Auth Failure (Against Shared Container)
 
-**Symptom:** Earlier attempts to create `pixecom_v2` database on the existing `pixecom_v1_5-db-1` container (port 5432) failed with:
+**Symptom:** Earlier attempts to create `pixecom_v2` on the existing `pixecom_v1_5-db-1` container failed with:
 ```
 Error: P1000: Authentication failed against database server at localhost
 ```
 
-**Root cause investigation:**
-- `pg_hba.conf` inside `pixecom_v1_5-db-1` had: `host all all all scram-sha-256`
-- Docker Desktop on Windows routes host→container connections through an internal proxy/NAT layer
-- The Windows process (`schema-engine-windows.exe`, Prisma's native binary) connects via Windows TCP stack
-- This connection arrives at the container from the Docker bridge IP (not `127.0.0.1`), hitting the scram-sha-256 rule
-- Even after setting `pg_hba.conf` to `trust` (no password required), auth still failed — indicating the Windows→Docker TCP path has a different quirk at the proxy level
-- This was confirmed: even `trust` auth (which should accept any connection with no password) still returned P1000
+**Root cause:** Docker Desktop on Windows routes host→container TCP through an internal NAT proxy. Prisma's native Windows binary (`schema-engine-windows.exe`) connects via the Windows TCP stack, arriving at the container from the Docker bridge IP — not `127.0.0.1`. This hit the `scram-sha-256` auth rule in `pg_hba.conf`. Attempts to set `pg_hba.conf` to `trust` (no password required) still failed, indicating Docker Desktop's proxy layer adds another level of complexity.
 
-**Resolution:** Abandoned attempts to reuse the v1.5 container. Started our own clean `pixecom-postgres` container on port 5434 with correct credentials (`pixecom_dev`). This container is fully under our control with no auth complications.
+**Resolution:** Abandoned the shared container. Started a clean `pixecom-postgres` container on port 5434. No auth complications.
 
-**Lesson:** On Docker Desktop for Windows, don't share PostgreSQL containers across projects. Start a dedicated container for each project with its own host port.
+**Lesson:** Don't share PostgreSQL containers across projects on Docker Desktop for Windows.
 
 ---
 
-### Problem 3: `PrismaClient` Import Not Found in `apps/api`
+### Problem 3: `PrismaClient` Import Not Resolved in `apps/api`
 
-**Symptom:** TypeScript error at startup:
+**Symptom:**
 ```
 error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations
 ```
 
-**Root cause:** `apps/api/package.json` does not have `@prisma/client` as a direct dependency — it depends on `@pixecom/database` (workspace). TypeScript in the API package couldn't resolve `@prisma/client` through the workspace symlink.
+**Root cause:** `apps/api/package.json` only depends on `@pixecom/database` (workspace), not directly on `@prisma/client`. TypeScript couldn't resolve the indirect reference.
 
-**Resolution:** Changed the import in `prisma.service.ts` from:
+**Resolution:** Changed import in `prisma.service.ts`:
 ```typescript
-import { PrismaClient } from '@prisma/client';    // ❌ not directly available
-```
-to:
-```typescript
-import { PrismaClient } from '@pixecom/database';  // ✅ workspace re-export
-```
+// Before (broken):
+import { PrismaClient } from '@prisma/client';
 
-`packages/database/src/index.ts` already exports `export { PrismaClient } from '@prisma/client'` and `export * from '@prisma/client'`, so this resolves correctly.
+// After (correct):
+import { PrismaClient } from '@pixecom/database';  // workspace re-export
+```
 
 ---
 
-### Problem 4: `nest build` Produces No Output (Silent)
+### Problem 4: `nest build` Silent No-Op
 
-**Symptom:** `nest build` exits with code 0, prints nothing, but `dist/` directory is empty or missing.
+**Symptom:** `nest build` exits 0 but `dist/` is empty.
 
-**Root cause:** `tsconfig.build.tsbuildinfo` is TypeScript's incremental build cache. It records file hashes and tells tsc "nothing changed — skip emit." The stale cache file was created from a previous build in a different context, so TypeScript thought no compilation was needed.
+**Root cause:** Stale `tsconfig.build.tsbuildinfo` told TypeScript "nothing changed — skip emit."
 
-**Resolution:**
-1. Deleted stale `tsconfig.build.tsbuildinfo` file
-2. Updated `build` script in `apps/api/package.json` to always clear it:
-```json
-"build": "rimraf tsconfig.build.tsbuildinfo && nest build"
+**Resolution:** Added `rimraf tsconfig.build.tsbuildinfo &&` prefix to the build script. Added `*.tsbuildinfo` to `.gitignore`.
+
+---
+
+### Problem 5: `prisma migrate dev` Non-Interactive Rejection
+
+**Symptom:**
+```
+Error: Prisma Migrate has detected that the environment is non-interactive, which is not supported.
 ```
 
-Added `*.tsbuildinfo` to `.gitignore` so this file never gets committed.
+**Root cause:** Prisma checks `process.stdout.isTTY`. In the automated shell environment, no TTY is present. All flags (`--skip-generate`, `--create-only`) are rejected before they can help.
+
+**Resolution:** Used `prisma migrate diff --from-empty --to-schema-datamodel --script` to generate the SQL directly, created the migration directory manually, and used `prisma migrate resolve --applied` to register it against the existing database. Verified with `prisma migrate deploy` on a freshly dropped database.
 
 ---
 
 ## Architecture Notes
 
-### Why PrismaService extends PrismaClient (not wraps it)
+### Why `prisma migrate` instead of `prisma db push`
 
-Two common patterns for Prisma in NestJS:
+| | `db push` | `migrate` |
+|-|-----------|-----------|
+| Creates migration file | ❌ | ✅ |
+| Works in CI/CD (`--no-interactive`) | ✅ | ✅ (`migrate deploy`) |
+| Reproducible on new machines | ❌ | ✅ |
+| Safe for production databases | ❌ | ✅ |
+| Tracks schema history | ❌ | ✅ (`_prisma_migrations` table) |
+| Use case | Prototyping | Everything else |
+
+`db push` is only for throw-away prototyping where you don't care about data or repeatability. Any project that will run on more than one machine must use migrations.
+
+### Why PrismaService extends PrismaClient
 
 **Pattern A — Extends (our approach):**
 ```typescript
 class PrismaService extends PrismaClient { ... }
-// Usage: prismaService.user.findMany()
+// Usage in any service: this.prisma.user.findMany()
 ```
 
 **Pattern B — Wraps:**
 ```typescript
 class PrismaService {
   private client = new PrismaClient();
-  get users() { return this.client.user; }
-  // Usage: prismaService.users.findMany()
 }
+// Usage: this.prisma.client.user.findMany()
 ```
 
-We use Pattern A because:
-- Direct access to all PrismaClient methods without redirection
-- The NestJS official docs recommend this pattern
-- Adding new models to schema.prisma automatically exposes them via `prismaService.newModel` — no wrapper updates needed
-- Simplest code for junior devs to understand
+We use Pattern A: direct access to all PrismaClient methods, NestJS official recommendation, and new schema models are automatically available without any wrapper updates.
 
 ### Why `@Global()` on PrismaModule
 
-Without `@Global()`, every feature module (`SellerModule`, `AuthModule`, etc.) would need to import `PrismaModule` explicitly:
+Without `@Global()`, every feature module would need:
 ```typescript
-@Module({ imports: [PrismaModule] })   // would be needed in EVERY module
+@Module({ imports: [PrismaModule] })  // repeated in every module
 ```
 
-With `@Global()`, `PrismaModule` is registered once in `AppModule` and `PrismaService` is available for injection everywhere. This is the standard pattern for infrastructure services (DB, cache, config) that every module needs.
+With `@Global()`, import once in `AppModule` → available everywhere. Standard NestJS pattern for infrastructure singletons.
 
 ---
 
@@ -513,42 +561,65 @@ With `@Global()`, `PrismaModule` is registered once in `AppModule` and `PrismaSe
 
 ### Running Services
 ```
-pixecom-postgres   Up  0.0.0.0:5434->5432/tcp   ← our v2 PostgreSQL
-pixecom-redis      Up  6379/tcp                  ← our v2 Redis
+pixecom-postgres  Up  0.0.0.0:5434->5432/tcp  ← v2 PostgreSQL
+pixecom-redis     Up  6379/tcp                 ← v2 Redis
 ```
 
 ### Database
 ```
-Database:  pixecom_v2
-User:      pixecom
-Password:  pixecom_dev
-Port:      5434 (host) → 5432 (container)
-Tables:    27 (all entities from schema.prisma)
+Database:    pixecom_v2
+User:        pixecom
+Password:    pixecom_dev
+Host port:   5434
+Tables:      27 app tables + _prisma_migrations = 28 total
+Migration:   20260218000000_init (applied, tracked)
 ```
 
 ### API
 ```
-Port:      3001
-Route:     GET /api/health → 200 {"status":"ok","service":"pixecom-api"}
-DB log:    [PrismaService] Database connected
+Port:    3001
+Route:   GET /api/health → 200 {"status":"ok","service":"pixecom-api"}
+DB log:  [PrismaService] Database connected
 ```
 
-### File Tree Added
+### File Tree — Net Changes
 ```
-apps/api/src/
-└── prisma/
-    ├── prisma.service.ts   ← NEW: NestJS-injectable PrismaClient wrapper
-    └── prisma.module.ts    ← NEW: @Global() module, exports PrismaService
+apps/api/src/prisma/
+├── prisma.service.ts             ← NEW
+└── prisma.module.ts              ← NEW
+
+packages/database/prisma/migrations/
+└── 20260218000000_init/
+    └── migration.sql             ← NEW (779 lines)
+
 docs/
-├── R2-CDN-SETUP-LOG.md            ← R2/CDN setup log (previous session)
+├── R2-CDN-SETUP-LOG.md           ← NEW (Phase 0 log)
 └── MILESTONE-2.1.1-WORKING-LOG.md ← this file
+```
+
+---
+
+## Database Workflow Reference (All Environments)
+
+```bash
+# ── Local dev: create a new migration after changing schema.prisma ──
+cd packages/database
+pnpm db:migrate          # prisma migrate dev  (interactive, needs TTY)
+
+# ── Local dev: reset everything and start fresh ──
+pnpm db:migrate:reset    # prisma migrate reset --force  (dev only!)
+
+# ── CI / VPS / Railway: apply pending migrations ──
+pnpm db:migrate:deploy   # prisma migrate deploy  (non-interactive, safe)
+
+# ── Inspect current migration status ──
+pnpm exec prisma migrate status
 ```
 
 ---
 
 ## Next Milestone: 2.1.2 — Auth Module
 
-With the database layer complete, the next step is:
 - JWT AuthModule (registration, login, refresh token)
 - `POST /api/auth/register` → create User + Seller records
 - `POST /api/auth/login` → validate credentials, return JWT pair
