@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AssetsModule } from './assets/assets.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { ProductsModule } from './products/products.module';
 import { SellerModule } from './seller/seller.module';
 
 @Module({
@@ -15,6 +17,8 @@ import { SellerModule } from './seller/seller.module';
     HealthModule,
     AuthModule,
     SellerModule,
+    ProductsModule,
+    AssetsModule,
   ],
 })
 export class AppModule {}
