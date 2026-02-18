@@ -65,6 +65,8 @@ model Seller {
   adStatsRaw     AdStatsRaw[]
   adStatsDaily   AdStatsDaily[]
   sellpageStats  SellpageStatsDaily[]
+  assets         Asset[]
+  creatives      Creative[]
 
   @@map("sellers")
 }
@@ -144,6 +146,7 @@ model SellerDomain {
   seller    Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   sellpages Sellpage[]
 
+  @@unique([hostname], name: "uq_domain_hostname")
   @@unique([sellerId, hostname], name: "uq_seller_domain")
   @@index([sellerId])
   @@map("seller_domains")
@@ -185,6 +188,7 @@ model Product {
   pricingRules PricingRule[]
   sellpages    Sellpage[]
   orderItems   OrderItem[]
+  creatives    Creative[]
 
   @@map("products")
 }
@@ -237,8 +241,49 @@ model ProductProductLabel {
 enum MediaType {
   VIDEO
   IMAGE
+  TEXT
 
   @@map("media_type")
+}
+
+// ─── ASSET / CREATIVE LAYER ──────────────────────────
+
+enum AssetSourceType {
+  PIXCON
+  USER_UPLOAD
+  PARTNER_API
+  MIGRATION
+  SYSTEM
+
+  @@map("asset_source_type")
+}
+
+enum CreativeStatus {
+  DRAFT
+  READY
+  ARCHIVED
+
+  @@map("creative_status")
+}
+
+enum CreativeType {
+  VIDEO_AD
+  IMAGE_AD
+  TEXT_ONLY
+  UGC_BUNDLE
+
+  @@map("creative_type")
+}
+
+enum CreativeAssetRole {
+  PRIMARY_VIDEO
+  THUMBNAIL
+  PRIMARY_TEXT
+  HEADLINE
+  DESCRIPTION
+  EXTRA
+
+  @@map("creative_asset_role")
 }
 
 model AssetMedia {
@@ -456,6 +501,7 @@ model Campaign {
   adAccount  FbConnection  @relation(fields: [adAccountId], references: [id])
   adStrategy AdStrategy?   @relation(fields: [adStrategyId], references: [id], onDelete: SetNull)
   adsets     Adset[]
+  creatives  CampaignCreative[]
 
   @@index([sellerId, sellpageId])
   @@index([sellerId, status])
@@ -737,4 +783,102 @@ model SellpageStatsDaily {
   @@index([sellerId, statDate])
   @@index([sellpageId, statDate])
   @@map("sellpage_stats_daily")
+}
+
+// ─── ASSET / CREATIVE MODELS ─────────────────────────
+
+// Multi-source asset registry.
+// ownerSellerId=null → platform asset (visible to all sellers)
+// ownerSellerId=uuid → seller-owned asset (scoped)
+// Uniqueness: (sourceType, ingestionId) partial unique WHERE ingestion_id IS NOT NULL
+//             (ownerSellerId, checksum) partial unique WHERE checksum IS NOT NULL
+//             Both are raw SQL indexes in migration — not expressible in Prisma schema.
+model Asset {
+  id            String          @id @default(uuid()) @db.Uuid
+  ownerSellerId String?         @map("owner_seller_id") @db.Uuid
+  sourceType    AssetSourceType @map("source_type")
+  ingestionId   String?         @map("ingestion_id") @db.VarChar(255)
+  mediaType     MediaType       @map("media_type")
+  url           String          @db.VarChar(1000)
+  storageKey    String?         @map("storage_key") @db.VarChar(500)
+  mimeType      String?         @map("mime_type") @db.VarChar(100)
+  fileSizeBytes BigInt?         @map("file_size_bytes")
+  durationSec   Int?            @map("duration_sec")
+  width         Int?
+  height        Int?
+  checksum      String?         @db.VarChar(64)
+  metadata      Json            @default("{}") @db.JsonB
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  ownerSeller    Seller?         @relation(fields: [ownerSellerId], references: [id], onDelete: Cascade)
+  creativeAssets CreativeAsset[]
+
+  // NOTE: Uniqueness is enforced by partial SQL indexes in migration, not here:
+  //   assets_uq_ingestion_id  ON (source_type, ingestion_id) WHERE ingestion_id IS NOT NULL
+  //   assets_uq_checksum      ON (owner_seller_id, checksum) WHERE checksum IS NOT NULL
+  @@index([ownerSellerId, mediaType])
+  @@map("assets")
+}
+
+// Seller-owned creative bundle. Links to a product for BI context.
+// Status lifecycle: DRAFT → READY (via validate endpoint) → ARCHIVED
+// creativeType drives which asset slots are required for READY validation.
+model Creative {
+  id             String         @id @default(uuid()) @db.Uuid
+  sellerId       String         @map("seller_id") @db.Uuid
+  productId      String?        @map("product_id") @db.Uuid
+  name           String         @db.VarChar(255)
+  status         CreativeStatus @default(DRAFT)
+  creativeType   CreativeType   @default(VIDEO_AD) @map("creative_type")
+  metadata       Json           @default("{}") @db.JsonB
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller    Seller            @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  product   Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  assets    CreativeAsset[]
+  campaigns CampaignCreative[]
+
+  @@index([sellerId, status])
+  @@map("creatives")
+}
+
+// Join table: Creative ↔ Asset with role slot.
+// Single-slot roles (all except EXTRA) are unique per creative.
+// EXTRA allows multiple rows per creative.
+// Uniqueness for single-slot roles is enforced by a conditional SQL index:
+//   CREATE UNIQUE INDEX ... WHERE role != 'EXTRA'
+// The Prisma @@unique is removed so EXTRA can repeat.
+// Service uses upsert via a named unique index for single-slot roles.
+model CreativeAsset {
+  id         String            @id @default(uuid()) @db.Uuid
+  creativeId String            @map("creative_id") @db.Uuid
+  assetId    String            @map("asset_id") @db.Uuid
+  role       CreativeAssetRole
+
+  creative Creative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+  asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  // NOTE: Single-slot role uniqueness is enforced by a conditional SQL index in migration:
+  //   creative_assets_uq_single_slot_role  ON (creative_id, role) WHERE role != 'EXTRA'
+  @@index([creativeId, role])
+  @@index([assetId])
+  @@map("creative_assets")
+}
+
+// Join table: Campaign ↔ Creative for BI attribution.
+// Tracks which creatives were used in which campaigns.
+model CampaignCreative {
+  id         String   @id @default(uuid()) @db.Uuid
+  campaignId String   @map("campaign_id") @db.Uuid
+  creativeId String   @map("creative_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creative Creative @relation(fields: [creativeId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, creativeId], name: "uq_campaign_creative")
+  @@index([creativeId])
+  @@map("campaign_creatives")
 }

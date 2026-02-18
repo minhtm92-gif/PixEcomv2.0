@@ -8,12 +8,14 @@ export interface JwtPayload {
   sub: string;
   sellerId: string;
   role: string;
+  isSuperadmin: boolean;
 }
 
 export interface AuthUser {
   userId: string;
   sellerId: string;
   role: string;
+  isSuperadmin: boolean;
 }
 
 @Injectable()
@@ -32,7 +34,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: JwtPayload): Promise<AuthUser> {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, isActive: true },
+      select: { id: true, isActive: true, isSuperadmin: true },
     });
 
     if (!user || !user.isActive) {
@@ -43,6 +45,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       userId: payload.sub,
       sellerId: payload.sellerId,
       role: payload.role,
+      isSuperadmin: user.isSuperadmin,
     };
   }
 }
