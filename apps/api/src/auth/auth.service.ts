@@ -262,6 +262,7 @@ export class AuthService {
       httpOnly: true,
       secure: this.config.get<string>('COOKIE_SECURE') === 'true',
       sameSite: 'lax',
+      domain: this.config.get<string>('COOKIE_DOMAIN', ''),
       path: '/api/auth/refresh',
       maxAge: REFRESH_TTL_MS,
     });
@@ -272,6 +273,7 @@ export class AuthService {
       httpOnly: true,
       secure: this.config.get<string>('COOKIE_SECURE') === 'true',
       sameSite: 'lax',
+      domain: this.config.get<string>('COOKIE_DOMAIN', ''),
       path: '/api/auth/refresh',
     });
   }
