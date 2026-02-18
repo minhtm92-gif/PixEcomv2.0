@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -8,6 +9,7 @@ import { HealthModule } from './health/health.module';
       isGlobal: true,
       envFilePath: '../../.env',
     }),
+    PrismaModule,
     HealthModule,
   ],
 })
