@@ -1,5 +1,5 @@
 /**
- * Seed script for PixEcom v2 — Milestone 2.2.1
+ * Seed script for PixEcom v2 — Milestone 2.2.2
  *
  * Seeds:
  *   - 4 ProductLabels: bestseller, new-arrival, trending, limited-edition
@@ -10,6 +10,8 @@
  *       Product 1 -> percentage  (sellerTakeFixed = null)  -> 49.99 * 40% = "20.00"
  *       Product 2 -> fixed       (sellerTakeFixed = 15.00) -> "15.00"
  *       Product 3 -> percentage  (sellerTakeFixed = null)  -> 39.99 * 35% = "14.00"
+ *   - 1 Seed Seller (seed-seller@pixecom.io / password: seedpassword123)
+ *       with SellerSettings + 3 Sellpages (DRAFT, PUBLISHED, DRAFT)
  *
  * Run: pnpm --filter @pixecom/database db:seed
  * Idempotent: safe to re-run.
@@ -143,6 +145,110 @@ async function main() {
   await prisma.pricingRule.upsert({ where: { id: '00000000-0000-0000-0000-000000000203' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000203', productId: product3.id, suggestedRetail: 39.99, sellerTakePercent: 35.00, sellerTakeFixed: null, holdPercent: 10, holdDurationDays: 7, effectiveFrom: new Date('2026-01-01T00:00:00Z'), effectiveUntil: null, isActive: true } });
   console.log('Product 3 (UltraClean Desk Pad) seeded');
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // SEED SELLER + SELLPAGES (for Milestone 2.2.2 e2e / dev testing)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Seed User (password hash is bcrypt of "seedpassword123" at cost 12)
+  // Pre-computed hash so the seed is deterministic and requires no bcrypt dep.
+  const SEED_USER_ID = '00000000-0000-0000-0000-000000001001';
+  const SEED_SELLER_ID = '00000000-0000-0000-0000-000000001002';
+
+  const seedUser = await prisma.user.upsert({
+    where: { id: SEED_USER_ID },
+    update: {},
+    create: {
+      id: SEED_USER_ID,
+      email: 'seed-seller@pixecom.io',
+      // bcrypt hash of "seedpassword123" (cost=12) — pre-computed for idempotency
+      passwordHash: '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQyCMcmDIoWS8SMCdp/05W5lG',
+      displayName: 'Seed Seller',
+      isActive: true,
+    },
+  });
+
+  const seedSeller = await prisma.seller.upsert({
+    where: { id: SEED_SELLER_ID },
+    update: {},
+    create: {
+      id: SEED_SELLER_ID,
+      name: 'Seed Seller Co.',
+      slug: 'seed-seller-co',
+      isActive: true,
+    },
+  });
+
+  await prisma.sellerUser.upsert({
+    where: { uq_seller_user: { sellerId: seedSeller.id, userId: seedUser.id } },
+    update: {},
+    create: {
+      sellerId: seedSeller.id,
+      userId: seedUser.id,
+      role: 'OWNER',
+      isActive: true,
+    },
+  });
+
+  await prisma.sellerSettings.upsert({
+    where: { sellerId: seedSeller.id },
+    update: {},
+    create: {
+      sellerId: seedSeller.id,
+      brandName: 'Seed Seller Co.',
+      defaultCurrency: 'USD',
+      timezone: 'UTC',
+    },
+  });
+
+  console.log('Seed seller seeded');
+
+  // Sellpage 1: DRAFT — mouse sellpage (no domain)
+  await prisma.sellpage.upsert({
+    where: { id: '00000000-0000-0000-0000-000000002001' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000002001',
+      sellerId: seedSeller.id,
+      productId: product1.id,
+      slug: 'my-mouse-offer',
+      status: 'DRAFT',
+      titleOverride: 'Get the SlimPro Mouse Today',
+      descriptionOverride: 'Limited time wireless mouse deal.',
+    },
+  });
+
+  // Sellpage 2: PUBLISHED — laptop stand sellpage (no domain)
+  await prisma.sellpage.upsert({
+    where: { id: '00000000-0000-0000-0000-000000002002' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000002002',
+      sellerId: seedSeller.id,
+      productId: product2.id,
+      slug: 'prostand-special',
+      status: 'PUBLISHED',
+      titleOverride: 'ProStand — Best Laptop Stand',
+      descriptionOverride: null,
+    },
+  });
+
+  // Sellpage 3: DRAFT — desk pad sellpage (no domain)
+  await prisma.sellpage.upsert({
+    where: { id: '00000000-0000-0000-0000-000000002003' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000002003',
+      sellerId: seedSeller.id,
+      productId: product3.id,
+      slug: 'desk-pad-offer',
+      status: 'DRAFT',
+      titleOverride: null,
+      descriptionOverride: null,
+    },
+  });
+
+  console.log('Sellpages seeded');
+
   const pc = await prisma.product.count();
   const vc = await prisma.productVariant.count();
   const lc = await prisma.productLabel.count();
@@ -150,7 +256,8 @@ async function main() {
   const tc = await prisma.assetThumbnail.count();
   const ac = await prisma.assetAdtext.count();
   const rc = await prisma.pricingRule.count();
-  console.log(`Summary: ${pc} products, ${vc} variants, ${lc} labels, ${mc} media, ${tc} thumbs, ${ac} adtexts, ${rc} pricing rules`);
+  const sc = await prisma.sellpage.count();
+  console.log(`Summary: ${pc} products, ${vc} variants, ${lc} labels, ${mc} media, ${tc} thumbs, ${ac} adtexts, ${rc} pricing rules, ${sc} sellpages`);
   console.log('Seeding complete.');
 }
 
