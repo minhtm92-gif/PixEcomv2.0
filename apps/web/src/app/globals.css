@@ -1,3 +1,173 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ================================================================
+   PIXECOM DARK THEME TOKENS (Pixelxlab Dark + Selless Clean)
+   ================================================================ */
+:root {
+  --radius: 0.5rem;
+
+  --background: #0c0c14;
+  --foreground: #e8e8f0;
+
+  --card: #12121e;
+  --card-foreground: #e8e8f0;
+
+  --popover: #12121e;
+  --popover-foreground: #e8e8f0;
+
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+
+  --secondary: #1e1e2e;
+  --secondary-foreground: #a1a1b5;
+
+  --muted: #16162a;
+  --muted-foreground: #6b6b8a;
+
+  --accent: #1a1a32;
+  --accent-foreground: #e8e8f0;
+
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  --border: #1e1e2e;
+  --input: #1e1e2e;
+  --ring: #6366f1;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+}
+
+/* ================================================================
+   BASE STYLES
+   ================================================================ */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* ================================================================
+   CUSTOM SCROLLBAR
+   ================================================================ */
+@layer base {
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--input);
+    border-radius: 5px;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--input) transparent;
+  }
+}
+
+/* ================================================================
+   LAYOUT: DEMO1 SIDEBAR + HEADER SYSTEM
+   ================================================================ */
+@layer components {
+  .demo1 {
+    --sidebar-transition-duration: 0.3s;
+    --sidebar-transition-timing: ease;
+    --sidebar-width: 280px;
+    --sidebar-width-collapse: 80px;
+    --sidebar-default-width: 280px;
+    --header-height: 70px;
+  }
+
+  @media (max-width: 1023px) {
+    .demo1 {
+      --sidebar-width: 280px;
+      --header-height: 60px;
+    }
+  }
+
+  .demo1 .header {
+    height: var(--header-height);
+  }
+
+  .demo1 .sidebar {
+    width: var(--sidebar-width);
+  }
+
+  .demo1.header-fixed .wrapper {
+    padding-top: var(--header-height);
+  }
+
+  @media (min-width: 1024px) {
+    .demo1 .sidebar {
+      width: var(--sidebar-width);
+      transition: width var(--sidebar-transition-duration) var(--sidebar-transition-timing);
+    }
+
+    .demo1 .sidebar .sidebar-header {
+      height: var(--header-height);
+    }
+
+    .demo1 .sidebar .sidebar-wrapper {
+      width: var(--sidebar-default-width);
+    }
+
+    .demo1.sidebar-fixed .wrapper {
+      padding-inline-start: var(--sidebar-width) !important;
+    }
+
+    .demo1.sidebar-fixed.header-fixed .header {
+      inset-inline-start: var(--sidebar-width) !important;
+    }
+
+    .demo1.sidebar-fixed.header-fixed .wrapper {
+      padding-top: var(--header-height);
+    }
+
+    .demo1.sidebar-collapse {
+      --sidebar-width: var(--sidebar-width-collapse);
+    }
+
+    .demo1.sidebar-collapse .sidebar {
+      transition: width var(--sidebar-transition-duration) var(--sidebar-transition-timing);
+    }
+
+    .demo1.sidebar-collapse .sidebar:hover {
+      width: var(--sidebar-default-width);
+    }
+
+    .demo1.sidebar-collapse .sidebar:not(:hover) .sidebar-label,
+    .demo1.sidebar-collapse .sidebar:not(:hover) .sidebar-menu-title {
+      display: none !important;
+    }
+  }
+
+  .demo1.layout-initialized .wrapper {
+    transition: padding-inline-start var(--sidebar-transition-duration) var(--sidebar-transition-timing);
+  }
+
+  .demo1.layout-initialized .header {
+    transition: inset-inline-start var(--sidebar-transition-duration) var(--sidebar-transition-timing);
+  }
+}
+
+/* ================================================================
+   UTILITIES
+   ================================================================ */
+@layer utilities {
+  .container-fluid {
+    @apply mx-auto w-full px-4 lg:px-5;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
