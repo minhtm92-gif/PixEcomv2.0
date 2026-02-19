@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AdStrategiesModule } from './ad-strategies/ad-strategies.module';
+import { OrdersModule } from './orders/orders.module';
 import { AssetRegistryModule } from './asset-registry/asset-registry.module';
 import { AssetsModule } from './assets/assets.module';
 import { AuthModule } from './auth/auth.module';
@@ -33,6 +34,7 @@ import { SellpagesModule } from './sellpages/sellpages.module';
     CreativesModule,
     FbConnectionsModule,
     AdStrategiesModule,
+    OrdersModule,
   ],
 })
 export class AppModule {}
