@@ -43,7 +43,7 @@ All milestone working logs in the `docs/` directory. Each log records implementa
 | 2.3.2 | [MILESTONE-2.3.2-WORKING-LOG.md](./MILESTONE-2.3.2-WORKING-LOG.md) | Campaign wizard — create/launch campaigns via FB connections + ad strategies | `feature/2.3.2-campaign-wizard` | `58b1d2e` | 212 E2E ✅ |
 | 2.3.3 | [MILESTONE-2.3.3-WORKING-LOG.md](./MILESTONE-2.3.3-WORKING-LOG.md) | Stats worker — BullMQ 3-tier pipeline + MockProvider | `feature/2.3.3-stats-worker` | `a80692c` | 245 E2E ✅ |
 | 2.3.4-A | [MILESTONE-2.3.4-A-WORKING-LOG.md](./MILESTONE-2.3.4-A-WORKING-LOG.md) | Ads Manager — campaign read layer + stats aggregation | `feature/2.3.4a-ads-manager-campaigns` | `23f2786` | 240 E2E ✅ (227 + 13 new) |
-| 2.3.4-C | [MILESTONE-2.3.4-C-WORKING-LOG.md](./MILESTONE-2.3.4-C-WORKING-LOG.md) | Analytics Overview — seller KPI dashboard (revenue, cost, money model) | `feature/2.3.4c-analytics-overview` | TBD | 240 E2E ✅ (227 + 13 new) |
+| 2.3.4-C | [MILESTONE-2.3.4-C-WORKING-LOG.md](./MILESTONE-2.3.4-C-WORKING-LOG.md) | Analytics Overview — seller KPI dashboard (revenue, cost, money model) | `feature/2.3.4c-analytics-overview` | `2dc6a7a` | 240 E2E ✅ (227 + 13 new) |
 
 ---
 
