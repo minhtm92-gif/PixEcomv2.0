@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AssetRegistryModule } from './asset-registry/asset-registry.module';
 import { AssetsModule } from './assets/assets.module';
 import { AuthModule } from './auth/auth.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
 import { CreativesModule } from './creatives/creatives.module';
 import { DomainsModule } from './domains/domains.module';
 import { HealthModule } from './health/health.module';
@@ -29,6 +30,7 @@ import { SellpagesModule } from './sellpages/sellpages.module';
     MediaModule,
     AssetRegistryModule,
     CreativesModule,
+    CampaignsModule,
   ],
 })
 export class AppModule {}
