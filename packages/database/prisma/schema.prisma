@@ -631,6 +631,7 @@ model Order {
   @@unique([sellerId, orderNumber], name: "uq_order_number")
   @@index([sellerId, status])
   @@index([sellerId, sellpageId])
+  @@index([sellerId, createdAt])
   @@map("orders")
 }
 
