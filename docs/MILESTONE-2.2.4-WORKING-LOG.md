@@ -1,15 +1,15 @@
-# Milestone 2.4 — Multi-Source Asset Ingestion + Creative Layer
-**Branch:** `feature/2.4-asset-creative-layer`  
-**Status:** ✅ Complete  
-**Date:** 2026-02-18  
-**Commit:** `2d0c285`  
-**PR:** https://github.com/minhtm92-gif/PixEcomv2.0/pull/new/feature/2.4-asset-creative-layer  
+# Milestone 2.2.4 — Multi-Source Asset Ingestion + Creative Layer
+**Branch:** `feature/2.4-asset-creative-layer`
+**Status:** ✅ Complete
+**Date:** 2026-02-18
+**Commit:** `2d0c285`
+**PR:** https://github.com/minhtm92-gif/PixEcomv2.0/pull/new/feature/2.4-asset-creative-layer
 
 ---
 
 ## Objective
 
-Implement the Asset Registry and Creative Layer (Milestone 2.4 per the PixEcom v2 architecture plan):
+Implement the Asset Registry and Creative Layer (Milestone 2.2.4 per the PixEcom v2 architecture plan):
 
 - Multi-source asset ingestion (seller uploads, internal pipelines, platform system assets)
 - Presigned R2/S3 upload URL generation
@@ -109,7 +109,7 @@ Two auth paths for the ingest endpoint:
 
 ---
 
-## Seed Data (Milestone 2.4)
+## Seed Data (Milestone 2.2.4)
 
 Added to `packages/database/prisma/seed.ts`:
 
@@ -237,7 +237,7 @@ File: `apps/api/test/asset-registry.e2e-spec.ts`
 
 ---
 
-# Milestone 2.4.1 — Pre-v2.3 Hardening
+# Milestone 2.2.4.1 — Pre-v2.3 Hardening
 **Branch:** `feature/2.4-asset-creative-layer`
 **Status:** ✅ Complete
 **Date:** 2026-02-19
