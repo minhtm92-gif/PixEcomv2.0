@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AdStrategiesModule } from './ad-strategies/ad-strategies.module';
 import { AssetRegistryModule } from './asset-registry/asset-registry.module';
 import { AssetsModule } from './assets/assets.module';
 import { AuthModule } from './auth/auth.module';
 import { CreativesModule } from './creatives/creatives.module';
 import { DomainsModule } from './domains/domains.module';
+import { FbConnectionsModule } from './fb-connections/fb-connections.module';
 import { HealthModule } from './health/health.module';
 import { MediaModule } from './media/media.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -29,6 +31,8 @@ import { SellpagesModule } from './sellpages/sellpages.module';
     MediaModule,
     AssetRegistryModule,
     CreativesModule,
+    FbConnectionsModule,
+    AdStrategiesModule,
   ],
 })
 export class AppModule {}
