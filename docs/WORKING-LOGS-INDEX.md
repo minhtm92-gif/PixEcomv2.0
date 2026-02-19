@@ -39,6 +39,7 @@ All milestone working logs in the `docs/` directory. Each log records implementa
 | Milestone | Log | Description | Branch | Commits | Tests |
 |-----------|-----|-------------|--------|---------|-------|
 | 2.3.1 | [MILESTONE-2.3.1-WORKING-LOG.md](./MILESTONE-2.3.1-WORKING-LOG.md) | FB connections + ad strategies (mock-only metadata store) | `feature/2.3.1-fb-connections-ad-strategies` | `c83373f`, `2525595` | 209 E2E ✅ (179 + 30 new) |
+| 2.3.4-A | [MILESTONE-2.3.4-A-WORKING-LOG.md](./MILESTONE-2.3.4-A-WORKING-LOG.md) | Ads Manager — campaign read layer + stats aggregation | `feature/2.3.4a-ads-manager-campaigns` | TBD | 240 E2E ✅ (227 + 13 new) |
 
 ---
 
@@ -63,6 +64,7 @@ All milestone working logs in the `docs/` directory. Each log records implementa
 | 2.2.4 | 161 |
 | 2.2.4.1 (hardening) | 179 |
 | **2.3.1** | **209** |
+| **2.3.4-A** | **240** |
 
 ---
 
@@ -70,6 +72,4 @@ All milestone working logs in the `docs/` directory. Each log records implementa
 
 | Milestone | Description |
 |-----------|-------------|
-| **2.3.2** | Campaign management — create/launch campaigns using FB connections + ad strategies |
-| 2.3.3 | Stats worker — BullMQ job to sync campaign stats (mock provider Phase 1) |
-| 2.3.4 | Ads manager + analytics dashboard + orders module |
+| **2.3.4-B** | Ads manager — ad sets + ad-level stats + orders module + analytics dashboard |

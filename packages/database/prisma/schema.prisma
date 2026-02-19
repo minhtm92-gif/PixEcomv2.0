@@ -752,6 +752,7 @@ model AdStatsDaily {
 
   @@unique([sellerId, entityType, entityId, statDate], name: "uq_ad_stats_daily")
   @@index([sellerId, statDate])
+  @@index([entityId, statDate])
   @@map("ad_stats_daily")
 }
 
