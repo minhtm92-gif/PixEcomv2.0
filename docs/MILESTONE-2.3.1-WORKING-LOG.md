@@ -204,3 +204,132 @@ Test Suites: 8 passed, 8 total
 Tests:       209 passed, 209 total  (179 existing + 30 new)
 Time:        ~18s
 ```
+
+---
+
+# Milestone 2.3.1.1 — Pre-2.3.2 Hardening
+**Branch:** `feature/2.3.1.1-connections-hardening`
+**Status:** ✅ Complete
+**Date:** 2026-02-19
+**Tests:** 227 passed (209 existing + 18 new)
+
+---
+
+## Objective
+
+Three minimal improvements applied before starting Milestone 2.3.2 (Campaign Wizard) to avoid service-layer refactors later. Scope kept intentionally small.
+
+---
+
+## Task 1 — Connection Hierarchy Validation
+
+### Rules Enforced (service-level, `validateHierarchy()`)
+| Type | parentId rule |
+|------|---------------|
+| `AD_ACCOUNT` | Must be **null** (top-level only) |
+| `PAGE` | Must be **null** (top-level only) |
+| `PIXEL` | Must reference an **AD_ACCOUNT** belonging to the same seller |
+| `CONVERSION` | Must reference a **PIXEL** belonging to the same seller |
+
+### Implementation
+- Added `HIERARCHY_RULES` constant map in `fb-connections.service.ts`
+- Added private `validateHierarchy(sellerId, connectionType, parentId?)` method
+- Called at start of `createConnection()` before the duplicate check
+- Cross-tenant parent access returns `404 NotFoundException` (not `403` — avoids leaking existence)
+- Wrong parent type returns `400 BadRequestException` with a descriptive message
+
+### No schema change required — logic is purely service-level.
+
+---
+
+## Task 2 — isActive Indexes
+
+### Migration: `20260219100000_hardening_2311`
+```sql
+CREATE INDEX IF NOT EXISTS "fb_connections_seller_id_is_active_idx"
+  ON "fb_connections" ("seller_id", "is_active");
+
+CREATE INDEX IF NOT EXISTS "ad_strategies_seller_id_is_active_idx"
+  ON "ad_strategies" ("seller_id", "is_active");
+```
+
+### Schema Changes
+Added to `packages/database/prisma/schema.prisma`:
+```prisma
+// FbConnection model
+@@index([sellerId, isActive])   -- new
+
+// AdStrategy model
+@@index([sellerId, isActive])   -- new
+```
+
+These composite indexes support the active-only filter added in Task 3 without a full table scan.
+
+---
+
+## Task 3 — Soft Disable (DELETE → `isActive=false`)
+
+### Behavior Change
+| Before | After |
+|--------|-------|
+| `DELETE` physically removed the row | `DELETE` sets `isActive=false` |
+| Response: `{ deleted: true, id }` | Response: `{ ok: true, id, isActive: false }` |
+| Row gone from DB | Row preserved — campaigns can still reference it |
+
+### List Endpoint Changes
+Both `GET /api/fb/connections` and `GET /api/fb/ad-strategies` now default to active-only:
+
+| Query param | Behavior |
+|-------------|----------|
+| *(none)* | Returns only `isActive=true` records |
+| `?includeInactive=true` | Returns all records (active + disabled) |
+
+### DTO Changes
+- `ListFbConnectionsDto` — added `@IsOptional() @IsBoolean() includeInactive?` with `@Transform` for query string booleans
+- `ListAdStrategiesDto` — new DTO (same shape as above), wired into controller and service
+
+### Existing Tests Updated
+- Test 14 in `fb-connections-ad-strategies.e2e-spec.ts` — updated assertions from `{ deleted: true }` to `{ ok: true, isActive: false }`
+- Test 29 in `fb-connections-ad-strategies.e2e-spec.ts` — same update; also replaced CONVERSION (now requires parentId) with AD_ACCOUNT
+
+---
+
+## Issues Encountered & Resolved
+
+| # | Issue | Resolution |
+|---|-------|-----------|
+| 1 | `prisma migrate resolve` advisory lock timeout | Applied SQL directly via `docker exec psql`, then inserted row into `_prisma_migrations` manually (`gen_random_uuid()::varchar` as PK) |
+| 2 | Existing test 14 created `CONVERSION` without `parentId` | Changed to `AD_ACCOUNT` (no parentId required) to comply with new hierarchy rules |
+| 3 | Existing tests 14 + 29 expected `{ deleted: true }` response | Updated to expect `{ ok: true, isActive: false }` |
+
+---
+
+## Files Modified
+
+| File | Change |
+|------|--------|
+| `apps/api/src/fb-connections/fb-connections.service.ts` | Added `HIERARCHY_RULES`, `validateHierarchy()`, soft-delete in `deleteConnection()`, active-only filter in `listConnections()` |
+| `apps/api/src/fb-connections/dto/list-fb-connections.dto.ts` | Added `includeInactive?` field with `@Transform` |
+| `apps/api/src/fb-connections/fb-connections.controller.ts` | Updated DELETE docstring |
+| `apps/api/src/ad-strategies/ad-strategies.service.ts` | Soft-delete in `deleteStrategy()`, active-only filter in `listStrategies()`, added `ListAdStrategiesDto` import |
+| `apps/api/src/ad-strategies/ad-strategies.controller.ts` | Added `@Query() query: ListAdStrategiesDto` to `list()`, updated DELETE docstring |
+| `packages/database/prisma/schema.prisma` | Added `@@index([sellerId, isActive])` to both `FbConnection` and `AdStrategy` models |
+| `apps/api/test/fb-connections-ad-strategies.e2e-spec.ts` | Updated tests 14 + 29 for new soft-delete response shape |
+
+## Files Created
+
+| File | Description |
+|------|-------------|
+| `apps/api/src/ad-strategies/dto/list-ad-strategies.dto.ts` | New list DTO with `includeInactive?` |
+| `packages/database/prisma/migrations/20260219100000_hardening_2311/migration.sql` | Two `CREATE INDEX` statements |
+| `apps/api/test/hardening-2311.e2e-spec.ts` | 18 new E2E tests |
+
+---
+
+## Test Results
+
+```
+Test Suites: 9 passed, 9 total
+Tests:       227 passed, 227 total  (209 existing + 18 new)
+Time:        ~17s
+```

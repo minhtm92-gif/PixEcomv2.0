@@ -276,14 +276,14 @@ describe('FB Connections + Ad Strategies (e2e)', () => {
       expect(res.status).toBe(404);
     });
 
-    it('14. DELETE — removes connection (200)', async () => {
+    it('14. DELETE — soft-disables connection (200, isActive=false)', async () => {
       // Create a throwaway connection to delete
       const create = await request(app.getHttpServer())
         .post('/api/fb/connections')
         .set('Authorization', auth(sellerAToken))
         .send({
-          connectionType: 'CONVERSION',
-          externalId: 'conv_delete_me',
+          connectionType: 'AD_ACCOUNT',
+          externalId: 'act_delete_me',
           name: 'To Delete',
         });
       const deleteId = create.body.id;
@@ -293,14 +293,23 @@ describe('FB Connections + Ad Strategies (e2e)', () => {
         .set('Authorization', auth(sellerAToken));
 
       expect(res.status).toBe(200);
-      expect(res.body.deleted).toBe(true);
+      expect(res.body.ok).toBe(true);
       expect(res.body.id).toBe(deleteId);
+      expect(res.body.isActive).toBe(false);
 
-      // Verify it's gone
-      const check = await request(app.getHttpServer())
-        .get(`/api/fb/connections/${deleteId}`)
+      // Verify it's NOT returned in the default (active-only) list
+      const list = await request(app.getHttpServer())
+        .get('/api/fb/connections')
         .set('Authorization', auth(sellerAToken));
-      expect(check.status).toBe(404);
+      const ids = list.body.map((c: any) => c.id);
+      expect(ids).not.toContain(deleteId);
+
+      // Verify it IS visible with includeInactive=true
+      const listAll = await request(app.getHttpServer())
+        .get('/api/fb/connections?includeInactive=true')
+        .set('Authorization', auth(sellerAToken));
+      const allIds = listAll.body.map((c: any) => c.id);
+      expect(allIds).toContain(deleteId);
     });
 
     it('15. DELETE — seller B cannot delete seller A connection (404)', async () => {
@@ -478,7 +487,7 @@ describe('FB Connections + Ad Strategies (e2e)', () => {
       expect(res.status).toBe(404);
     });
 
-    it('29. DELETE — removes strategy (200)', async () => {
+    it('29. DELETE — soft-disables strategy (200, isActive=false)', async () => {
       // Create throwaway
       const create = await request(app.getHttpServer())
         .post('/api/fb/ad-strategies')
@@ -491,14 +500,23 @@ describe('FB Connections + Ad Strategies (e2e)', () => {
         .set('Authorization', auth(sellerAToken));
 
       expect(res.status).toBe(200);
-      expect(res.body.deleted).toBe(true);
+      expect(res.body.ok).toBe(true);
       expect(res.body.id).toBe(deleteId);
+      expect(res.body.isActive).toBe(false);
 
-      // Verify gone
-      const check = await request(app.getHttpServer())
-        .get(`/api/fb/ad-strategies/${deleteId}`)
+      // Verify NOT returned in default (active-only) list
+      const list = await request(app.getHttpServer())
+        .get('/api/fb/ad-strategies')
         .set('Authorization', auth(sellerAToken));
-      expect(check.status).toBe(404);
+      const ids = list.body.map((s: any) => s.id);
+      expect(ids).not.toContain(deleteId);
+
+      // Verify visible with includeInactive=true
+      const listAll = await request(app.getHttpServer())
+        .get('/api/fb/ad-strategies?includeInactive=true')
+        .set('Authorization', auth(sellerAToken));
+      const allIds = listAll.body.map((s: any) => s.id);
+      expect(allIds).toContain(deleteId);
     });
 
     it('30. DELETE — seller B cannot delete seller A strategy (404)', async () => {
