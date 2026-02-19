@@ -87,8 +87,8 @@ export class FbConnectionsController {
 
   /**
    * DELETE /api/fb/connections/:id
-   * Permanently remove a connection (must belong to authenticated seller).
-   * Returns 200 { deleted: true, id }.
+   * Soft-disables a connection (sets isActive=false).
+   * Returns 200 { ok: true, id, isActive: false }.
    */
   @Delete(':id')
   remove(

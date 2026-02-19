@@ -38,6 +38,21 @@ type FbConnectionRow = {
   updatedAt: Date;
 };
 
+// ─── Hierarchy rules ──────────────────────────────────────────────────────────
+// AD_ACCOUNT and PAGE are top-level (parentId must be null).
+// PIXEL must have a parent that is an AD_ACCOUNT.
+// CONVERSION must have a parent that is a PIXEL.
+
+const HIERARCHY_RULES: Record<
+  string,
+  { requiresParent: boolean; allowedParentType: string | null }
+> = {
+  AD_ACCOUNT: { requiresParent: false, allowedParentType: null },
+  PAGE: { requiresParent: false, allowedParentType: null },
+  PIXEL: { requiresParent: true, allowedParentType: 'AD_ACCOUNT' },
+  CONVERSION: { requiresParent: true, allowedParentType: 'PIXEL' },
+};
+
 @Injectable()
 export class FbConnectionsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -45,16 +60,7 @@ export class FbConnectionsService {
   // ─── CREATE ────────────────────────────────────────────────────────────────
 
   async createConnection(sellerId: string, dto: CreateFbConnectionDto) {
-    // If parentId provided, verify it belongs to this seller
-    if (dto.parentId) {
-      const parent = await this.prisma.fbConnection.findUnique({
-        where: { id: dto.parentId },
-        select: { id: true, sellerId: true },
-      });
-      if (!parent || parent.sellerId !== sellerId) {
-        throw new NotFoundException(`Parent connection not found`);
-      }
-    }
+    await this.validateHierarchy(sellerId, dto.connectionType, dto.parentId);
 
     // Enforce unique (sellerId, connectionType, externalId)
     const existing = await this.prisma.fbConnection.findFirst({
@@ -95,6 +101,8 @@ export class FbConnectionsService {
     const connections = await this.prisma.fbConnection.findMany({
       where: {
         sellerId,
+        // Task 3: default to active-only; includeInactive bypasses this
+        ...(query.includeInactive ? {} : { isActive: true }),
         ...(query.connectionType
           ? { connectionType: query.connectionType as any }
           : {}),
@@ -152,14 +160,20 @@ export class FbConnectionsService {
     return mapToDto(updated as FbConnectionRow);
   }
 
-  // ─── DELETE ────────────────────────────────────────────────────────────────
+  // ─── DELETE (soft disable) ─────────────────────────────────────────────────
+  // Task 3: Sets isActive=false instead of physically deleting the row.
+  // This prevents FK/orphan issues when campaigns reference this connection.
 
   async deleteConnection(sellerId: string, id: string) {
     await this.assertBelongsToSeller(sellerId, id);
 
-    await this.prisma.fbConnection.delete({ where: { id } });
+    const updated = await this.prisma.fbConnection.update({
+      where: { id },
+      data: { isActive: false },
+      select: FB_CONNECTION_SELECT,
+    });
 
-    return { deleted: true, id };
+    return { ok: true, id, isActive: updated.isActive };
   }
 
   // ─── PRIVATE ───────────────────────────────────────────────────────────────
@@ -173,6 +187,54 @@ export class FbConnectionsService {
       throw new NotFoundException('Connection not found');
     }
     return connection;
+  }
+
+  /**
+   * Enforces the connection type hierarchy:
+   * - AD_ACCOUNT / PAGE: parentId must be absent/null
+   * - PIXEL: parentId must reference an AD_ACCOUNT belonging to the same seller
+   * - CONVERSION: parentId must reference a PIXEL belonging to the same seller
+   */
+  private async validateHierarchy(
+    sellerId: string,
+    connectionType: string,
+    parentId?: string,
+  ) {
+    const rule = HIERARCHY_RULES[connectionType];
+    if (!rule) return; // unknown type — leave to other validators
+
+    if (rule.allowedParentType === null) {
+      // Top-level types must not have a parent
+      if (parentId) {
+        throw new BadRequestException(
+          `${connectionType} connections must not have a parentId`,
+        );
+      }
+      return;
+    }
+
+    // Types that require a parent
+    if (!parentId) {
+      throw new BadRequestException(
+        `${connectionType} connections require a parentId referencing a ${rule.allowedParentType}`,
+      );
+    }
+
+    // Verify parent exists, belongs to the same seller, and is the correct type
+    const parent = await this.prisma.fbConnection.findUnique({
+      where: { id: parentId },
+      select: { id: true, sellerId: true, connectionType: true },
+    });
+
+    if (!parent || parent.sellerId !== sellerId) {
+      throw new NotFoundException(`Parent connection not found`);
+    }
+
+    if (parent.connectionType !== rule.allowedParentType) {
+      throw new BadRequestException(
+        `${connectionType} requires a parent of type ${rule.allowedParentType}, but got ${parent.connectionType}`,
+      );
+    }
   }
 }
 

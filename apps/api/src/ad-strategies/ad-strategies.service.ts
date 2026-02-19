@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAdStrategyDto } from './dto/create-ad-strategy.dto';
+import { ListAdStrategiesDto } from './dto/list-ad-strategies.dto';
 import { UpdateAdStrategyDto } from './dto/update-ad-strategy.dto';
 
 // ─── Prisma select shape ──────────────────────────────────────────────────────
@@ -71,9 +72,13 @@ export class AdStrategiesService {
 
   // ─── LIST ────────────────────────────────────────────────────────────────
 
-  async listStrategies(sellerId: string) {
+  async listStrategies(sellerId: string, query: ListAdStrategiesDto = {}) {
     const strategies = await this.prisma.adStrategy.findMany({
-      where: { sellerId },
+      where: {
+        sellerId,
+        // Task 3: default to active-only; includeInactive bypasses this
+        ...(query.includeInactive ? {} : { isActive: true }),
+      },
       orderBy: { createdAt: 'desc' },
       select: AD_STRATEGY_SELECT,
     });
@@ -154,7 +159,9 @@ export class AdStrategiesService {
     return mapToDto(updated as AdStrategyRow);
   }
 
-  // ─── DELETE ──────────────────────────────────────────────────────────────
+  // ─── DELETE (soft disable) ────────────────────────────────────────────────
+  // Task 3: Sets isActive=false instead of physically deleting the row.
+  // Campaigns will later reference strategies — physical delete risks FK issues.
 
   async deleteStrategy(sellerId: string, id: string) {
     const existing = await this.prisma.adStrategy.findUnique({
@@ -166,9 +173,13 @@ export class AdStrategiesService {
       throw new NotFoundException('Ad strategy not found');
     }
 
-    await this.prisma.adStrategy.delete({ where: { id } });
+    const updated = await this.prisma.adStrategy.update({
+      where: { id },
+      data: { isActive: false },
+      select: AD_STRATEGY_SELECT,
+    });
 
-    return { deleted: true, id };
+    return { ok: true, id, isActive: updated.isActive };
   }
 }
 

@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -16,6 +17,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/strategies/jwt.strategy';
 import { AdStrategiesService } from './ad-strategies.service';
 import { CreateAdStrategyDto } from './dto/create-ad-strategy.dto';
+import { ListAdStrategiesDto } from './dto/list-ad-strategies.dto';
 import { UpdateAdStrategyDto } from './dto/update-ad-strategy.dto';
 
 /**
@@ -46,11 +48,15 @@ export class AdStrategiesController {
 
   /**
    * GET /api/fb/ad-strategies
-   * List all ad strategies for the authenticated seller.
+   * List strategies for the authenticated seller.
+   * Default: active only. ?includeInactive=true includes disabled strategies.
    */
   @Get()
-  list(@CurrentUser() user: AuthUser) {
-    return this.service.listStrategies(user.sellerId);
+  list(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ListAdStrategiesDto,
+  ) {
+    return this.service.listStrategies(user.sellerId, query);
   }
 
   /**
@@ -81,8 +87,8 @@ export class AdStrategiesController {
 
   /**
    * DELETE /api/fb/ad-strategies/:id
-   * Permanently remove a strategy.
-   * Returns 200 { deleted: true, id }.
+   * Soft-disables a strategy (sets isActive=false).
+   * Returns 200 { ok: true, id, isActive: false }.
    */
   @Delete(':id')
   remove(
