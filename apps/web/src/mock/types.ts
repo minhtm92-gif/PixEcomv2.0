@@ -76,30 +76,64 @@ export interface SellpageCardDto {
   productName?: string;
 }
 
-/** Order item */
-export interface OrderItemDto {
+/** Order status — mirrors backend enum */
+export type OrderStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'CANCELLED'
+  | 'REFUNDED';
+
+/** Order list item — matches OrderListItem from orders.service */
+export interface OrderListItem {
   id: string;
-  productName: string;
-  variantName: string | null;
-  quantity: number;
-  unitPrice: string;
-  lineTotal: string;
-  heroImageUrl: string | null;
+  orderNumber: string;
+  createdAt: string;
+  sellpage: { id: string; url: string } | null;
+  customer: { email: string; name: string | null };
+  total: number;
+  currency: string;
+  status: OrderStatus;
+  itemsCount: number;
 }
 
-/** Order card — list endpoint shape */
-export interface OrderCardDto {
+/** Order detail item — line item in order */
+export interface OrderDetailItem {
+  productTitle: string;
+  variantTitle: string | null;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+/** Order event — timeline entry */
+export interface OrderEvent {
+  type: string;
+  at: string;
+  note: string | null;
+}
+
+/** Order detail — full detail response */
+export interface OrderDetail {
   id: string;
-  orderCode: string;
-  customerName: string;
-  customerEmail: string;
-  status: 'PENDING' | 'CONFIRMED' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'REFUNDED';
-  paymentStatus: 'UNPAID' | 'PAID' | 'REFUNDED' | 'PARTIAL';
-  totalAmount: string;
-  currency: string;
-  itemCount: number;
-  items: OrderItemDto[];
-  shippingAddress: {
+  orderNumber: string;
+  createdAt: string;
+  sellpage: { id: string; url: string } | null;
+  customer: { email: string; name: string | null; phone: string | null };
+  totals: {
+    subtotal: number;
+    shipping: number;
+    tax: number;
+    discount: number;
+    total: number;
+    currency: string;
+  };
+  status: OrderStatus;
+  items: OrderDetailItem[];
+  events: OrderEvent[];
+  shippingAddress?: {
     line1: string;
     line2?: string;
     city: string;
@@ -107,9 +141,9 @@ export interface OrderCardDto {
     zip: string;
     country: string;
   };
-  sellpageSlug: string;
-  createdAt: string;
-  updatedAt: string;
+  trackingNumber?: string | null;
+  trackingUrl?: string | null;
+  paymentMethod?: string | null;
 }
 
 /** Asset (media registry) */
