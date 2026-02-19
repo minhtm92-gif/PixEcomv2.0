@@ -444,6 +444,7 @@ model FbConnection {
 
   @@unique([sellerId, connectionType, externalId], name: "uq_fb_connection")
   @@index([sellerId, connectionType])
+  @@index([sellerId, isActive])
   @@map("fb_connections")
 }
 
@@ -460,6 +461,7 @@ model AdStrategy {
   campaigns Campaign[]
 
   @@index([sellerId])
+  @@index([sellerId, isActive])
   @@map("ad_strategies")
 }
 
