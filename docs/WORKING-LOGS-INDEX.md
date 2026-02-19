@@ -39,7 +39,10 @@ All milestone working logs in the `docs/` directory. Each log records implementa
 | Milestone | Log | Description | Branch | Commits | Tests |
 |-----------|-----|-------------|--------|---------|-------|
 | 2.3.1 | [MILESTONE-2.3.1-WORKING-LOG.md](./MILESTONE-2.3.1-WORKING-LOG.md) | FB connections + ad strategies (mock-only metadata store) | `feature/2.3.1-fb-connections-ad-strategies` | `c83373f`, `2525595` | 209 E2E ✅ (179 + 30 new) |
-| 2.3.4-A | [MILESTONE-2.3.4-A-WORKING-LOG.md](./MILESTONE-2.3.4-A-WORKING-LOG.md) | Ads Manager — campaign read layer + stats aggregation | `feature/2.3.4a-ads-manager-campaigns` | TBD | 240 E2E ✅ (227 + 13 new) |
+| 2.3.1.1 | *(appended to 2.3.1 log)* | Pre-2.3.2 hardening — connection hierarchy, isActive indexes, soft disable | `feature/2.3.1.1-connections-hardening` | `043e76d` | 227 E2E ✅ |
+| 2.3.2 | [MILESTONE-2.3.2-WORKING-LOG.md](./MILESTONE-2.3.2-WORKING-LOG.md) | Campaign wizard — create/launch campaigns via FB connections + ad strategies | `feature/2.3.2-campaign-wizard` | `58b1d2e` | 212 E2E ✅ |
+| 2.3.3 | [MILESTONE-2.3.3-WORKING-LOG.md](./MILESTONE-2.3.3-WORKING-LOG.md) | Stats worker — BullMQ 3-tier pipeline + MockProvider | `feature/2.3.3-stats-worker` | `a80692c` | 245 E2E ✅ |
+| 2.3.4-A | [MILESTONE-2.3.4-A-WORKING-LOG.md](./MILESTONE-2.3.4-A-WORKING-LOG.md) | Ads Manager — campaign read layer + stats aggregation | `feature/2.3.4a-ads-manager-campaigns` | `23f2786` | 240 E2E ✅ (227 + 13 new) |
 
 ---
 
@@ -64,7 +67,10 @@ All milestone working logs in the `docs/` directory. Each log records implementa
 | 2.2.4 | 161 |
 | 2.2.4.1 (hardening) | 179 |
 | **2.3.1** | **209** |
-| **2.3.4-A** | **240** |
+| 2.3.1.1 | 227 |
+| 2.3.2 | 212 |
+| 2.3.3 | 245 |
+| **2.3.4-A** | **240** *(off develop base 227 + 13 new)* |
 
 ---
 
