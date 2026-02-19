@@ -1,13 +1,15 @@
 import { cn } from '@/lib/utils';
 
-interface PageHeaderProps {
+export interface PageHeaderProps {
   title: string;
   subtitle?: string;
+  action?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
 }
 
-export function PageHeader({ title, subtitle, children, className }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, action, children, className }: PageHeaderProps) {
+  const trailing = action || children;
   return (
     <div className={cn('flex items-center flex-wrap gap-2 justify-between', className)}>
       <div className="flex flex-col gap-1">
@@ -16,7 +18,7 @@ export function PageHeader({ title, subtitle, children, className }: PageHeaderP
           <span className="text-sm text-muted-foreground">{subtitle}</span>
         )}
       </div>
-      {children && <div className="flex items-center gap-2.5">{children}</div>}
+      {trailing && <div className="flex items-center gap-2.5">{trailing}</div>}
     </div>
   );
 }
