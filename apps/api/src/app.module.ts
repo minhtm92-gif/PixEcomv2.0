@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AdsManagerModule } from './ads-manager/ads-manager.module';
 import { AdStrategiesModule } from './ad-strategies/ad-strategies.module';
 import { OrdersModule } from './orders/orders.module';
@@ -15,6 +16,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { SellerModule } from './seller/seller.module';
 import { SellpagesModule } from './sellpages/sellpages.module';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 
 @Module({
   imports: [
@@ -22,6 +24,7 @@ import { SellpagesModule } from './sellpages/sellpages.module';
       isGlobal: true,
       envFilePath: '../../.env',
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
     AuthModule,
@@ -39,4 +42,9 @@ import { SellpagesModule } from './sellpages/sellpages.module';
     OrdersModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    // WS2: Attach request ID to every inbound request
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

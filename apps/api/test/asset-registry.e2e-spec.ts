@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * Asset Registry + Creatives E2E Tests — Milestone 2.4
@@ -30,6 +31,7 @@ import { AppModule } from '../src/app.module';
  */
 describe('Asset Registry + Creatives (e2e)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
 
   let sellerAToken: string;
   let sellerBToken: string;
@@ -74,6 +76,30 @@ describe('Asset Registry + Creatives (e2e)', () => {
     app.use(cookieParser());
     app.setGlobalPrefix('api');
     await app.init();
+
+    prisma = moduleFixture.get<PrismaService>(PrismaService);
+
+    // ── Self-contained seed: platform asset (ownerSellerId=null, visible to all sellers) ──
+    // Uses upsert + explicit update of createdAt so the asset always appears
+    // in the first page of results (ordered createdAt DESC, limit=100).
+    await prisma.asset.upsert({
+      where: { id: PLATFORM_ASSET_SEED_ID },
+      update: { createdAt: new Date() },   // bump to now so it sorts to top
+      create: {
+        id: PLATFORM_ASSET_SEED_ID,
+        ownerSellerId: null,
+        sourceType: 'SYSTEM',
+        ingestionId: 'platform-video-001',
+        mediaType: 'VIDEO',
+        url: 'https://cdn.pixelxlab.com/platform/v1-demo-video.mp4',
+        storageKey: 'platform/v1-demo-video.mp4',
+        mimeType: 'video/mp4',
+        fileSizeBytes: BigInt(12000000),
+        durationSec: 30,
+        width: 1080,
+        height: 1080,
+      },
+    });
 
     // Register two sellers
     const resA = await register(uniqueEmail('ar-a'), 'Asset Seller A');

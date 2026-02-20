@@ -3,13 +3,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * Product Catalog + Asset E2E Tests — Milestone 2.2.1
- *
- * Requires a live PostgreSQL database (pixecom-postgres on port 5434)
- * with seed data already applied:
- *   pnpm --filter @pixecom/database db:seed
+ * Updated Milestone 2.3.7: self-contained seed — no external db:seed required.
  *
  * Run: pnpm --filter @pixecom/api test:e2e
  *
@@ -23,6 +21,7 @@ import { AppModule } from '../src/app.module';
  */
 describe('Product Catalog (e2e)', () => {
   let app: INestApplication;
+  let prisma: PrismaService;
   let accessToken: string;
 
   // IDs resolved after listing — we look them up by productCode in beforeAll
@@ -66,10 +65,125 @@ describe('Product Catalog (e2e)', () => {
     );
     await app.init();
 
+    prisma = moduleFixture.get<PrismaService>(PrismaService);
+
+    // ── Self-contained seed: labels ──────────────────────────────────────
+    const labelBestseller = await prisma.productLabel.upsert({
+      where: { slug: 'bestseller' },
+      update: {},
+      create: { name: 'Bestseller', slug: 'bestseller' },
+    });
+    const labelNewArrival = await prisma.productLabel.upsert({
+      where: { slug: 'new-arrival' },
+      update: {},
+      create: { name: 'New Arrival', slug: 'new-arrival' },
+    });
+    const labelTrending = await prisma.productLabel.upsert({
+      where: { slug: 'trending' },
+      update: {},
+      create: { name: 'Trending', slug: 'trending' },
+    });
+    const labelLimited = await prisma.productLabel.upsert({
+      where: { slug: 'limited-edition' },
+      update: {},
+      create: { name: 'Limited Edition', slug: 'limited-edition' },
+    });
+
+    // ── Self-contained seed: products ───────────────────────────────────
+    // Product 1: MOUSE-001 — percentage pricing (49.99 * 40% = 20.00)
+    const product1 = await prisma.product.upsert({
+      where: { productCode: 'MOUSE-001' },
+      update: {},
+      create: {
+        productCode: 'MOUSE-001',
+        name: 'SlimPro Wireless Mouse',
+        slug: 'slimpro-wireless-mouse',
+        basePrice: 29.99,
+        compareAtPrice: 39.99,
+        currency: 'USD',
+        sku: 'MOUSE-001-SKU',
+        description: 'Ergonomic wireless mouse with precision tracking and 6-month battery life.',
+        descriptionBlocks: [
+          { type: 'paragraph', content: 'Ultra-slim ergonomic design for all-day comfort.' },
+          { type: 'bullet_list', items: ['2.4GHz wireless', '1600 DPI sensor', '6-month battery'] },
+        ],
+        shippingInfo: { weight_g: 95, dimensions_cm: { l: 11.5, w: 6.2, h: 3.8 } },
+        tags: ['wireless', 'ergonomic', 'office', 'productivity'],
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.productVariant.upsert({ where: { id: '00000000-0000-0000-0000-000000000101' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000101', productId: product1.id, name: 'Black', sku: 'MOUSE-001-BLK', priceOverride: null, options: { color: 'Black' }, stockQuantity: 150, isActive: true, position: 0 } });
+    await prisma.productVariant.upsert({ where: { id: '00000000-0000-0000-0000-000000000102' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000102', productId: product1.id, name: 'White', sku: 'MOUSE-001-WHT', priceOverride: null, options: { color: 'White' }, stockQuantity: 80, isActive: true, position: 1 } });
+    await prisma.productVariant.upsert({ where: { id: '00000000-0000-0000-0000-000000000103' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000103', productId: product1.id, name: 'Rose Gold', sku: 'MOUSE-001-RGD', priceOverride: 32.99, options: { color: 'Rose Gold' }, stockQuantity: 40, isActive: true, position: 2 } });
+    await prisma.productProductLabel.upsert({ where: { productId_labelId: { productId: product1.id, labelId: labelBestseller.id } }, update: {}, create: { productId: product1.id, labelId: labelBestseller.id } });
+    await prisma.productProductLabel.upsert({ where: { productId_labelId: { productId: product1.id, labelId: labelTrending.id } }, update: {}, create: { productId: product1.id, labelId: labelTrending.id } });
+    await prisma.pricingRule.upsert({ where: { id: '00000000-0000-0000-0000-000000000201' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000201', productId: product1.id, suggestedRetail: 49.99, sellerTakePercent: 40.00, sellerTakeFixed: null, holdPercent: 10, holdDurationDays: 7, effectiveFrom: new Date('2026-01-01T00:00:00Z'), effectiveUntil: null, isActive: true } });
+    await prisma.assetMedia.upsert({ where: { id: '00000000-0000-0000-0000-000000000301' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000301', productId: product1.id, version: 'v1', url: 'https://cdn.pixelxlab.com/assets/mouse-001/v1-main.mp4', mediaType: 'VIDEO', durationSec: 30, fileSize: 8500000, width: 1080, height: 1080, position: 0, isCurrent: true } });
+    await prisma.assetThumbnail.upsert({ where: { id: '00000000-0000-0000-0000-000000000401' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000401', productId: product1.id, version: 'v1', url: 'https://cdn.pixelxlab.com/assets/mouse-001/v1-thumb.jpg', width: 800, height: 800, position: 0, isCurrent: true } });
+    await prisma.assetThumbnail.upsert({ where: { id: '00000000-0000-0000-0000-000000000402' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000402', productId: product1.id, version: 'b1', url: 'https://cdn.pixelxlab.com/assets/mouse-001/b1-thumb.jpg', width: 800, height: 800, position: 1, isCurrent: false } });
+    await prisma.assetAdtext.upsert({ where: { id: '00000000-0000-0000-0000-000000000501' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000501', productId: product1.id, version: 'v1', primaryText: 'Say goodbye to tangled cables.', headline: 'SlimPro Wireless Mouse — Work Smarter', description: 'Ergonomic. Precise. Silent. Free 2-day shipping.' } });
+
+    // Product 2: STAND-001 — fixed pricing override (15.00)
+    const product2 = await prisma.product.upsert({
+      where: { productCode: 'STAND-001' },
+      update: {},
+      create: {
+        productCode: 'STAND-001',
+        name: 'ProStand Laptop Stand',
+        slug: 'prostand-laptop-stand',
+        basePrice: 34.99,
+        compareAtPrice: 49.99,
+        currency: 'USD',
+        sku: 'STAND-001-SKU',
+        description: 'Adjustable aluminum laptop stand with cable management.',
+        descriptionBlocks: [
+          { type: 'paragraph', content: 'Premium aluminum alloy construction.' },
+          { type: 'bullet_list', items: ['Adjustable 0-60 degrees', 'Fits 10-17 inch laptops', 'Foldable for travel'] },
+        ],
+        shippingInfo: { weight_g: 420, dimensions_cm: { l: 26, w: 22, h: 3 } },
+        tags: ['laptop', 'stand', 'ergonomic', 'aluminum', 'portable'],
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.productVariant.upsert({ where: { id: '00000000-0000-0000-0000-000000000111' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000111', productId: product2.id, name: 'Silver', sku: 'STAND-001-SLV', priceOverride: null, options: { color: 'Silver' }, stockQuantity: 200, isActive: true, position: 0 } });
+    await prisma.productVariant.upsert({ where: { id: '00000000-0000-0000-0000-000000000112' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000112', productId: product2.id, name: 'Space Gray', sku: 'STAND-001-SGR', priceOverride: 37.99, options: { color: 'Space Gray' }, stockQuantity: 120, isActive: true, position: 1 } });
+    await prisma.productProductLabel.upsert({ where: { productId_labelId: { productId: product2.id, labelId: labelBestseller.id } }, update: {}, create: { productId: product2.id, labelId: labelBestseller.id } });
+    await prisma.productProductLabel.upsert({ where: { productId_labelId: { productId: product2.id, labelId: labelNewArrival.id } }, update: {}, create: { productId: product2.id, labelId: labelNewArrival.id } });
+    await prisma.pricingRule.upsert({ where: { id: '00000000-0000-0000-0000-000000000202' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000202', productId: product2.id, suggestedRetail: 54.99, sellerTakePercent: 25.00, sellerTakeFixed: 15.00, holdPercent: 10, holdDurationDays: 7, effectiveFrom: new Date('2026-01-01T00:00:00Z'), effectiveUntil: null, isActive: true } });
+
+    // Product 3: DESKPAD-001 — percentage pricing (39.99 * 35% = 14.00)
+    const product3 = await prisma.product.upsert({
+      where: { productCode: 'DESKPAD-001' },
+      update: {},
+      create: {
+        productCode: 'DESKPAD-001',
+        name: 'UltraClean Desk Pad',
+        slug: 'ultraclean-desk-pad',
+        basePrice: 24.99,
+        compareAtPrice: null,
+        currency: 'USD',
+        sku: 'DESKPAD-001-SKU',
+        description: 'Large waterproof desk pad with stitched edges and non-slip rubber base.',
+        descriptionBlocks: [
+          { type: 'paragraph', content: 'Keep your desk clean and organised.' },
+          { type: 'bullet_list', items: ['900x400mm XL size', 'Waterproof surface', 'Non-slip base'] },
+        ],
+        shippingInfo: { weight_g: 280, dimensions_cm: { l: 92, w: 42, h: 0.3 } },
+        tags: ['desk', 'pad', 'waterproof', 'home-office'],
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.productVariant.upsert({ where: { id: '00000000-0000-0000-0000-000000000121' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000121', productId: product3.id, name: 'Black / XL', sku: 'DESKPAD-001-BLK-XL', priceOverride: null, options: { color: 'Black', size: 'XL' }, stockQuantity: 300, isActive: true, position: 0 } });
+    await prisma.productVariant.upsert({ where: { id: '00000000-0000-0000-0000-000000000122' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000122', productId: product3.id, name: 'Grey / XL', sku: 'DESKPAD-001-GRY-XL', priceOverride: null, options: { color: 'Grey', size: 'XL' }, stockQuantity: 250, isActive: true, position: 1 } });
+    await prisma.productVariant.upsert({ where: { id: '00000000-0000-0000-0000-000000000123' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000123', productId: product3.id, name: 'Pink / XL', sku: 'DESKPAD-001-PNK-XL', priceOverride: 26.99, options: { color: 'Pink', size: 'XL' }, stockQuantity: 75, isActive: true, position: 2 } });
+    await prisma.productProductLabel.upsert({ where: { productId_labelId: { productId: product3.id, labelId: labelLimited.id } }, update: {}, create: { productId: product3.id, labelId: labelLimited.id } });
+    await prisma.productProductLabel.upsert({ where: { productId_labelId: { productId: product3.id, labelId: labelTrending.id } }, update: {}, create: { productId: product3.id, labelId: labelTrending.id } });
+    await prisma.pricingRule.upsert({ where: { id: '00000000-0000-0000-0000-000000000203' }, update: {}, create: { id: '00000000-0000-0000-0000-000000000203', productId: product3.id, suggestedRetail: 39.99, sellerTakePercent: 35.00, sellerTakeFixed: null, holdPercent: 10, holdDurationDays: 7, effectiveFrom: new Date('2026-01-01T00:00:00Z'), effectiveUntil: null, isActive: true } });
+
     // Register a seller to obtain an access token used in all tests
     accessToken = await registerAndGetToken();
 
-    // Discover seeded product IDs by fetching the full catalog
+    // Discover product IDs by fetching the full catalog
     const listRes = await request(app.getHttpServer())
       .get('/api/products?limit=100')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -78,14 +192,10 @@ describe('Product Catalog (e2e)', () => {
     const products: Array<{ id: string; code: string }> = listRes.body.data;
     mouseProductId = products.find((p) => p.code === 'MOUSE-001')?.id ?? '';
     standProductId = products.find((p) => p.code === 'STAND-001')?.id ?? '';
-    deskpadProductId =
-      products.find((p) => p.code === 'DESKPAD-001')?.id ?? '';
+    deskpadProductId = products.find((p) => p.code === 'DESKPAD-001')?.id ?? '';
 
-    // Guard: fail early with a clear message if seed wasn't run
     if (!mouseProductId || !standProductId || !deskpadProductId) {
-      throw new Error(
-        'Seed data missing! Run: pnpm --filter @pixecom/database db:seed',
-      );
+      throw new Error('Self-contained seed failed — products not found after upsert');
     }
   }, 60_000);
 
@@ -322,7 +432,7 @@ describe('Product Catalog (e2e)', () => {
 
     it('MOUSE-001 card heroImageUrl is the v1 thumbnail URL', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/products')
+        .get('/api/products?limit=100')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
@@ -571,7 +681,7 @@ describe('Product Catalog (e2e)', () => {
      */
     it('catalog card computes youTakeEstimate as pct of suggestedRetail', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/products')
+        .get('/api/products?limit=100')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
@@ -595,7 +705,7 @@ describe('Product Catalog (e2e)', () => {
 
     it('DESKPAD-001 youTakeEstimate = 39.99 * 35% = 14.00', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/products')
+        .get('/api/products?limit=100')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
@@ -622,7 +732,7 @@ describe('Product Catalog (e2e)', () => {
      */
     it('catalog card youTakeEstimate uses fixed amount, not percentage', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/products')
+        .get('/api/products?limit=100')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
