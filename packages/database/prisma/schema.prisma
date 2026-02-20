@@ -64,8 +64,9 @@ model Seller {
   orderEvents    OrderEvent[]
   adStatsRaw     AdStatsRaw[]
   adStatsDaily   AdStatsDaily[]
-  sellpageStats  SellpageStatsDaily[]
-  assets         Asset[]
+  sellpageStats       SellpageStatsDaily[]
+  storeEntityStats    StoreEntityStatsDaily[]
+  assets              Asset[]
   creatives      Creative[]
 
   @@map("sellers")
@@ -620,6 +621,14 @@ model Order {
   trackingNumber  String?     @map("tracking_number") @db.VarChar(255)
   trackingUrl     String?     @map("tracking_url") @db.VarChar(1000)
   notes           String?
+  // UTM attribution — set at order creation from landing page URL params
+  // utm_campaign = 'c_<campaignId>', utm_term = 'as_<adsetId>', utm_content = 'a_<adId>'
+  // 'N/A' sentinel means no UTM was present — never mixed with real attributed orders
+  utmSource       String?     @map("utm_source") @db.VarChar(100)
+  utmMedium       String?     @map("utm_medium") @db.VarChar(100)
+  utmCampaign     String?     @map("utm_campaign") @db.VarChar(255)
+  utmTerm         String?     @map("utm_term") @db.VarChar(255)
+  utmContent      String?     @map("utm_content") @db.VarChar(255)
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -632,6 +641,9 @@ model Order {
   @@index([sellerId, status])
   @@index([sellerId, sellpageId])
   @@index([sellerId, createdAt])
+  @@index([sellerId, utmCampaign])
+  @@index([sellerId, utmTerm])
+  @@index([sellerId, utmContent])
   @@map("orders")
 }
 
@@ -786,6 +798,32 @@ model SellpageStatsDaily {
   @@index([sellerId, statDate])
   @@index([sellpageId, statDate])
   @@map("sellpage_stats_daily")
+}
+
+// Store-side metrics rolled up per entity (campaign/adset/ad) per day.
+// Populated by UTM attribution: orders are matched to entityIds via
+//   utm_campaign = 'c_<campaignId>'
+//   utm_term     = 'as_<adsetId>'
+//   utm_content  = 'a_<adId>'
+// Orders with utm = 'N/A' or null are NOT included here — they never mix.
+model StoreEntityStatsDaily {
+  id           String   @id @default(uuid()) @db.Uuid
+  sellerId     String   @map("seller_id") @db.Uuid
+  platform     String   @default("META") @db.VarChar(20)
+  level        String   @db.VarChar(10)   // 'CAMPAIGN' | 'ADSET' | 'AD'
+  entityId     String   @map("entity_id") @db.Uuid
+  statDate     DateTime @map("stat_date") @db.Date
+  contentViews Int      @default(0) @map("content_views")
+  checkouts    Int      @default(0)
+  purchases    Int      @default(0)
+  revenue      Decimal  @default(0) @db.Decimal(12, 2)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, level, entityId, statDate], name: "uq_store_entity_stats_daily")
+  @@index([sellerId, level, entityId, statDate])
+  @@map("store_entity_stats_daily")
 }
 
 // ─── ASSET / CREATIVE MODELS ─────────────────────────

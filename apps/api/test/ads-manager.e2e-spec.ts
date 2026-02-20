@@ -25,7 +25,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
  *  12. GET /ads-manager/ads        — all metric columns present in response
  *  13. GET /ads-manager/filters    — returns campaigns, adsets, ads, statusEnums
  *  14. GET /ads-manager/campaigns  — status filter works
- *  15. Metrics derivation: CTR = clicks/impressions*100, CPC = spend/clicks, ROAS = purchaseValue/spend
+ *  15. Metrics derivation: CTR = clicks/impressions*100, CPC = spend/clicks, ROAS = store.revenue/spend, CR from store stats
  *  16. storeMetricsPending=false when ad_stats_daily rows exist with non-zero values
  */
 describe('Ads Manager 3-Tier Read Layer (e2e)', () => {
@@ -242,6 +242,54 @@ describe('Ads Manager 3-Tier Read Layer (e2e)', () => {
         checkoutInitiated: 48,
         purchases: 24,
         purchaseValue: 1200,
+      },
+    });
+
+    // ── Seed store_entity_stats_daily — store-side metrics for Campaign A / Adset 1 / Ad 1 ──
+    // Required by 2.3.5 architecture: ROAS/CR/contentViews now sourced from store_entity_stats_daily
+    // Campaign A: revenue=1500, purchases=30, contentViews=300, checkouts=60
+    //   → ROAS = 1500/100 = 15, CR = 30/300*100 = 10, CR1 = 60/300*100 = 20, CR2 = 30/60*100 = 50
+    await prisma.storeEntityStatsDaily.create({
+      data: {
+        sellerId: sellerAId,
+        platform: 'META',
+        level: 'CAMPAIGN',
+        entityId: campaignAId,
+        statDate: today,
+        contentViews: 300,
+        checkouts: 60,
+        purchases: 30,
+        revenue: 1500,
+      },
+    });
+
+    // Adset 1: revenue=1200, purchases=24, contentViews=240, checkouts=48
+    await prisma.storeEntityStatsDaily.create({
+      data: {
+        sellerId: sellerAId,
+        platform: 'META',
+        level: 'ADSET',
+        entityId: adsetA1Id,
+        statDate: today,
+        contentViews: 240,
+        checkouts: 48,
+        purchases: 24,
+        revenue: 1200,
+      },
+    });
+
+    // Ad 1: revenue=1200, purchases=24, contentViews=240, checkouts=48
+    await prisma.storeEntityStatsDaily.create({
+      data: {
+        sellerId: sellerAId,
+        platform: 'META',
+        level: 'AD',
+        entityId: adA1Id,
+        statDate: today,
+        contentViews: 240,
+        checkouts: 48,
+        purchases: 24,
+        revenue: 1200,
       },
     });
   });
