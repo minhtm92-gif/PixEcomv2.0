@@ -13,7 +13,10 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed-alpha": "tsx prisma/seed-alpha.ts",
+    "seed:staging": "tsx prisma/seed.staging.ts",
+    "seed:staging:reset": "tsx prisma/seed.staging.reset.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0"

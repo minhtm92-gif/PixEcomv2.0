@@ -12,6 +12,8 @@
     "db:push": "turbo db:push",
     "db:migrate": "turbo db:migrate",
     "db:studio": "pnpm --filter @pixecom/database db:studio",
+    "seed:staging": "pnpm --filter @pixecom/database seed:staging",
+    "seed:staging:reset": "pnpm --filter @pixecom/database seed:staging:reset",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\""
   },
   "devDependencies": {
