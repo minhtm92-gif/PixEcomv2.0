@@ -6,6 +6,21 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateSellerSettingsDto } from './dto/update-seller-settings.dto';
 
+// Shared select for all settings queries
+const SETTINGS_SELECT = {
+  id: true,
+  sellerId: true,
+  brandName: true,
+  defaultCurrency: true,
+  timezone: true,
+  supportEmail: true,
+  metaPixelId: true,
+  googleAnalyticsId: true,
+  autoTrackingRefresh: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
 @Injectable()
 export class SellerSettingsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -17,18 +32,7 @@ export class SellerSettingsService {
   async getSettings(sellerId: string) {
     const settings = await this.prisma.sellerSettings.findUnique({
       where: { sellerId },
-      select: {
-        id: true,
-        sellerId: true,
-        brandName: true,
-        defaultCurrency: true,
-        timezone: true,
-        supportEmail: true,
-        metaPixelId: true,
-        googleAnalyticsId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: SETTINGS_SELECT,
     });
 
     if (!settings) {
@@ -74,19 +78,11 @@ export class SellerSettingsService {
         ...(dto.googleAnalyticsId !== undefined && {
           googleAnalyticsId: dto.googleAnalyticsId,
         }),
+        ...(dto.autoTrackingRefresh !== undefined && {
+          autoTrackingRefresh: dto.autoTrackingRefresh,
+        }),
       },
-      select: {
-        id: true,
-        sellerId: true,
-        brandName: true,
-        defaultCurrency: true,
-        timezone: true,
-        supportEmail: true,
-        metaPixelId: true,
-        googleAnalyticsId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: SETTINGS_SELECT,
     });
 
     return updated;

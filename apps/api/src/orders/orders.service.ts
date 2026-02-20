@@ -62,6 +62,9 @@ export interface OrderListItem {
   currency: string;
   status: string;
   itemsCount: number;
+  transactionId: string | null;
+  trackingNumber: string | null;
+  trackingStatus: string | null;
 }
 
 export interface OrderListResult {
@@ -84,6 +87,13 @@ export interface OrderDetail {
     currency: string;
   };
   status: string;
+  transactionId: string | null;
+  tracking: {
+    number: string | null;
+    status: string | null;
+    url: string | null;
+    provider: string | null;
+  };
   items: Array<{
     productTitle: string;
     variantTitle: string | null;
@@ -160,6 +170,9 @@ export class OrdersService {
         total: true,
         currency: true,
         status: true,
+        paymentId: true,
+        trackingNumber: true,
+        trackingStatus: true,
         sellpage: {
           select: {
             id: true,
@@ -196,6 +209,9 @@ export class OrdersService {
       currency: r.currency,
       status: r.status,
       itemsCount: r._count.items,
+      transactionId: r.paymentId ?? null,
+      trackingNumber: r.trackingNumber ?? null,
+      trackingStatus: r.trackingStatus ?? null,
     }));
 
     return { items, nextCursor };
@@ -218,6 +234,11 @@ export class OrdersService {
         total: true,
         currency: true,
         status: true,
+        paymentId: true,
+        trackingNumber: true,
+        trackingStatus: true,
+        trackingUrl: true,
+        trackingProvider: true,
         sellpage: {
           select: {
             id: true,
@@ -274,6 +295,13 @@ export class OrdersService {
         currency: order.currency,
       },
       status: order.status,
+      transactionId: order.paymentId ?? null,
+      tracking: {
+        number: order.trackingNumber ?? null,
+        status: order.trackingStatus ?? null,
+        url: order.trackingUrl ?? null,
+        provider: order.trackingProvider ?? null,
+      },
       items: order.items.map((i) => ({
         productTitle: i.productName,
         variantTitle: i.variantName ?? null,

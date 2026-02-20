@@ -105,10 +105,11 @@ model SellerSettings {
   defaultCurrency   String   @default("USD") @map("default_currency") @db.VarChar(3)
   timezone          String   @default("UTC") @db.VarChar(64)
   supportEmail      String?  @map("support_email") @db.VarChar(255)
-  metaPixelId       String?  @map("meta_pixel_id") @db.VarChar(100)
-  googleAnalyticsId String?  @map("google_analytics_id") @db.VarChar(100)
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  metaPixelId           String?  @map("meta_pixel_id") @db.VarChar(100)
+  googleAnalyticsId     String?  @map("google_analytics_id") @db.VarChar(100)
+  autoTrackingRefresh   Boolean  @default(false) @map("auto_tracking_refresh")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
@@ -617,11 +618,13 @@ model Order {
   paymentMethod   String?     @map("payment_method") @db.VarChar(50)
   paymentId       String?     @map("payment_id") @db.VarChar(255)
   paidAt          DateTime?   @map("paid_at") @db.Timestamptz
-  trackingNumber  String?     @map("tracking_number") @db.VarChar(255)
-  trackingUrl     String?     @map("tracking_url") @db.VarChar(1000)
-  notes           String?
-  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  trackingNumber   String?     @map("tracking_number")   @db.VarChar(255)
+  trackingUrl      String?     @map("tracking_url")       @db.VarChar(1000)
+  trackingStatus   String?     @map("tracking_status")    @db.VarChar(50)
+  trackingProvider String?     @map("tracking_provider")  @db.VarChar(50)
+  notes            String?
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   seller   Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   sellpage Sellpage?  @relation(fields: [sellpageId], references: [id], onDelete: SetNull)
@@ -632,6 +635,7 @@ model Order {
   @@index([sellerId, status])
   @@index([sellerId, sellpageId])
   @@index([sellerId, createdAt])
+  @@index([sellerId, trackingStatus])
   @@map("orders")
 }
 
@@ -665,6 +669,7 @@ enum OrderEventType {
   CANCELLED
   REFUNDED
   NOTE_ADDED
+  TRACKING_REFRESHED
 
   @@map("order_event_type")
 }

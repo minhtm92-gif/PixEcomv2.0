@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AdsManagerModule } from './ads-manager/ads-manager.module';
 import { AdStrategiesModule } from './ad-strategies/ad-strategies.module';
 import { OrdersModule } from './orders/orders.module';
@@ -22,6 +23,7 @@ import { SellpagesModule } from './sellpages/sellpages.module';
       isGlobal: true,
       envFilePath: '../../.env',
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
     AuthModule,

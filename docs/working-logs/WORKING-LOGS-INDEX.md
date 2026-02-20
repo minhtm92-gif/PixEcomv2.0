@@ -50,6 +50,8 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 | 2.3.4-C | [MILESTONE-2.3.4-C-WORKING-LOG.md](./MILESTONE-2.3.4-C-WORKING-LOG.md) | Analytics Overview — seller KPI dashboard (revenue, cost, money model) | `feature/2.3.4c-analytics-overview` | `2dc6a7a` | 240 E2E ✅ (227 + 13 new) |
 | 2.3.4-D | [MILESTONE-2.3.4-D-WORKING-LOG.md](./MILESTONE-2.3.4-D-WORKING-LOG.md) | Orders Read Layer — list + detail, keyset pagination, no-leak contract | `feature/2.3.4d-orders-read-layer` | `46242c4` | 241 E2E ✅ (227 + 14 new) |
 | 2.3.4-B | [MILESTONE-2.3.4-B-WORKING-LOG.md](./MILESTONE-2.3.4-B-WORKING-LOG.md) | Ads Manager 3-Tier Read Layer — Campaign/Adset/Ad + metrics contract | `feature/2.3.4b-ads-manager-3tier` | `6dd681c` | 257 E2E ✅ (241 + 16 new) |
+| 2.3.5 | [MILESTONE-2.3.5-WORKING-LOG.md](./MILESTONE-2.3.5-WORKING-LOG.md) | Ads Manager Store Metrics Join — store_entity_stats_daily join for ROAS/CR | `feature/2.3.5-store-metrics-join` | `193ddfc` | 265 E2E ✅ (252 + 13 new) |
+| 2.3.6 | [MILESTONE-2.3.6-WORKING-LOG.md](./MILESTONE-2.3.6-WORKING-LOG.md) | Orders Upgrade — transactionId + 17track refresh + autoTrackingRefresh + rate limit | `feature/2.3.6-orders-tracking` | *(pending)* | 266 E2E ✅ (252 + 14 new) |
 
 ---
 
@@ -82,6 +84,8 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 | **2.3.4-C** | **240** | +13 *(off develop base 227)* |
 | **2.3.4-D** | **241** | +14 *(off develop base 227)* |
 | **2.3.4-B** | **257** | +16 *(off develop base 241)* |
+| **2.3.5** | **265** | +13 *(off develop base 252)* |
+| **2.3.6** | **271** | +14 new passing (266 pass; 5 pre-existing fail) |
 
 ---
 
@@ -90,17 +94,6 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 | Milestone | Description | Spec | Status |
 |-----------|-------------|------|--------|
 | **2.3.4-B** | Ads Manager 3-Tier Read Layer (Campaign/Adset/Ad + metrics contract) | — | ✅ Done |
-| **2.3.X** | Ads Manager Full Read Layer + Store Funnel Join + Orders Tracking Upgrade | [`TECH-SPEC-V1-ADDENDUM-2.3.X.md`](../TECH-SPEC-V1-ADDENDUM-2.3.X.md) | 🔄 Pending |
-| **2.3.5** | Seller dashboard frontend wiring (Next.js) | — | Pending |
-
-### 2.3.X Phase Tracker
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| PHASE 0 | Precheck — branch `feature/2.3.4d-orders-read-layer`, schema valid, 241/241 E2E ✅ | ✅ Done (`dd7fa9c`) |
-| PHASE 1 | Migration — UTM fields + tracking fields on Order, autoTrackingRefresh on SellerSettings, 4 indexes | ⏳ Awaiting confirmation |
-| PHASE 2 | Metrics engine — `apps/api/src/shared/utils/metrics.util.ts` + unit tests | ⏳ Pending |
-| PHASE 3 | AdsManager campaign level — 3-source join + store funnel + unattributed bucket | ⏳ Pending |
-| PHASE 4 | AdsManager adset level — `GET /ads-manager/adsets?campaignId=...` | ⏳ Pending |
-| PHASE 5 | AdsManager ad level — `GET /ads-manager/ads?adsetId=...` | ⏳ Pending |
-| PHASE 6 | Orders tracking refresh — TrackingProvider + SevenTrack stub + `POST /orders/:id/refresh-tracking` | ⏳ Pending |
+| **2.3.5** | Ads Manager Store Metrics Join — ROAS/CR via store_entity_stats_daily | — | ✅ Done |
+| **2.3.6** | Orders Upgrade — transactionId + 17track refresh + rate limit + scheduler | — | ✅ Done |
+| **2.4** | Frontend wiring — Next.js seller dashboard | — | 🔄 Pending |

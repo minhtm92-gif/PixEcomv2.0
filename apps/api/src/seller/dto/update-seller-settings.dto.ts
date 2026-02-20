@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsString, Length, MaxLength } from 'class-validator';
 
 export class UpdateSellerSettingsDto {
   @IsString()
@@ -29,4 +29,8 @@ export class UpdateSellerSettingsDto {
   @IsOptional()
   @MaxLength(100)
   googleAnalyticsId?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  autoTrackingRefresh?: boolean;
 }
