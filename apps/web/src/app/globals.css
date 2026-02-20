@@ -1,3 +1,40 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Dark theme tokens ── */
+:root {
+  --background: #0c0c14;
+  --foreground: #e4e4e9;
+  --card: #12121e;
+  --border: #1e1e2e;
+  --input: #1a1a2e;
+  --primary: #6366f1;
+  --primary-foreground: #ffffff;
+  --muted: #16162a;
+  --muted-foreground: #6b6b8a;
+  --destructive: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
+    font-family: Inter, system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* ── Toast animation ── */
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.animate-slide-in {
+  animation: slideIn 0.2s ease-out;
+}
+
+/* ── Custom scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
