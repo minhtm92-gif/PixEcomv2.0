@@ -1,6 +1,10 @@
 # PixEcom v2 — Working Logs Index
 
-All milestone working logs in the `docs/` directory. Each log records implementation decisions, issues encountered, fixes applied, and test results.
+All milestone working logs are in this `docs/working-logs/` directory. Each log records implementation decisions, issues encountered, fixes applied, and test results.
+
+> **Note:** Audit & competitor analysis files are in [`../audit/`](../audit/README.md)
+> **Metrics contract (frozen):** [`../METRICS-CONTRACT.md`](../METRICS-CONTRACT.md)
+> **2.3.X spec:** [`../TECH-SPEC-V1-ADDENDUM-2.3.X.md`](../TECH-SPEC-V1-ADDENDUM-2.3.X.md)
 
 ---
 
@@ -39,12 +43,12 @@ All milestone working logs in the `docs/` directory. Each log records implementa
 | Milestone | Log | Description | Branch | Commits | Tests |
 |-----------|-----|-------------|--------|---------|-------|
 | 2.3.1 | [MILESTONE-2.3.1-WORKING-LOG.md](./MILESTONE-2.3.1-WORKING-LOG.md) | FB connections + ad strategies (mock-only metadata store) | `feature/2.3.1-fb-connections-ad-strategies` | `c83373f`, `2525595` | 209 E2E ✅ (179 + 30 new) |
-| 2.3.1.1 | *(appended to 2.3.1 log)* | Pre-2.3.2 hardening — connection hierarchy, isActive indexes, soft disable | `feature/2.3.1.1-connections-hardening` | `043e76d` | 227 E2E ✅ |
+| 2.3.1.1 | [MILESTONE-2.3.1.1-WORKING-LOG.md](./MILESTONE-2.3.1.1-WORKING-LOG.md) | Pre-2.3.2 hardening — connection hierarchy, isActive indexes, soft disable | `feature/2.3.1.1-connections-hardening` | `145259f` → `043e76d` → merged `a0b7123` | 227 E2E ✅ (+18) |
 | 2.3.2 | [MILESTONE-2.3.2-WORKING-LOG.md](./MILESTONE-2.3.2-WORKING-LOG.md) | Campaign wizard — create/launch campaigns via FB connections + ad strategies | `feature/2.3.2-campaign-wizard` | `58b1d2e` | 212 E2E ✅ |
 | 2.3.3 | [MILESTONE-2.3.3-WORKING-LOG.md](./MILESTONE-2.3.3-WORKING-LOG.md) | Stats worker — BullMQ 3-tier pipeline + MockProvider | `feature/2.3.3-stats-worker` | `a80692c` | 245 E2E ✅ |
 | 2.3.4-A | [MILESTONE-2.3.4-A-WORKING-LOG.md](./MILESTONE-2.3.4-A-WORKING-LOG.md) | Ads Manager — campaign read layer + stats aggregation | `feature/2.3.4a-ads-manager-campaigns` | `23f2786` | 240 E2E ✅ (227 + 13 new) |
 | 2.3.4-C | [MILESTONE-2.3.4-C-WORKING-LOG.md](./MILESTONE-2.3.4-C-WORKING-LOG.md) | Analytics Overview — seller KPI dashboard (revenue, cost, money model) | `feature/2.3.4c-analytics-overview` | `2dc6a7a` | 240 E2E ✅ (227 + 13 new) |
-| 2.3.4-D | [MILESTONE-2.3.4-D-WORKING-LOG.md](./MILESTONE-2.3.4-D-WORKING-LOG.md) | Orders Read Layer — list + detail, keyset pagination, no-leak contract | `feature/2.3.4d-orders-read-layer` | TBD | 241 E2E ✅ (227 + 14 new) |
+| 2.3.4-D | [MILESTONE-2.3.4-D-WORKING-LOG.md](./MILESTONE-2.3.4-D-WORKING-LOG.md) | Orders Read Layer — list + detail, keyset pagination, no-leak contract | `feature/2.3.4d-orders-read-layer` | `46242c4` | 241 E2E ✅ (227 + 14 new) |
 
 ---
 
@@ -81,7 +85,19 @@ All milestone working logs in the `docs/` directory. Each log records implementa
 
 ## Up Next
 
-| Milestone | Description |
-|-----------|-------------|
-| **2.3.4-B** | Ads manager — ad-set + ad level stats drilldowns |
-| **2.3.5** | Seller dashboard frontend wiring (Next.js) |
+| Milestone | Description | Spec | Status |
+|-----------|-------------|------|--------|
+| **2.3.X** | Ads Manager Full Read Layer + Store Funnel Join + Orders Tracking Upgrade | [`TECH-SPEC-V1-ADDENDUM-2.3.X.md`](../TECH-SPEC-V1-ADDENDUM-2.3.X.md) | 🔄 In Progress |
+| **2.3.5** | Seller dashboard frontend wiring (Next.js) | — | Pending |
+
+### 2.3.X Phase Tracker
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| PHASE 0 | Precheck — branch `feature/2.3.4d-orders-read-layer`, schema valid, 241/241 E2E ✅ | ✅ Done (`dd7fa9c`) |
+| PHASE 1 | Migration — UTM fields + tracking fields on Order, autoTrackingRefresh on SellerSettings, 4 indexes | ⏳ Awaiting confirmation |
+| PHASE 2 | Metrics engine — `apps/api/src/shared/utils/metrics.util.ts` + unit tests | ⏳ Pending |
+| PHASE 3 | AdsManager campaign level — 3-source join + store funnel + unattributed bucket | ⏳ Pending |
+| PHASE 4 | AdsManager adset level — `GET /ads-manager/adsets?campaignId=...` | ⏳ Pending |
+| PHASE 5 | AdsManager ad level — `GET /ads-manager/ads?adsetId=...` | ⏳ Pending |
+| PHASE 6 | Orders tracking refresh — TrackingProvider + SevenTrack stub + `POST /orders/:id/refresh-tracking` | ⏳ Pending |
