@@ -50,7 +50,7 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 | 2.3.4-C | [MILESTONE-2.3.4-C-WORKING-LOG.md](./MILESTONE-2.3.4-C-WORKING-LOG.md) | Analytics Overview — seller KPI dashboard (revenue, cost, money model) | `feature/2.3.4c-analytics-overview` | `2dc6a7a` | 240 E2E ✅ (227 + 13 new) |
 | 2.3.4-D | [MILESTONE-2.3.4-D-WORKING-LOG.md](./MILESTONE-2.3.4-D-WORKING-LOG.md) | Orders Read Layer — list + detail, keyset pagination, no-leak contract | `feature/2.3.4d-orders-read-layer` | `46242c4` | 241 E2E ✅ (227 + 14 new) |
 | 2.3.4-B | [MILESTONE-2.3.4-B-WORKING-LOG.md](./MILESTONE-2.3.4-B-WORKING-LOG.md) | Ads Manager 3-Tier Read Layer — Campaign/Adset/Ad + metrics contract | `feature/2.3.4b-ads-manager-3tier` | `6dd681c` | 257 E2E ✅ (241 + 16 new) |
-| 2.3.7 | [MILESTONE-2.3.7-WORKING-LOG.md](./MILESTONE-2.3.7-WORKING-LOG.md) | Stability Hardening — E2E fixes + RequestId + exception filter + health + timing | `feature/2.3.7-stability-hardening` | *(pending)* | 257/257 ✅ (0 failing, all green) |
+| 2.3.7 | [MILESTONE-2.3.7-WORKING-LOG.md](./MILESTONE-2.3.7-WORKING-LOG.md) | Stability Hardening — E2E fixes + RequestId + exception filter + health + timing | `feature/2.3.7-stability-hardening` | `338b5e5` | 257/257 ✅ (0 failing, all green) |
 
 ---
 
