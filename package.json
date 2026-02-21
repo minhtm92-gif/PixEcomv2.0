@@ -12,6 +12,12 @@
     "db:push": "turbo db:push",
     "db:migrate": "turbo db:migrate",
     "db:studio": "pnpm --filter @pixecom/database db:studio",
+    "seed:alpha": "pnpm --filter @pixecom/database seed:alpha",
+    "seed:alpha:reset": "pnpm --filter @pixecom/database seed:alpha:reset",
+    "seed:alpha:verify": "pnpm --filter @pixecom/database seed:alpha:verify",
+    "seed:alpha:ads": "pnpm --filter @pixecom/database seed:alpha:ads",
+    "seed:alpha:ads:reset": "pnpm --filter @pixecom/database seed:alpha:ads:reset",
+    "seed:alpha:ads:verify": "pnpm --filter @pixecom/database seed:alpha:ads:verify",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\""
   },
   "devDependencies": {
