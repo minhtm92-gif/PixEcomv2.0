@@ -6,6 +6,7 @@
  *  - credentials: "include" (sends refresh_token cookie)
  *  - Attaches Authorization: Bearer <accessToken> if present
  *  - Auto-refresh on 401: calls POST /auth/refresh, retries once
+ *  - Request timeout: 30s default via AbortController
  *  - Normalised error shape: { code, message, requestId, details, status }
  *
  * IMPORTANT: NEXT_PUBLIC_API_BASE_URL is injected at BUILD TIME by Next.js.
@@ -106,6 +107,9 @@ export function setForceLogoutCallback(cb: () => void) {
   _onForceLogout = cb;
 }
 
+// ── Request timeout ──
+const DEFAULT_TIMEOUT_MS = 30_000; // 30 seconds
+
 // ── Core fetch wrapper ──
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
   /** JSON body — will be stringified */
@@ -114,6 +118,8 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
   noAuth?: boolean;
   /** Skip auto-refresh retry on 401 */
   skipRefresh?: boolean;
+  /** Request timeout in ms (default: 30000) */
+  timeout?: number;
 }
 
 // ── Debug instrumentation callback ──
@@ -127,11 +133,12 @@ export async function api<T = unknown>(
   path: string,
   opts: RequestOptions = {},
 ): Promise<T> {
-  const { body, noAuth, skipRefresh, headers: extraHeaders, ...rest } = opts;
+  const { body, noAuth, skipRefresh, timeout, headers: extraHeaders, ...rest } = opts;
 
   const url = path.startsWith('http') ? path : `${BASE}${path.startsWith('/') ? '' : '/'}${path}`;
   const method = (rest.method ?? 'GET').toUpperCase();
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const timeoutMs = timeout ?? DEFAULT_TIMEOUT_MS;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -142,25 +149,78 @@ export async function api<T = unknown>(
     headers['Authorization'] = `Bearer ${_accessToken}`;
   }
 
+  // ── AbortController for timeout + navigation cancellation ──
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  // Merge caller's signal (if any) so external abort also cancels
+  const callerSignal = rest.signal;
+  if (callerSignal) {
+    if (callerSignal.aborted) {
+      controller.abort();
+    } else {
+      callerSignal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  }
+
   const fetchOpts: RequestInit = {
     ...rest,
     credentials: 'include',
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: controller.signal,
   };
 
-  let res = await fetch(url, fetchOpts);
+  let res: Response;
+  try {
+    res = await fetch(url, fetchOpts);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      const timeoutErr: ApiError = {
+        code: 'REQUEST_TIMEOUT',
+        message: `Request timeout (${Math.round(timeoutMs / 1000)}s)`,
+        requestId: null,
+        details: { url, method, timeoutMs },
+        status: 0,
+      };
+      _onDebugEntry?.({ method, url, status: 0, requestId: null, ms: timeoutMs });
+      throw timeoutErr;
+    }
+    throw err;
+  }
+
+  clearTimeout(timeoutId);
 
   // ── Auto-refresh on 401 ──
   if (res.status === 401 && !skipRefresh && !path.includes('/auth/refresh')) {
     const originalRes = res;
     const refreshResult = await tryRefresh();
     if (refreshResult === 'ok') {
-      // Retry with the new access token
+      // Retry with the new access token (fresh AbortController for retry)
       if (_accessToken) {
         headers['Authorization'] = `Bearer ${_accessToken}`;
       }
-      res = await fetch(url, { ...fetchOpts, headers });
+      const retryController = new AbortController();
+      const retryTimeout = setTimeout(() => retryController.abort(), timeoutMs);
+      try {
+        res = await fetch(url, { ...fetchOpts, headers, signal: retryController.signal });
+      } catch (err) {
+        clearTimeout(retryTimeout);
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          const timeoutErr: ApiError = {
+            code: 'REQUEST_TIMEOUT',
+            message: `Request timeout (${Math.round(timeoutMs / 1000)}s)`,
+            requestId: null,
+            details: { url, method, timeoutMs, retry: true },
+            status: 0,
+          };
+          _onDebugEntry?.({ method, url, status: 0, requestId: null, ms: timeoutMs });
+          throw timeoutErr;
+        }
+        throw err;
+      }
+      clearTimeout(retryTimeout);
     } else if (refreshResult === 'expired') {
       // Refresh token is dead — force logout
       setAccessToken(null);
