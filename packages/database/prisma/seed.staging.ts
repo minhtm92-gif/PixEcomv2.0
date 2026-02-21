@@ -124,11 +124,11 @@ async function main() {
   console.log('\n👤 Seeding alpha seller...');
 
   // bcrypt hash of "AlphaSeed2026!" (cost=12) — pre-computed for idempotency
-  const ALPHA_PASSWORD_HASH = '$2b$12$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi';
+  const ALPHA_PASSWORD_HASH = '$2b$12$sdYt7WcMkP4r5P2R4mi62O6At7xazYTxzD.LZU7g/8L8.zNTPoQhC';
 
   await prisma.user.upsert({
     where: { id: SEED.USER_ID },
-    update: {},
+    update: { passwordHash: ALPHA_PASSWORD_HASH }, // always ensure correct hash on re-run
     create: {
       id: SEED.USER_ID,
       email: 'alpha-seller@pixecom.io',
