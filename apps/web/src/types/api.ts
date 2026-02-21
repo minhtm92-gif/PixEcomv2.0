@@ -463,6 +463,86 @@ export function isDraftCampaign(c: Pick<CampaignListItem, 'status' | 'externalCa
   return c.status === 'PAUSED' && !c.externalCampaignId;
 }
 
+// ── Ad Units (Campaign management — distinct from analytics Adset/Ad above) ──
+export type AdUnitStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+export type OptimizationGoal = 'CONVERSIONS' | 'LINK_CLICKS' | 'IMPRESSIONS' | 'REACH';
+
+export interface AdsetUnit {
+  id: string;
+  name: string;
+  status: AdUnitStatus;
+  externalAdsetId: string | null;
+  optimizationGoal: OptimizationGoal | null;
+  targeting: Record<string, unknown> | null;
+  campaignId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdsetUnitDetail extends AdsetUnit {
+  ads?: AdUnit[];
+}
+
+export interface AdsetUnitsListResponse {
+  data: AdsetUnit[];
+  nextCursor: string | null;
+}
+
+export interface AdUnit {
+  id: string;
+  name: string;
+  status: AdUnitStatus;
+  externalAdId: string | null;
+  adsetId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdPostItem {
+  id: string;
+  adId: string;
+  pageId: string;
+  pageName: string | null;
+  externalPostId: string | null;
+  assetMediaId: string | null;
+  assetThumbnailId: string | null;
+  assetAdtextId: string | null;
+  createdAt: string;
+}
+
+export interface AdUnitDetail extends AdUnit {
+  adPosts: AdPostItem[];
+}
+
+export interface AdUnitsListResponse {
+  data: AdUnit[];
+  nextCursor: string | null;
+}
+
+export interface CreateAdsetDto {
+  name: string;
+  optimizationGoal?: OptimizationGoal;
+  targeting?: Record<string, unknown>;
+}
+
+export interface CreateAdDto {
+  name: string;
+}
+
+export interface CreateAdPostDto {
+  pageId: string;
+  externalPostId?: string;
+  assetMediaId?: string;
+  assetThumbnailId?: string;
+  assetAdtextId?: string;
+}
+
+/** Pre-launch adset/ad: PAUSED + no externalId */
+export function isDraftAdUnit(c: { status: AdUnitStatus; externalAdsetId?: string | null; externalAdId?: string | null }): boolean {
+  const extId = c.externalAdsetId ?? c.externalAdId ?? null;
+  return c.status === 'PAUSED' && !extId;
+}
+
 // ── Health ──
 export interface HealthResponse {
   status: string;
