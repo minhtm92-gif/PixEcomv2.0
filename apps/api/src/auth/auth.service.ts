@@ -103,7 +103,7 @@ export class AuthService {
 
   // ─── Login ────────────────────────────────────────────────────────────────
 
-  async login(dto: LoginDto): Promise<AuthPayload> {
+  async login(dto: LoginDto, loginType: 'seller' | 'admin' = 'seller'): Promise<AuthPayload> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
       select: {
@@ -127,6 +127,14 @@ export class AuthService {
     const passwordValid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!passwordValid) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Enforce login type separation: prevent cross-portal login
+    if (loginType === 'seller' && user.isSuperadmin) {
+      throw new UnauthorizedException('Admin accounts must login at /admin');
+    }
+    if (loginType === 'admin' && !user.isSuperadmin) {
+      throw new UnauthorizedException('Not an admin account');
     }
 
     const sellerUser = await this.prisma.sellerUser.findFirst({
@@ -223,6 +231,7 @@ export class AuthService {
         displayName: true,
         avatarUrl: true,
         isActive: true,
+        isSuperadmin: true,
       },
     });
 
@@ -242,6 +251,7 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       sellerId,
       role: sellerUser?.role ?? null,
+      isSuperadmin: user.isSuperadmin,
     };
   }
 

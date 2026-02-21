@@ -45,7 +45,8 @@ export class AuthController {
 
   /**
    * POST /api/auth/login
-   * Authenticates with email + password.
+   * Authenticates seller accounts with email + password.
+   * Superadmin accounts are rejected — they must use /auth/admin-login.
    * Sets httpOnly refresh token cookie, returns access token + context.
    */
   @Post('login')
@@ -54,7 +55,28 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: false }) res: Response,
   ) {
-    const result = await this.authService.login(dto);
+    const result = await this.authService.login(dto, 'seller');
+    this.authService.setRefreshCookie(res, result.rawRefreshToken);
+    return res.status(HttpStatus.OK).json({
+      accessToken: result.accessToken,
+      user: result.user,
+      seller: result.seller,
+    });
+  }
+
+  /**
+   * POST /api/auth/admin-login
+   * Authenticates superadmin accounts only.
+   * Regular seller accounts are rejected — they must use /auth/login.
+   * Sets httpOnly refresh token cookie, returns access token + context.
+   */
+  @Post('admin-login')
+  @HttpCode(HttpStatus.OK)
+  async adminLogin(
+    @Body() dto: LoginDto,
+    @Res({ passthrough: false }) res: Response,
+  ) {
+    const result = await this.authService.login(dto, 'admin');
     this.authService.setRefreshCookie(res, result.rawRefreshToken);
     return res.status(HttpStatus.OK).json({
       accessToken: result.accessToken,
