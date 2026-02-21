@@ -6,7 +6,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
- * Orders Read Layer E2E Tests — Milestone 2.3.4-D
+ * Orders Read Layer E2E Tests — Milestone 2.3.4-D + Task B2
  *
  * Requires live PostgreSQL on port 5434.
  *
@@ -24,7 +24,12 @@ import { PrismaService } from '../src/prisma/prisma.service';
  *  11. GET /orders/:id — 404 when order belongs to another seller
  *  12. GET /orders/:id — 404 for non-existent order id
  *  13. GET /orders/:id — 400 for non-UUID param
- *  14. Response never leaks raw DB fields (sellerId, shippingAddress, etc.)
+ *  14. Response never leaks raw DB fields (sellerId, shippingCost, discountAmount, etc.)
+ *  15. GET /orders/:id — exposes tracking + payment fields
+ *  16. GET /orders — list item includes trackingNumber
+ *  17. GET /orders — search by customerName (contains)
+ *  18. GET /orders — search by customerPhone (contains)
+ *  19. GET /orders — search by trackingNumber (contains)
  */
 describe('Orders Read Layer (e2e)', () => {
   let app: INestApplication;
@@ -39,7 +44,7 @@ describe('Orders Read Layer (e2e)', () => {
   let productId: string;
   let sellpageId1: string;
   let sellpageId2: string;
-  let orderA1Id: string; // CONFIRMED, sellpage1
+  let orderA1Id: string; // CONFIRMED, sellpage1, has tracking + payment
   let orderA2Id: string; // PENDING, sellpage1
   let orderA3Id: string; // CONFIRMED, sellpage2
   let orderBId: string;  // Seller B's order
@@ -124,6 +129,7 @@ describe('Orders Read Layer (e2e)', () => {
     // Orders for Seller A
     const now = Date.now();
 
+    // Order A1 — has tracking + payment fields for Task B2 tests
     const o1 = await prisma.order.create({
       data: {
         sellerId: sellerAId,
@@ -139,6 +145,11 @@ describe('Orders Read Layer (e2e)', () => {
         total: 155.00,
         currency: 'USD',
         status: 'CONFIRMED',
+        trackingNumber: 'TRK-TEST-001',
+        trackingUrl: 'https://track.example.com/TRK-TEST-001',
+        paymentMethod: 'COD',
+        paymentId: 'PAY-ALICE-001',
+        shippingAddress: { street: '123 Main St', city: 'HCM', country: 'VN' },
         createdAt: new Date('2026-02-10T10:00:00.000Z'),
       },
     });
@@ -187,6 +198,7 @@ describe('Orders Read Layer (e2e)', () => {
         orderNumber: `ORD-A-003-${now}`,
         customerEmail: 'carol@test.io',
         customerName: 'Carol Buyer',
+        customerPhone: '+84900000003',
         subtotal: 200.00,
         total: 200.00,
         currency: 'USD',
@@ -424,25 +436,107 @@ describe('Orders Read Layer (e2e)', () => {
     await get('/api/orders/not-a-uuid', sellerAToken).expect(400);
   });
 
-  it('14. Response never leaks raw DB fields (sellerId, shippingAddress, paymentId, etc.)', async () => {
+  it('14. Response never leaks raw DB fields (sellerId, shippingCost, discountAmount, updatedAt)', async () => {
     const listRes = await get('/api/orders', sellerAToken, {
       dateFrom: '2026-02-10',
       dateTo: '2026-02-10',
     }).expect(200);
 
     const listItem = listRes.body.items[0];
+    // Raw DB fields must not appear in list items
     expect(listItem).not.toHaveProperty('sellerId');
-    expect(listItem).not.toHaveProperty('shippingAddress');
-    expect(listItem).not.toHaveProperty('paymentId');
-    expect(listItem).not.toHaveProperty('paymentMethod');
     expect(listItem).not.toHaveProperty('updatedAt');
+    expect(listItem).not.toHaveProperty('shippingCost');  // exposed as totals.shipping in detail only
+    expect(listItem).not.toHaveProperty('discountAmount'); // exposed as totals.discount in detail only
 
     const detailRes = await get(`/api/orders/${orderA1Id}`, sellerAToken).expect(200);
     const detail = detailRes.body;
+    // Raw DB field names must not leak (values are mapped to semantic response keys)
     expect(detail).not.toHaveProperty('sellerId');
-    expect(detail).not.toHaveProperty('shippingAddress');
-    expect(detail).not.toHaveProperty('paymentId');
-    expect(detail).not.toHaveProperty('discountAmount'); // in totals.discount, not raw
-    expect(detail).not.toHaveProperty('shippingCost');   // in totals.shipping, not raw
+    expect(detail).not.toHaveProperty('discountAmount'); // in totals.discount
+    expect(detail).not.toHaveProperty('shippingCost');   // in totals.shipping
+    expect(detail).not.toHaveProperty('subtotal');        // in totals.subtotal
+    expect(detail).not.toHaveProperty('taxAmount');       // in totals.tax
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // TASK B2 — NEW TESTS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  it('15. GET /orders/:id — exposes tracking + payment + shippingAddress fields', async () => {
+    const res = await get(`/api/orders/${orderA1Id}`, sellerAToken).expect(200);
+    const o = res.body;
+
+    expect(o.trackingNumber).toBe('TRK-TEST-001');
+    expect(o.trackingUrl).toBe('https://track.example.com/TRK-TEST-001');
+    expect(o.paymentMethod).toBe('COD');
+    expect(o.paymentId).toBe('PAY-ALICE-001');
+    expect(o.shippingAddress).toMatchObject({ street: '123 Main St', city: 'HCM', country: 'VN' });
+  });
+
+  it('15b. GET /orders/:id — tracking/payment fields are null when not set', async () => {
+    const res = await get(`/api/orders/${orderA2Id}`, sellerAToken).expect(200);
+    const o = res.body;
+
+    expect(o.trackingNumber).toBeNull();
+    expect(o.trackingUrl).toBeNull();
+    expect(o.paymentMethod).toBeNull();
+    expect(o.paymentId).toBeNull();
+    expect(o.shippingAddress).toEqual({});
+  });
+
+  it('16. GET /orders — list item includes trackingNumber field', async () => {
+    const res = await get('/api/orders', sellerAToken, {
+      dateFrom: '2026-02-10',
+      dateTo: '2026-02-10',
+    }).expect(200);
+
+    // All items must have the trackingNumber key (null for unset, string for set)
+    for (const item of res.body.items) {
+      expect(item).toHaveProperty('trackingNumber');
+    }
+
+    // Find order A1 in the list — should have its trackingNumber
+    const a1 = res.body.items.find((i: any) => i.id === orderA1Id);
+    expect(a1).toBeDefined();
+    expect(a1.trackingNumber).toBe('TRK-TEST-001');
+
+    // Order A2 has no trackingNumber — should be null
+    const a2 = res.body.items.find((i: any) => i.id === orderA2Id);
+    expect(a2).toBeDefined();
+    expect(a2.trackingNumber).toBeNull();
+  });
+
+  it('17. GET /orders — search by customerName (contains, case-insensitive)', async () => {
+    const res = await get('/api/orders', sellerAToken, {
+      dateFrom: '2026-02-10',
+      dateTo: '2026-02-10',
+      search: 'alice buyer',
+    }).expect(200);
+
+    expect(res.body.items.length).toBe(1);
+    expect(res.body.items[0].id).toBe(orderA1Id);
+  });
+
+  it('18. GET /orders — search by customerPhone (contains)', async () => {
+    const res = await get('/api/orders', sellerAToken, {
+      dateFrom: '2026-02-10',
+      dateTo: '2026-02-10',
+      search: '+84900000003',
+    }).expect(200);
+
+    expect(res.body.items.length).toBe(1);
+    expect(res.body.items[0].id).toBe(orderA3Id);
+  });
+
+  it('19. GET /orders — search by trackingNumber (contains, case-insensitive)', async () => {
+    const res = await get('/api/orders', sellerAToken, {
+      dateFrom: '2026-02-10',
+      dateTo: '2026-02-10',
+      search: 'TRK-TEST',
+    }).expect(200);
+
+    expect(res.body.items.length).toBe(1);
+    expect(res.body.items[0].id).toBe(orderA1Id);
   });
 });

@@ -62,6 +62,7 @@ export interface OrderListItem {
   currency: string;
   status: string;
   itemsCount: number;
+  trackingNumber: string | null;
 }
 
 export interface OrderListResult {
@@ -75,6 +76,7 @@ export interface OrderDetail {
   createdAt: Date;
   sellpage: { id: string; url: string } | null;
   customer: { email: string; name: string | null; phone: string | null };
+  shippingAddress: Record<string, unknown>;
   totals: {
     subtotal: number;
     shipping: number;
@@ -84,6 +86,10 @@ export interface OrderDetail {
     currency: string;
   };
   status: string;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  paymentMethod: string | null;
+  paymentId: string | null;
   items: Array<{
     productTitle: string;
     variantTitle: string | null;
@@ -113,37 +119,46 @@ export class OrdersService {
     const cursorData = query.cursor ? decodeCursor(query.cursor) : null;
 
     // ── Build WHERE ──────────────────────────────────────────────────────────
-    const where: Record<string, unknown> = {
-      sellerId,
-      createdAt: { gte: toDateStart(dateFrom), lte: toDateEnd(dateTo) },
-    };
+    const andClauses: Record<string, unknown>[] = [
+      { sellerId },
+      { createdAt: { gte: toDateStart(dateFrom), lte: toDateEnd(dateTo) } },
+    ];
 
     if (query.sellpageId) {
-      where['sellpageId'] = query.sellpageId;
+      andClauses.push({ sellpageId: query.sellpageId });
     }
 
     if (query.status) {
-      where['status'] = query.status;
+      andClauses.push({ status: query.status });
     }
 
     if (query.search) {
       const s = query.search;
-      where['OR'] = [
-        { orderNumber: { startsWith: s } },
-        { customerEmail: { contains: s, mode: 'insensitive' } },
-      ];
+      andClauses.push({
+        OR: [
+          { orderNumber: { startsWith: s } },
+          { customerEmail: { contains: s, mode: 'insensitive' } },
+          { customerName: { contains: s, mode: 'insensitive' } },
+          { customerPhone: { contains: s } },
+          { trackingNumber: { contains: s, mode: 'insensitive' } },
+        ],
+      });
     }
 
     // Keyset pagination: page after (createdAt, id) cursor
     if (cursorData) {
-      where['OR'] = [
-        { createdAt: { lt: cursorData.createdAt } },
-        {
-          createdAt: { equals: cursorData.createdAt },
-          id: { lt: cursorData.id },
-        },
-      ];
+      andClauses.push({
+        OR: [
+          { createdAt: { lt: cursorData.createdAt } },
+          {
+            createdAt: { equals: cursorData.createdAt },
+            id: { lt: cursorData.id },
+          },
+        ],
+      });
     }
+
+    const where = { AND: andClauses };
 
     // ── Query ────────────────────────────────────────────────────────────────
     const rows = await this.prisma.order.findMany({
@@ -160,6 +175,7 @@ export class OrdersService {
         total: true,
         currency: true,
         status: true,
+        trackingNumber: true,
         sellpage: {
           select: {
             id: true,
@@ -196,6 +212,7 @@ export class OrdersService {
       currency: r.currency,
       status: r.status,
       itemsCount: r._count.items,
+      trackingNumber: r.trackingNumber ?? null,
     }));
 
     return { items, nextCursor };
@@ -218,6 +235,11 @@ export class OrdersService {
         total: true,
         currency: true,
         status: true,
+        shippingAddress: true,
+        trackingNumber: true,
+        trackingUrl: true,
+        paymentMethod: true,
+        paymentId: true,
         sellpage: {
           select: {
             id: true,
@@ -265,6 +287,7 @@ export class OrdersService {
         name: order.customerName,
         phone: order.customerPhone ?? null,
       },
+      shippingAddress: (order.shippingAddress as Record<string, unknown>) ?? {},
       totals: {
         subtotal: Number(order.subtotal),
         shipping: Number(order.shippingCost),
@@ -274,6 +297,10 @@ export class OrdersService {
         currency: order.currency,
       },
       status: order.status,
+      trackingNumber: order.trackingNumber ?? null,
+      trackingUrl: order.trackingUrl ?? null,
+      paymentMethod: order.paymentMethod ?? null,
+      paymentId: order.paymentId ?? null,
       items: order.items.map((i) => ({
         productTitle: i.productName,
         variantTitle: i.variantName ?? null,
