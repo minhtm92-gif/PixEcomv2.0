@@ -12,13 +12,21 @@ import {
   Loader2,
   Globe,
   EyeOff,
+  ChevronDown,
+  ChevronRight,
+  Megaphone,
 } from 'lucide-react';
 import { apiGet, apiPatch, apiPost, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { StatusBadge } from '@/components/StatusBadge';
 import { KpiCard } from '@/components/KpiCard';
 import { fmtDate, moneyWhole } from '@/lib/format';
-import type { SellpageDetail, UpdateSellpageDto } from '@/types/api';
+import type {
+  SellpageDetail,
+  UpdateSellpageDto,
+  LinkedAdsResponse,
+  LinkedCampaign,
+} from '@/types/api';
 
 export default function SellpageDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +47,11 @@ export default function SellpageDetailPage() {
   // ── Publish state ──
   const [publishing, setPublishing] = useState(false);
 
+  // ── Linked Ads state ──
+  const [linkedCampaigns, setLinkedCampaigns] = useState<LinkedCampaign[]>([]);
+  const [linkedAdsLoading, setLinkedAdsLoading] = useState(false);
+  const [linkedAdsExpanded, setLinkedAdsExpanded] = useState<boolean | null>(null);
+
   const fetchSellpage = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -55,9 +68,27 @@ export default function SellpageDetailPage() {
     }
   }, [id]);
 
+  const fetchLinkedAds = useCallback(async () => {
+    if (!id) return;
+    setLinkedAdsLoading(true);
+    try {
+      const data = await apiGet<LinkedAdsResponse>(`/sellpages/${id}/linked-ads`);
+      setLinkedCampaigns(data.campaigns);
+      // Default: expanded if <= 5 campaigns, collapsed if > 5
+      if (linkedAdsExpanded === null) {
+        setLinkedAdsExpanded(data.campaigns.length <= 5);
+      }
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setLinkedAdsLoading(false);
+    }
+  }, [id, linkedAdsExpanded]);
+
   useEffect(() => {
     fetchSellpage();
-  }, [fetchSellpage]);
+    fetchLinkedAds();
+  }, [fetchSellpage, fetchLinkedAds]);
 
   // ── Enter edit mode ──
   function startEditing() {
@@ -123,6 +154,12 @@ export default function SellpageDetailPage() {
       setPublishing(false);
     }
   }
+
+  // ── Count total ads ──
+  const totalAdsCount = linkedCampaigns.reduce(
+    (sum, c) => sum + c.adsets.reduce((s2, as_) => s2 + as_.ads.length, 0),
+    0,
+  );
 
   const inputCls =
     'w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
@@ -282,6 +319,84 @@ export default function SellpageDetailPage() {
           </div>
         </form>
       )}
+
+      {/* ── Linked Ads ── */}
+      <div className="bg-card border border-border rounded-xl mb-6 overflow-hidden">
+        {/* Header — clickable to toggle */}
+        <button
+          onClick={() => setLinkedAdsExpanded((prev) => !prev)}
+          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors text-left"
+        >
+          {linkedAdsExpanded ? (
+            <ChevronDown size={16} className="text-muted-foreground flex-shrink-0" />
+          ) : (
+            <ChevronRight size={16} className="text-muted-foreground flex-shrink-0" />
+          )}
+          <Megaphone size={16} className="text-muted-foreground flex-shrink-0" />
+          <h2 className="text-sm font-medium text-foreground">
+            Linked Ads
+            {!linkedAdsLoading && (
+              <span className="text-muted-foreground font-normal ml-1">({totalAdsCount})</span>
+            )}
+          </h2>
+          {linkedAdsLoading && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+        </button>
+
+        {/* Body */}
+        {linkedAdsExpanded && (
+          <div className="px-4 pb-4">
+            {linkedAdsLoading ? (
+              <div className="space-y-2 pt-1">
+                <div className="h-6 bg-muted rounded w-3/4 animate-pulse" />
+                <div className="h-6 bg-muted rounded w-1/2 animate-pulse ml-6" />
+                <div className="h-6 bg-muted rounded w-2/3 animate-pulse ml-12" />
+              </div>
+            ) : linkedCampaigns.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-2">
+                No campaigns linked to this sellpage yet
+              </p>
+            ) : (
+              <div className="space-y-1 pt-1">
+                {linkedCampaigns.map((campaign) => (
+                  <div key={campaign.id}>
+                    {/* Campaign row */}
+                    <div className="flex items-center gap-2 py-1.5">
+                      <span className="text-sm font-medium text-foreground">{campaign.name}</span>
+                      <StatusBadge status={campaign.status} />
+                    </div>
+
+                    {/* Adsets */}
+                    {campaign.adsets.map((adset) => (
+                      <div key={adset.id} className="ml-4 border-l-2 border-border pl-4">
+                        {/* Adset row */}
+                        <div className="flex items-center gap-2 py-1.5">
+                          <span className="text-sm text-foreground">{adset.name}</span>
+                          <StatusBadge status={adset.status} />
+                        </div>
+
+                        {/* Ads */}
+                        {adset.ads.map((ad) => (
+                          <div key={ad.id} className="ml-4 border-l-2 border-border pl-4">
+                            <div className="flex items-center gap-2 py-1.5 flex-wrap">
+                              <span className="text-sm text-foreground">{ad.name}</span>
+                              <StatusBadge status={ad.status} />
+                              {ad.adPost && (
+                                <span className="text-xs text-muted-foreground font-mono">
+                                  FB Post: {ad.adPost.externalPostId}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Info cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

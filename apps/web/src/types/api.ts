@@ -199,6 +199,37 @@ export interface SellpageDetail extends SellpageListItem {
   };
 }
 
+export interface LinkedAdPost {
+  externalPostId: string;
+  pageId: string;
+  createdAt: string;
+}
+
+export interface LinkedAd {
+  id: string;
+  name: string;
+  status: string;
+  adPost: LinkedAdPost | null;
+}
+
+export interface LinkedAdset {
+  id: string;
+  name: string;
+  status: string;
+  ads: LinkedAd[];
+}
+
+export interface LinkedCampaign {
+  id: string;
+  name: string;
+  status: string;
+  adsets: LinkedAdset[];
+}
+
+export interface LinkedAdsResponse {
+  campaigns: LinkedCampaign[];
+}
+
 export interface CreateSellpageDto {
   productId: string;
   slug: string;
