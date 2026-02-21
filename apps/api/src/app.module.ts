@@ -11,6 +11,7 @@ import { DomainsModule } from './domains/domains.module';
 import { FbConnectionsModule } from './fb-connections/fb-connections.module';
 import { HealthModule } from './health/health.module';
 import { MediaModule } from './media/media.module';
+import { MetaModule } from './meta/meta.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { SellerModule } from './seller/seller.module';
@@ -37,6 +38,7 @@ import { SellpagesModule } from './sellpages/sellpages.module';
     AdsManagerModule,
     AdStrategiesModule,
     OrdersModule,
+    MetaModule,
   ],
 })
 export class AppModule {}
