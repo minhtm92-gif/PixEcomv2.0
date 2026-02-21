@@ -13,6 +13,9 @@ export interface OrderListItem {
   currency: string;
   status: string;
   itemsCount: number;
+  source: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
 }
 
 export interface OrderListResponse {
@@ -34,6 +37,25 @@ export interface OrderEvent {
   note: string | null;
 }
 
+export interface OrderShippingAddress {
+  name: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+}
+
+export interface OrderAttribution {
+  source: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmTerm: string | null;
+}
+
 export interface OrderDetail {
   id: string;
   orderNumber: string;
@@ -51,6 +73,18 @@ export interface OrderDetail {
   status: string;
   items: OrderDetailItem[];
   events: OrderEvent[];
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  shippingAddress: OrderShippingAddress | null;
+  paymentMethod: string | null;
+  paymentId: string | null;
+  attribution: OrderAttribution | null;
+}
+
+export interface ImportTrackingResult {
+  updated: number;
+  failed: number;
+  errors: { row: number; orderNumber: string; reason: string }[];
 }
 
 // ── Ads Manager metrics shape (shared by campaign/adset/ad) ──
