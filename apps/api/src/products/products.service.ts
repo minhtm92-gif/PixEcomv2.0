@@ -47,6 +47,7 @@ export class ProductsService {
           name: true,
           slug: true,
           basePrice: true,
+          createdAt: true,
           // Active pricing rules (may be multiple, we pick the latest)
           pricingRules: {
             where: {
@@ -264,39 +265,44 @@ export class ProductsService {
    *   - If active rule has sellerTakeFixed set  → use fixed amount directly
    *   - Else                                    → suggestedRetail * (sellerTakePercent / 100)
    *   - If no active rule                       → null
+   *
+   * All Decimal fields are converted to plain numbers via Number() before
+   * returning, so JSON serialization never produces Prisma Decimal objects
+   * (which can appear as {} and cause $NaN in the frontend).
    */
   private mapToCard(product: {
     id: string;
     productCode: string;
     name: string;
     slug: string;
-    basePrice: { toString(): string };
+    basePrice: { toNumber(): number } | number;
     pricingRules: Array<{
-      suggestedRetail: { toString(): string };
-      sellerTakePercent: { toString(): string };
-      sellerTakeFixed: { toString(): string } | null;
+      suggestedRetail: { toNumber(): number } | number;
+      sellerTakePercent: { toNumber(): number } | number;
+      sellerTakeFixed: ({ toNumber(): number } | number) | null;
     }>;
     assetThumbs: Array<{ url: string }>;
     labels: Array<{ label: { id: string; name: string; slug: string } }>;
   }): ProductCardDto {
     const rule = product.pricingRules[0] ?? null;
 
+    // Convert Prisma Decimals to plain JS numbers first to avoid {} serialization
+    const basePrice = Number(product.basePrice);
+    const suggestedRetail = rule ? Number(rule.suggestedRetail) : basePrice;
+
     // suggestedRetailPrice: prefer pricing rule's suggested retail, else product basePrice
-    const suggestedRetailPrice = rule
-      ? rule.suggestedRetail.toString()
-      : product.basePrice.toString();
+    const suggestedRetailPrice = suggestedRetail.toFixed(2);
 
     // youTakeEstimate — deterministic, no order/ad-spend involved
     let youTakeEstimate: string | null = null;
     if (rule) {
       if (rule.sellerTakeFixed !== null) {
         // Fixed override takes precedence over percentage
-        youTakeEstimate = rule.sellerTakeFixed.toString();
+        youTakeEstimate = Number(rule.sellerTakeFixed).toFixed(2);
       } else {
         // Percentage of suggested retail
         const pct = Number(rule.sellerTakePercent) / 100;
-        const estimate = Number(rule.suggestedRetail) * pct;
-        // Round to 2 decimal places, return as string (consistent with Prisma { toString(): string })
+        const estimate = suggestedRetail * pct;
         youTakeEstimate = estimate.toFixed(2);
       }
     }
@@ -326,32 +332,35 @@ export class ProductsService {
    * Maps a Prisma variant row to ProductVariantDto.
    *
    * effectivePrice = priceOverride if set, else product.basePrice
+   * Decimal fields converted to Number to prevent {} JSON serialization.
    */
   private mapToVariant(
     variant: {
       id: string;
       name: string;
       sku: string | null;
-      priceOverride: { toString(): string } | null;
-      compareAtPrice: { toString(): string } | null;
+      priceOverride: ({ toNumber(): number } | number) | null;
+      compareAtPrice: ({ toNumber(): number } | number) | null;
       options: unknown;
       stockQuantity: number;
       isActive: boolean;
       position: number;
     },
-    basePrice: { toString(): string },
+    basePrice: { toNumber(): number } | number,
   ): ProductVariantDto {
     const effectivePrice =
       variant.priceOverride !== null
-        ? variant.priceOverride.toString()
-        : basePrice.toString();
+        ? Number(variant.priceOverride).toFixed(2)
+        : Number(basePrice).toFixed(2);
 
     return {
       id: variant.id,
       name: variant.name,
       sku: variant.sku,
       effectivePrice,
-      compareAtPrice: variant.compareAtPrice?.toString() ?? null,
+      compareAtPrice: variant.compareAtPrice != null
+        ? Number(variant.compareAtPrice).toFixed(2)
+        : null,
       options: variant.options as Record<string, unknown>,
       stockQuantity: variant.stockQuantity,
       isActive: variant.isActive,
