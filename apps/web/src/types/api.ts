@@ -165,6 +165,21 @@ export interface SellpageDetail extends SellpageListItem {
   };
 }
 
+export interface CreateSellpageDto {
+  productId: string;
+  slug: string;
+  domainId?: string;
+  titleOverride?: string;
+  descriptionOverride?: string;
+}
+
+export interface UpdateSellpageDto {
+  slug?: string;
+  domainId?: string;
+  titleOverride?: string;
+  descriptionOverride?: string;
+}
+
 // ── Products ──
 export interface ProductLabel {
   id: string;
