@@ -331,6 +331,60 @@ export interface UpdateSellerSettingsDto {
   googleAnalyticsId?: string;
 }
 
+// ── Creatives ──
+export type CreativeType = 'VIDEO_AD' | 'IMAGE_AD' | 'TEXT_ONLY' | 'UGC_BUNDLE';
+export type AssetRole = 'PRIMARY_VIDEO' | 'THUMBNAIL' | 'PRIMARY_TEXT' | 'HEADLINE' | 'DESCRIPTION' | 'EXTRA';
+
+export interface CreativeAsset {
+  id: string;
+  assetId: string;
+  role: AssetRole;
+  asset: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    url: string;
+  };
+}
+
+export interface CreativeListItem {
+  id: string;
+  name: string;
+  creativeType: CreativeType;
+  status: string;
+  productId: string | null;
+  product: { id: string; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreativeDetail extends CreativeListItem {
+  metadata: Record<string, unknown> | null;
+  assets: CreativeAsset[];
+}
+
+export interface CreativesListResponse {
+  data: CreativeListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface CreateCreativeDto {
+  name: string;
+  creativeType: CreativeType;
+  productId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateCreativeDto {
+  name?: string;
+  creativeType?: CreativeType;
+  productId?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+}
+
 // ── Health ──
 export interface HealthResponse {
   status: string;
