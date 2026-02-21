@@ -16,10 +16,15 @@ import {
   FileText,
   AlignLeft,
   Layers,
+  UploadCloud,
+  Trash2,
+  Play,
+  AlertTriangle,
 } from 'lucide-react';
-import { apiGet, apiPatch, apiPost, type ApiError } from '@/lib/apiClient';
+import { apiGet, apiPatch, apiPost, apiDelete, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { StatusBadge } from '@/components/StatusBadge';
+import { AssetUploader } from '@/components/AssetUploader';
 import { fmtDate } from '@/lib/format';
 import type {
   CreativeDetail,
@@ -46,6 +51,118 @@ const ASSET_ROLES: { role: AssetRole; label: string; icon: typeof Film }[] = [
   { role: 'EXTRA', label: 'Extra', icon: Layers },
 ];
 
+// ── Modal shell ──
+function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-lg bg-card border border-border rounded-2xl shadow-2xl flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        {/* Body */}
+        <div className="px-5 py-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Confirm remove dialog ──
+function ConfirmRemoveDialog({
+  label,
+  onConfirm,
+  onCancel,
+  loading,
+}: {
+  label: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+      <div className="relative z-10 w-full max-w-sm bg-card border border-border rounded-2xl shadow-2xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <AlertTriangle size={20} className="text-yellow-400 shrink-0" />
+          <h3 className="text-sm font-semibold text-foreground">Remove Asset</h3>
+        </div>
+        <p className="text-sm text-muted-foreground mb-6">
+          Remove the <span className="text-foreground font-medium">{label}</span> asset from this creative? This unlinks
+          the slot but does not delete the asset file.
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="px-4 py-2 bg-muted text-muted-foreground rounded-lg text-sm font-medium hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium
+                       hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            {loading ? 'Removing…' : 'Remove'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Asset preview ──
+function AssetPreview({ mimeType, url, filename }: { mimeType: string; url: string; filename: string }) {
+  if (mimeType.startsWith('image/')) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt={filename}
+        className="w-full h-32 object-cover rounded-lg border border-border"
+        onError={(e) => {
+          (e.target as HTMLImageElement).style.display = 'none';
+        }}
+      />
+    );
+  }
+
+  if (mimeType.startsWith('video/')) {
+    return (
+      <div className="w-full h-32 flex flex-col items-center justify-center gap-2 bg-muted/50 rounded-lg border border-border">
+        <Play size={24} className="text-muted-foreground" />
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-xs text-primary hover:underline flex items-center gap-1"
+        >
+          <ExternalLink size={10} /> View video
+        </a>
+      </div>
+    );
+  }
+
+  // Text / other — show text preview placeholder
+  return (
+    <div className="w-full h-16 flex items-center justify-center bg-muted/30 rounded-lg border border-border">
+      <span className="text-xs text-muted-foreground italic">Text asset</span>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────
 export default function CreativeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -71,6 +188,16 @@ export default function CreativeDetailPage() {
 
   // ── Preview state ──
   const [previewing, setPreviewing] = useState(false);
+
+  // ── Upload modal ──
+  const [uploadRole, setUploadRole] = useState<AssetRole | null>(null); // null = closed
+
+  // ── Remove confirm ──
+  const [removeRole, setRemoveRole] = useState<AssetRole | null>(null); // null = closed
+  const [removing, setRemoving] = useState(false);
+
+  // ── Assigning asset (POST after upload) ──
+  const [assigning, setAssigning] = useState(false);
 
   const fetchCreative = useCallback(async () => {
     if (!id) return;
@@ -179,6 +306,41 @@ export default function CreativeDetailPage() {
     }
   }
 
+  // ── Upload success → assign slot ──
+  async function handleUploadSuccess(assetId: string) {
+    if (!creative || !uploadRole) return;
+    setUploadRole(null); // close modal
+    setAssigning(true);
+    try {
+      await apiPost(`/creatives/${creative.id}/assets`, {
+        assetId,
+        role: uploadRole,
+      });
+      addToast('Asset assigned to slot', 'success');
+      await fetchCreative();
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  // ── Remove asset slot ──
+  async function handleRemoveConfirm() {
+    if (!creative || !removeRole) return;
+    setRemoving(true);
+    try {
+      await apiDelete(`/creatives/${creative.id}/assets/${removeRole}`);
+      addToast('Asset removed from slot', 'success');
+      setRemoveRole(null);
+      await fetchCreative();
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   const inputCls =
     'w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
 
@@ -209,6 +371,11 @@ export default function CreativeDetailPage() {
   // Build asset map for quick lookup
   const assetMap = new Map(creative.assets.map((a) => [a.role, a]));
 
+  // Label for remove confirm
+  const removeLabel = removeRole
+    ? (ASSET_ROLES.find((r) => r.role === removeRole)?.label ?? removeRole)
+    : '';
+
   return (
     <div className="p-6 max-w-4xl">
       <button onClick={() => router.push('/creatives')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4">
@@ -222,6 +389,13 @@ export default function CreativeDetailPage() {
         <span className="text-xs text-muted-foreground">{TYPE_LABELS[creative.creativeType] ?? creative.creativeType}</span>
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Assigning spinner */}
+          {assigning && (
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 size={14} className="animate-spin" /> Assigning…
+            </span>
+          )}
+
           {/* Validate */}
           {isDraft && (
             <button
@@ -399,6 +573,7 @@ export default function CreativeDetailPage() {
                 asset ? 'border-primary/30' : 'border-border border-dashed'
               }`}
             >
+              {/* Slot header */}
               <div className="flex items-center gap-2 mb-3">
                 <Icon size={16} className={asset ? 'text-primary' : 'text-muted-foreground'} />
                 <h3 className="text-sm font-medium text-foreground">{label}</h3>
@@ -406,21 +581,63 @@ export default function CreativeDetailPage() {
               </div>
 
               {asset ? (
-                <div className="space-y-1">
-                  <p className="text-sm text-foreground truncate">{asset.asset.filename}</p>
-                  <p className="text-xs text-muted-foreground">{asset.asset.mimeType}</p>
-                  <a
-                    href={asset.asset.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-primary text-xs hover:underline mt-1"
-                  >
-                    <ExternalLink size={10} /> View asset
-                  </a>
+                <div className="space-y-2">
+                  {/* Preview */}
+                  <AssetPreview
+                    mimeType={asset.asset.mimeType}
+                    url={asset.asset.url}
+                    filename={asset.asset.filename}
+                  />
+
+                  {/* File info */}
+                  <div className="space-y-0.5">
+                    <p className="text-sm text-foreground truncate">{asset.asset.filename}</p>
+                    <p className="text-xs text-muted-foreground">{asset.asset.mimeType}</p>
+                  </div>
+
+                  {/* Actions row */}
+                  <div className="flex items-center justify-between pt-1">
+                    <a
+                      href={asset.asset.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-primary text-xs hover:underline"
+                    >
+                      <ExternalLink size={10} /> View asset
+                    </a>
+                    <div className="flex items-center gap-2">
+                      {/* Re-upload button */}
+                      <button
+                        onClick={() => setUploadRole(role)}
+                        disabled={assigning}
+                        className="flex items-center gap-1 px-2 py-1 bg-muted text-muted-foreground rounded text-xs
+                                   hover:text-foreground transition-colors disabled:opacity-50"
+                      >
+                        <UploadCloud size={11} /> Replace
+                      </button>
+                      {/* Remove button */}
+                      <button
+                        onClick={() => setRemoveRole(role)}
+                        disabled={assigning || removing}
+                        className="flex items-center gap-1 px-2 py-1 bg-red-500/10 text-red-400 rounded text-xs
+                                   hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 size={11} /> Remove
+                      </button>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center py-4">
+                <div className="flex flex-col items-center justify-center py-6 gap-3">
                   <p className="text-sm text-muted-foreground">Empty</p>
+                  <button
+                    onClick={() => setUploadRole(role)}
+                    disabled={assigning}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 text-primary border border-primary/20
+                               rounded-lg text-xs font-medium hover:bg-primary/20 transition-colors disabled:opacity-50"
+                  >
+                    <UploadCloud size={13} /> Upload &amp; Assign
+                  </button>
                 </div>
               )}
             </div>
@@ -436,6 +653,29 @@ export default function CreativeDetailPage() {
             {JSON.stringify(creative.metadata, null, 2)}
           </pre>
         </div>
+      )}
+
+      {/* ── Upload modal ── */}
+      {uploadRole !== null && (
+        <ModalShell
+          title={`Upload Asset — ${ASSET_ROLES.find((r) => r.role === uploadRole)?.label ?? uploadRole}`}
+          onClose={() => setUploadRole(null)}
+        >
+          <AssetUploader
+            onSuccess={handleUploadSuccess}
+            onClose={() => setUploadRole(null)}
+          />
+        </ModalShell>
+      )}
+
+      {/* ── Remove confirm dialog ── */}
+      {removeRole !== null && (
+        <ConfirmRemoveDialog
+          label={removeLabel}
+          onConfirm={handleRemoveConfirm}
+          onCancel={() => setRemoveRole(null)}
+          loading={removing}
+        />
       )}
     </div>
   );

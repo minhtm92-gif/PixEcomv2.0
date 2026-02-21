@@ -331,6 +331,12 @@ export interface UpdateSellerSettingsDto {
   googleAnalyticsId?: string;
 }
 
+// ── Assets ──
+export interface UploadUrlResponse {
+  uploadUrl: string;
+  assetId: string;
+}
+
 // ── Creatives ──
 export type CreativeType = 'VIDEO_AD' | 'IMAGE_AD' | 'TEXT_ONLY' | 'UGC_BUNDLE';
 export type AssetRole = 'PRIMARY_VIDEO' | 'THUMBNAIL' | 'PRIMARY_TEXT' | 'HEADLINE' | 'DESCRIPTION' | 'EXTRA';
