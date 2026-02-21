@@ -408,6 +408,61 @@ export interface MetaAuthUrlResponse {
   url: string;
 }
 
+// ── Campaigns ──
+export type CampaignStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+export type BudgetType = 'DAILY' | 'LIFETIME';
+
+export interface CampaignListItem {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  externalCampaignId: string | null;
+  budgetPerDay: number | null;
+  budgetType: BudgetType;
+  startDate: string | null;
+  endDate: string | null;
+  sellpageId: string;
+  sellpage: { id: string; slug: string; urlPreview: string } | null;
+  adAccountId: string;
+  adAccountName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignDetail extends CampaignListItem {
+  sellerId: string;
+  platform: string;
+  deliveryStatus: string | null;
+}
+
+export interface CampaignsListResponse {
+  data: CampaignListItem[];
+  nextCursor: string | null;
+}
+
+export interface CreateCampaignDto {
+  name: string;
+  sellpageId: string;
+  adAccountId: string;
+  budget: number;
+  budgetType: BudgetType;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface UpdateCampaignDto {
+  name?: string;
+  budget?: number;
+  budgetType?: BudgetType;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+/** Pre-launch: PAUSED status with no externalCampaignId */
+export function isDraftCampaign(c: Pick<CampaignListItem, 'status' | 'externalCampaignId'>): boolean {
+  return c.status === 'PAUSED' && !c.externalCampaignId;
+}
+
 // ── Health ──
 export interface HealthResponse {
   status: string;

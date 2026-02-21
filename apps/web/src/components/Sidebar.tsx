@@ -14,12 +14,14 @@ import {
   Settings,
   LogOut,
   Activity,
+  Rocket,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 const NAV = [
   { label: 'Orders', href: '/orders', icon: ClipboardList },
   { label: 'Ads Manager', href: '/ads-manager', icon: Megaphone },
+  { label: 'Campaigns', href: '/campaigns', icon: Rocket },
   { label: 'Analytics', href: '/analytics', icon: BarChart3 },
   { label: 'Sellpages', href: '/sellpages', icon: FileText },
   { label: 'Creatives', href: '/creatives', icon: Palette },
