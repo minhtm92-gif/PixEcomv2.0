@@ -376,6 +376,89 @@ export class SellpagesService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // LINKED ADS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Returns the full Campaign → Adset → Ad → AdPost chain for a sellpage.
+   *
+   * Single Prisma query with nested selects — no N+1.
+   * Throws 404 if the sellpage does not exist or belongs to another seller.
+   */
+  async getLinkedAds(sellerId: string, sellpageId: string) {
+    // Verify sellpage ownership first (404 on miss or wrong seller)
+    const sellpage = await this.prisma.sellpage.findUnique({
+      where: { id: sellpageId },
+      select: { id: true, sellerId: true },
+    });
+    if (!sellpage || sellpage.sellerId !== sellerId) {
+      throw new NotFoundException('Sellpage not found');
+    }
+
+    // Single query: Campaign (sellpageId+sellerId) → Adset → Ad → AdPost
+    const campaigns = await this.prisma.campaign.findMany({
+      where: { sellpageId, sellerId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        adsets: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            ads: {
+              orderBy: { createdAt: 'asc' },
+              select: {
+                id: true,
+                name: true,
+                status: true,
+                adPosts: {
+                  take: 1,
+                  orderBy: { createdAt: 'desc' },
+                  select: {
+                    externalPostId: true,
+                    pageId: true,
+                    createdAt: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return {
+      campaigns: campaigns.map((campaign) => ({
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        adsets: campaign.adsets.map((adset) => ({
+          id: adset.id,
+          name: adset.name,
+          status: adset.status,
+          ads: adset.ads.map((ad) => ({
+            id: ad.id,
+            name: ad.name,
+            status: ad.status,
+            adPost:
+              ad.adPosts.length > 0
+                ? {
+                    externalPostId: ad.adPosts[0].externalPostId,
+                    pageId: ad.adPosts[0].pageId,
+                    createdAt: ad.adPosts[0].createdAt,
+                  }
+                : null,
+          })),
+        })),
+      })),
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // PRIVATE HELPERS
   // ─────────────────────────────────────────────────────────────────────────
 

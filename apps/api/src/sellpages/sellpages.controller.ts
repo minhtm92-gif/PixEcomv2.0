@@ -82,6 +82,22 @@ export class SellpagesController {
   }
 
   /**
+   * GET /api/sellpages/:id/linked-ads
+   *
+   * Returns the Campaign → Adset → Ad → AdPost chain for a sellpage.
+   * Read-only. Single DB query (no N+1).
+   * 404 if the sellpage does not exist or belongs to another seller.
+   */
+  @Get(':id/linked-ads')
+  @HttpCode(HttpStatus.OK)
+  async getLinkedAds(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.sellpagesService.getLinkedAds(user.sellerId, id);
+  }
+
+  /**
    * PATCH /api/sellpages/:id
    *
    * Partial update of a sellpage (slug, domainId, titleOverride, descriptionOverride).
