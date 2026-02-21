@@ -385,6 +385,29 @@ export interface UpdateCreativeDto {
   metadata?: Record<string, unknown>;
 }
 
+// ── FB Connections ──
+export interface FbConnection {
+  id: string;
+  sellerId: string;
+  fbUserId: string;
+  fbUserName: string;
+  name: string;
+  connectionType: 'AD_ACCOUNT' | 'PAGE' | 'PIXEL';
+  externalId: string;
+  isActive: boolean;
+  lastSyncAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FbConnectionsResponse {
+  data: FbConnection[];
+}
+
+export interface MetaAuthUrlResponse {
+  url: string;
+}
+
 // ── Health ──
 export interface HealthResponse {
   status: string;

@@ -1,14 +1,31 @@
 'use client';
 
 import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { apiGet, apiPatch, type ApiError } from '@/lib/apiClient';
+import { apiGet, apiPatch, apiDelete, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
-import { Settings, Store, Wrench, Save, Loader2 } from 'lucide-react';
+import {
+  Settings,
+  Store,
+  Wrench,
+  Save,
+  Loader2,
+  Facebook,
+  Trash2,
+  Pencil,
+  X,
+  Check,
+  ToggleLeft,
+  ToggleRight,
+  ExternalLink,
+} from 'lucide-react';
 import type {
   SellerProfile,
   SellerSettings,
   UpdateSellerDto,
   UpdateSellerSettingsDto,
+  FbConnection,
+  FbConnectionsResponse,
+  MetaAuthUrlResponse,
 } from '@/types/api';
 
 const CURRENCIES = [
@@ -31,6 +48,12 @@ const TIMEZONES = [
   { value: 'Australia/Sydney', label: 'Australia/Sydney (UTC+11)' },
   { value: 'Pacific/Auckland', label: 'Pacific/Auckland (UTC+13)' },
 ];
+
+const CONNECTION_TYPE_LABELS: Record<string, string> = {
+  AD_ACCOUNT: 'Ad Account',
+  PAGE: 'Page',
+  PIXEL: 'Pixel',
+};
 
 const inputCls =
   'w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
@@ -58,6 +81,16 @@ export default function SettingsPage() {
   const [supportEmail, setSupportEmail] = useState('');
   const [metaPixelId, setMetaPixelId] = useState('');
   const [gaId, setGaId] = useState('');
+
+  // ── FB Connections state ──
+  const [connections, setConnections] = useState<FbConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(true);
+  const [connecting, setConnecting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   // ── Fetch profile ──
   const fetchProfile = useCallback(async () => {
@@ -93,10 +126,24 @@ export default function SettingsPage() {
     }
   }, []);
 
+  // ── Fetch FB connections ──
+  const fetchConnections = useCallback(async () => {
+    setConnectionsLoading(true);
+    try {
+      const res = await apiGet<FbConnectionsResponse>('/fb/connections');
+      setConnections(res.data);
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchProfile();
     fetchSettings();
-  }, [fetchProfile, fetchSettings]);
+    fetchConnections();
+  }, [fetchProfile, fetchSettings, fetchConnections]);
 
   // ── Save profile ──
   async function handleSaveProfile(e: FormEvent) {
@@ -137,6 +184,80 @@ export default function SettingsPage() {
       toastApiError(err as ApiError);
     } finally {
       setSettingsSaving(false);
+    }
+  }
+
+  // ── Connect Facebook (OAuth) ──
+  async function handleConnectFacebook() {
+    setConnecting(true);
+    try {
+      const res = await apiGet<MetaAuthUrlResponse>('/meta/auth-url');
+      window.location.href = res.url;
+    } catch (err) {
+      toastApiError(err as ApiError);
+      setConnecting(false);
+    }
+  }
+
+  // ── Toggle connection active/inactive ──
+  async function handleToggle(conn: FbConnection) {
+    setTogglingId(conn.id);
+    try {
+      const updated = await apiPatch<FbConnection>(`/fb/connections/${conn.id}`, {
+        isActive: !conn.isActive,
+      });
+      setConnections((prev) => prev.map((c) => (c.id === conn.id ? updated : c)));
+      addToast(`Connection ${updated.isActive ? 'activated' : 'deactivated'}`, 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  // ── Start inline name edit ──
+  function startEditName(conn: FbConnection) {
+    setEditingId(conn.id);
+    setEditName(conn.name);
+  }
+
+  function cancelEditName() {
+    setEditingId(null);
+    setEditName('');
+  }
+
+  // ── Save name edit ──
+  async function handleSaveName(conn: FbConnection) {
+    if (!editName.trim() || editName.trim() === conn.name) {
+      cancelEditName();
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const updated = await apiPatch<FbConnection>(`/fb/connections/${conn.id}`, {
+        name: editName.trim(),
+      });
+      setConnections((prev) => prev.map((c) => (c.id === conn.id ? updated : c)));
+      addToast('Connection renamed', 'success');
+      setEditingId(null);
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  // ── Delete connection ──
+  async function handleDelete(conn: FbConnection) {
+    setDeletingId(conn.id);
+    try {
+      await apiDelete(`/fb/connections/${conn.id}`);
+      setConnections((prev) => prev.filter((c) => c.id !== conn.id));
+      addToast('Connection removed', 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -224,7 +345,7 @@ export default function SettingsPage() {
       </form>
 
       {/* Section 2: Store Settings */}
-      <form onSubmit={handleSaveSettings}>
+      <form onSubmit={handleSaveSettings} className="mb-6">
         <div className="bg-card border border-border rounded-xl">
           <div className="px-5 py-4 border-b border-border">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -354,6 +475,167 @@ export default function SettingsPage() {
           </div>
         </div>
       </form>
+
+      {/* Section 3: Facebook Connections */}
+      <div className="bg-card border border-border rounded-xl">
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Facebook size={16} className="text-[#1877F2]" />
+            Facebook Connections
+          </h2>
+          <button
+            onClick={handleConnectFacebook}
+            disabled={connecting}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white transition-colors
+                       disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ backgroundColor: '#1877F2' }}
+          >
+            {connecting ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <ExternalLink size={14} />
+            )}
+            {connecting ? 'Redirecting...' : 'Connect Facebook'}
+          </button>
+        </div>
+
+        <div className="p-5">
+          {connectionsLoading ? (
+            <div className="space-y-3">
+              <div className="h-16 bg-muted rounded-lg animate-pulse" />
+              <div className="h-16 bg-muted rounded-lg animate-pulse" />
+            </div>
+          ) : connections.length === 0 ? (
+            <div className="text-center py-8">
+              <Facebook size={32} className="mx-auto text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">No Facebook connections yet</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">
+                Click &quot;Connect Facebook&quot; to link your ad accounts, pages, or pixels
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {connections.map((conn) => (
+                <div
+                  key={conn.id}
+                  className={`border rounded-lg p-4 transition-colors ${
+                    conn.isActive ? 'border-[#1877F2]/30 bg-[#1877F2]/5' : 'border-border bg-muted/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Toggle */}
+                    <button
+                      onClick={() => handleToggle(conn)}
+                      disabled={togglingId === conn.id}
+                      className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                      title={conn.isActive ? 'Deactivate' : 'Activate'}
+                    >
+                      {togglingId === conn.id ? (
+                        <Loader2 size={20} className="animate-spin" />
+                      ) : conn.isActive ? (
+                        <ToggleRight size={20} className="text-[#1877F2]" />
+                      ) : (
+                        <ToggleLeft size={20} />
+                      )}
+                    </button>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      {editingId === conn.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="px-2 py-1 bg-input border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-48"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveName(conn);
+                              if (e.key === 'Escape') cancelEditName();
+                            }}
+                          />
+                          <button
+                            onClick={() => handleSaveName(conn)}
+                            disabled={editSaving}
+                            className="text-green-400 hover:text-green-300 disabled:opacity-50"
+                          >
+                            {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                          </button>
+                          <button
+                            onClick={cancelEditName}
+                            disabled={editSaving}
+                            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-medium text-foreground truncate">{conn.name}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                              {CONNECTION_TYPE_LABELS[conn.connectionType] ?? conn.connectionType}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {conn.fbUserName}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/50">
+                              ID: {conn.externalId}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Status */}
+                    <span
+                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                        conn.isActive
+                          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                          : 'bg-muted text-muted-foreground border border-border'
+                      }`}
+                    >
+                      {conn.isActive ? 'Active' : 'Inactive'}
+                    </span>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1">
+                      {editingId !== conn.id && (
+                        <button
+                          onClick={() => startEditName(conn)}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                          title="Rename"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(conn)}
+                        disabled={deletingId === conn.id}
+                        className="p-1.5 text-muted-foreground hover:text-red-400 rounded transition-colors disabled:opacity-50"
+                        title="Remove connection"
+                      >
+                        {deletingId === conn.id ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={13} />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Last sync */}
+                  {conn.lastSyncAt && (
+                    <p className="text-[10px] text-muted-foreground/50 mt-2 ml-8">
+                      Last synced: {new Date(conn.lastSyncAt).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
