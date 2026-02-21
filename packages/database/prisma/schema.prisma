@@ -620,6 +620,14 @@ model Order {
   trackingNumber  String?     @map("tracking_number") @db.VarChar(255)
   trackingUrl     String?     @map("tracking_url") @db.VarChar(1000)
   notes           String?
+  // ── Attribution (Task B3) ─────────────────────────────────────────────
+  source          String?     @db.VarChar(50)
+  transactionId   String?     @map("transaction_id") @db.VarChar(255)
+  utmSource       String?     @map("utm_source") @db.VarChar(255)
+  utmMedium       String?     @map("utm_medium") @db.VarChar(255)
+  utmCampaign     String?     @map("utm_campaign") @db.VarChar(255)
+  utmTerm         String?     @map("utm_term") @db.VarChar(255)
+  utmContent      String?     @map("utm_content") @db.VarChar(255)
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -630,6 +638,7 @@ model Order {
 
   @@unique([sellerId, orderNumber], name: "uq_order_number")
   @@index([sellerId, status])
+  @@index([sellerId, source])
   @@index([sellerId, sellpageId])
   @@index([sellerId, createdAt])
   @@map("orders")

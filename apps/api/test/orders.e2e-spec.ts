@@ -6,7 +6,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 /**
- * Orders Read Layer E2E Tests — Milestone 2.3.4-D + Task B2
+ * Orders Read Layer E2E Tests — Milestone 2.3.4-D + Task B2 + Task B3
  *
  * Requires live PostgreSQL on port 5434.
  *
@@ -30,6 +30,11 @@ import { PrismaService } from '../src/prisma/prisma.service';
  *  17. GET /orders — search by customerName (contains)
  *  18. GET /orders — search by customerPhone (contains)
  *  19. GET /orders — search by trackingNumber (contains)
+ *  20. GET /orders — list item includes source field
+ *  21. GET /orders/:id — exposes source, transactionId, utm fields
+ *  22. GET /orders — source filter returns only matching channel
+ *  23. GET /orders — source filter=tiktok returns 0 when no tiktok orders
+ *  24. GET /orders — source filter rejects invalid value (400)
  */
 describe('Orders Read Layer (e2e)', () => {
   let app: INestApplication;
@@ -44,9 +49,10 @@ describe('Orders Read Layer (e2e)', () => {
   let productId: string;
   let sellpageId1: string;
   let sellpageId2: string;
-  let orderA1Id: string; // CONFIRMED, sellpage1, has tracking + payment
-  let orderA2Id: string; // PENDING, sellpage1
-  let orderA3Id: string; // CONFIRMED, sellpage2
+  let orderA1Id: string; // CONFIRMED, sellpage1, source=facebook, tracking + payment
+  let orderA2Id: string; // PENDING, sellpage1, source=null
+  let orderA3Id: string; // CONFIRMED, sellpage2, source=null
+  let orderA4Id: string; // CONFIRMED, sellpage1, source=facebook, utm fields, transactionId
   let orderBId: string;  // Seller B's order
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -129,7 +135,7 @@ describe('Orders Read Layer (e2e)', () => {
     // Orders for Seller A
     const now = Date.now();
 
-    // Order A1 — has tracking + payment fields for Task B2 tests
+    // Order A1 — has tracking + payment + source=facebook fields
     const o1 = await prisma.order.create({
       data: {
         sellerId: sellerAId,
@@ -150,6 +156,7 @@ describe('Orders Read Layer (e2e)', () => {
         paymentMethod: 'COD',
         paymentId: 'PAY-ALICE-001',
         shippingAddress: { street: '123 Main St', city: 'HCM', country: 'VN' },
+        source: 'facebook',
         createdAt: new Date('2026-02-10T10:00:00.000Z'),
       },
     });
@@ -208,6 +215,30 @@ describe('Orders Read Layer (e2e)', () => {
     });
     orderA3Id = o3.id;
 
+    // Order A4 — source=facebook + full UTM + transactionId (for Task B3 tests)
+    const o4 = await prisma.order.create({
+      data: {
+        sellerId: sellerAId,
+        sellpageId: sellpageId1,
+        orderNumber: `ORD-A-004-${now}`,
+        customerEmail: 'dave@test.io',
+        customerName: 'Dave Buyer',
+        subtotal: 99.99,
+        total: 99.99,
+        currency: 'USD',
+        status: 'CONFIRMED',
+        source: 'facebook',
+        transactionId: 'TXN-B3-TEST-001',
+        utmSource: 'facebook',
+        utmMedium: 'paid',
+        utmCampaign: 'c_cmp-b3-test',
+        utmTerm: 'wireless mouse',
+        utmContent: 'video-v1',
+        createdAt: new Date('2026-02-10T09:00:00.000Z'),
+      },
+    });
+    orderA4Id = o4.id;
+
     // Seller B's order (must never appear in Seller A results)
     const spB = await prisma.sellpage.create({
       data: {
@@ -263,7 +294,7 @@ describe('Orders Read Layer (e2e)', () => {
       dateTo: '2026-02-10',
     }).expect(200);
 
-    expect(res.body.items.length).toBe(3);
+    expect(res.body.items.length).toBe(4);
     const item = res.body.items[0]; // most recent first
     expect(item).toHaveProperty('id');
     expect(item).toHaveProperty('orderNumber');
@@ -286,7 +317,7 @@ describe('Orders Read Layer (e2e)', () => {
       sellpageId: sellpageId1,
     }).expect(200);
 
-    expect(res.body.items.length).toBe(2);
+    expect(res.body.items.length).toBe(3); // A1, A2, A4 use sellpageId1
     for (const item of res.body.items) {
       expect(item.sellpage.id).toBe(sellpageId1);
     }
@@ -366,6 +397,7 @@ describe('Orders Read Layer (e2e)', () => {
     expect(ids).not.toContain(orderA1Id);
     expect(ids).not.toContain(orderA2Id);
     expect(ids).not.toContain(orderA3Id);
+    expect(ids).not.toContain(orderA4Id);
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -538,5 +570,101 @@ describe('Orders Read Layer (e2e)', () => {
 
     expect(res.body.items.length).toBe(1);
     expect(res.body.items[0].id).toBe(orderA1Id);
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // TASK B3 — SOURCE ATTRIBUTION TESTS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  it('20. GET /orders — list item includes source field', async () => {
+    const res = await get('/api/orders', sellerAToken, {
+      dateFrom: '2026-02-10',
+      dateTo: '2026-02-10',
+    }).expect(200);
+
+    // All items must have the source key
+    for (const item of res.body.items) {
+      expect(item).toHaveProperty('source');
+    }
+
+    // Order A1 has source=facebook
+    const a1 = res.body.items.find((i: any) => i.id === orderA1Id);
+    expect(a1).toBeDefined();
+    expect(a1.source).toBe('facebook');
+
+    // Order A2 has no source — should be null
+    const a2 = res.body.items.find((i: any) => i.id === orderA2Id);
+    expect(a2).toBeDefined();
+    expect(a2.source).toBeNull();
+  });
+
+  it('21. GET /orders/:id — exposes source, transactionId, utm fields', async () => {
+    const res = await get(`/api/orders/${orderA4Id}`, sellerAToken).expect(200);
+    const o = res.body;
+
+    expect(o.source).toBe('facebook');
+    expect(o.transactionId).toBe('TXN-B3-TEST-001');
+    expect(o.utm).toMatchObject({
+      source: 'facebook',
+      medium: 'paid',
+      campaign: 'c_cmp-b3-test',
+      term: 'wireless mouse',
+      content: 'video-v1',
+    });
+  });
+
+  it('21b. GET /orders/:id — utm fields are null when not set', async () => {
+    const res = await get(`/api/orders/${orderA2Id}`, sellerAToken).expect(200);
+    const o = res.body;
+
+    expect(o.source).toBeNull();
+    expect(o.transactionId).toBeNull();
+    expect(o.utm).toEqual({
+      source: null,
+      medium: null,
+      campaign: null,
+      term: null,
+      content: null,
+    });
+  });
+
+  it('22. GET /orders — source filter returns only facebook orders', async () => {
+    const res = await get('/api/orders', sellerAToken, {
+      dateFrom: '2026-02-10',
+      dateTo: '2026-02-10',
+      source: 'facebook',
+    }).expect(200);
+
+    // Only A1 and A4 have source=facebook
+    expect(res.body.items.length).toBe(2);
+    const ids = res.body.items.map((i: any) => i.id);
+    expect(ids).toContain(orderA1Id);
+    expect(ids).toContain(orderA4Id);
+    expect(ids).not.toContain(orderA2Id);
+    expect(ids).not.toContain(orderA3Id);
+
+    // Verify source field on returned items
+    for (const item of res.body.items) {
+      expect(item.source).toBe('facebook');
+    }
+  });
+
+  it('23. GET /orders — source filter=tiktok returns 0 when no tiktok orders exist', async () => {
+    const res = await get('/api/orders', sellerAToken, {
+      dateFrom: '2026-02-10',
+      dateTo: '2026-02-10',
+      source: 'tiktok',
+    }).expect(200);
+
+    expect(res.body.items).toEqual([]);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  it('24. GET /orders — source filter rejects invalid value (400)', async () => {
+    await get('/api/orders', sellerAToken, {
+      dateFrom: '2026-02-10',
+      dateTo: '2026-02-10',
+      source: 'instagram', // not in ORDER_SOURCES enum
+    }).expect(400);
   });
 });

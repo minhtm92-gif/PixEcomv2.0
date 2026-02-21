@@ -63,6 +63,7 @@ export interface OrderListItem {
   status: string;
   itemsCount: number;
   trackingNumber: string | null;
+  source: string | null;
 }
 
 export interface OrderListResult {
@@ -86,10 +87,19 @@ export interface OrderDetail {
     currency: string;
   };
   status: string;
+  source: string | null;
+  transactionId: string | null;
   trackingNumber: string | null;
   trackingUrl: string | null;
   paymentMethod: string | null;
   paymentId: string | null;
+  utm: {
+    source: string | null;
+    medium: string | null;
+    campaign: string | null;
+    term: string | null;
+    content: string | null;
+  };
   items: Array<{
     productTitle: string;
     variantTitle: string | null;
@@ -130,6 +140,10 @@ export class OrdersService {
 
     if (query.status) {
       andClauses.push({ status: query.status });
+    }
+
+    if (query.source) {
+      andClauses.push({ source: query.source });
     }
 
     if (query.search) {
@@ -176,6 +190,7 @@ export class OrdersService {
         currency: true,
         status: true,
         trackingNumber: true,
+        source: true,
         sellpage: {
           select: {
             id: true,
@@ -213,6 +228,7 @@ export class OrdersService {
       status: r.status,
       itemsCount: r._count.items,
       trackingNumber: r.trackingNumber ?? null,
+      source: r.source ?? null,
     }));
 
     return { items, nextCursor };
@@ -240,6 +256,13 @@ export class OrdersService {
         trackingUrl: true,
         paymentMethod: true,
         paymentId: true,
+        source: true,
+        transactionId: true,
+        utmSource: true,
+        utmMedium: true,
+        utmCampaign: true,
+        utmTerm: true,
+        utmContent: true,
         sellpage: {
           select: {
             id: true,
@@ -297,10 +320,19 @@ export class OrdersService {
         currency: order.currency,
       },
       status: order.status,
+      source: order.source ?? null,
+      transactionId: order.transactionId ?? null,
       trackingNumber: order.trackingNumber ?? null,
       trackingUrl: order.trackingUrl ?? null,
       paymentMethod: order.paymentMethod ?? null,
       paymentId: order.paymentId ?? null,
+      utm: {
+        source: order.utmSource ?? null,
+        medium: order.utmMedium ?? null,
+        campaign: order.utmCampaign ?? null,
+        term: order.utmTerm ?? null,
+        content: order.utmContent ?? null,
+      },
       items: order.items.map((i) => ({
         productTitle: i.productName,
         variantTitle: i.variantName ?? null,

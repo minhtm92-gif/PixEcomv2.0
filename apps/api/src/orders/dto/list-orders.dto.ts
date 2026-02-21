@@ -22,6 +22,16 @@ export const ORDER_STATUSES = [
 ] as const;
 export type OrderStatusFilter = (typeof ORDER_STATUSES)[number];
 
+export const ORDER_SOURCES = [
+  'facebook',
+  'tiktok',
+  'google',
+  'email',
+  'direct',
+  'other',
+] as const;
+export type OrderSourceFilter = (typeof ORDER_SOURCES)[number];
+
 export class ListOrdersQueryDto {
   /** Start of date range (createdAt). Defaults to today UTC. */
   @IsOptional()
@@ -43,8 +53,14 @@ export class ListOrdersQueryDto {
   @IsIn(ORDER_STATUSES)
   status?: OrderStatusFilter;
 
+  /** Filter by traffic source channel (e.g. facebook, tiktok, direct). */
+  @IsOptional()
+  @IsIn(ORDER_SOURCES)
+  source?: OrderSourceFilter;
+
   /**
-   * Free-text search: matches order number (prefix) or customer email (contains).
+   * Free-text search: matches orderNumber, customerEmail, customerName,
+   * customerPhone, trackingNumber.
    * Applied only if provided; max 100 chars to avoid abuse.
    */
   @IsOptional()
