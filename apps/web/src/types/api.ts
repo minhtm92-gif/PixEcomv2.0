@@ -196,11 +196,17 @@ export interface SellpageDetail extends SellpageListItem {
     basePrice: string;
     heroImageUrl: string | null;
   };
+  customDomain?: string | null;
+  customDomainStatus?: 'NOT_SET' | 'PENDING' | 'VERIFIED' | null;
+  pixelId?: string | null;
 }
 
 export interface LinkedAdPost {
-  externalPostId: string;
+  externalPostId: string | null;
   pageId: string;
+  pageName: string | null;
+  thumbnailUrl: string | null;
+  adText: string | null;
   createdAt: string;
 }
 
@@ -209,6 +215,13 @@ export interface LinkedAd {
   name: string;
   status: string;
   adPost: LinkedAdPost | null;
+  metrics: {
+    spend: number;
+    impressions: number;
+    clicks: number;
+    purchases: number;
+    roas: number;
+  } | null;
 }
 
 export interface LinkedAdset {
@@ -227,6 +240,39 @@ export interface LinkedCampaign {
 
 export interface LinkedAdsResponse {
   campaigns: LinkedCampaign[];
+}
+
+export interface BulkActionResult {
+  updated: number;
+  skipped: number;
+  failed: Array<{ id: string; reason: string }>;
+}
+
+export interface SyncResult {
+  synced: { campaigns: number; adsets: number; ads: number };
+  errors: Array<{ accountName: string; reason: string }>;
+  lastSyncAt: string;
+}
+
+export interface OrderTransitionsResponse {
+  currentStatus: string;
+  validTransitions: string[];
+}
+
+export interface SellpageDomainCheckResponse {
+  available: boolean;
+}
+
+export interface SellpageDomainVerifyResponse {
+  verified: boolean;
+  domain: string;
+  expectedCname: string;
+}
+
+export interface SellpagePixelResponse {
+  pixelId: string | null;
+  pixelName: string | null;
+  pixelExternalId: string | null;
 }
 
 export interface CreateSellpageDto {
