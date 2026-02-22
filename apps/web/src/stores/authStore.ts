@@ -102,7 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
           accessToken: string;
           user: AuthUser;
           seller: AuthSeller;
-        }>('/auth/login', { email, password }, { noAuth: true });
+        }>('/auth/login', { email, password }, { noAuth: true, skipRefresh: true });
 
         setAccessToken(data.accessToken);
         const user = { ...data.user, isSuperadmin: data.user.isSuperadmin ?? false };
@@ -121,7 +121,7 @@ export const useAuthStore = create<AuthState>((set, get) => {
         const data = await apiPost<{
           accessToken: string;
           user: AuthUser;
-        }>('/auth/admin-login', { email, password }, { noAuth: true });
+        }>('/auth/admin-login', { email, password }, { noAuth: true, skipRefresh: true });
 
         setAccessToken(data.accessToken);
         const user = { ...data.user, isSuperadmin: true };
