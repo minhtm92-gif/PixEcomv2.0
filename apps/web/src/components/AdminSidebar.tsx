@@ -9,7 +9,9 @@ import {
   Users,
   ShoppingBag,
   ClipboardList,
-  Image,
+  Globe,
+  BarChart3,
+  Settings,
   LogOut,
   Shield,
 } from 'lucide-react';
@@ -18,9 +20,11 @@ import { cn } from '@/lib/cn';
 const NAV = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Sellers', href: '/admin/sellers', icon: Users },
-  { label: 'Products', href: '/admin/products', icon: ShoppingBag },
   { label: 'Orders', href: '/admin/orders', icon: ClipboardList },
-  { label: 'Assets', href: '/admin/assets', icon: Image },
+  { label: 'Products', href: '/admin/products', icon: ShoppingBag },
+  { label: 'Stores', href: '/admin/stores', icon: Globe },
+  { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+  { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
 export function AdminSidebar() {
