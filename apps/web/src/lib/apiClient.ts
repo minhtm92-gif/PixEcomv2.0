@@ -21,6 +21,7 @@ export function validateApiBase(): string | null {
     return 'NEXT_PUBLIC_API_BASE_URL is not set. Rebuild with the correct .env.local.';
   }
   if (BASE.includes('localhost') || BASE.includes('127.0.0.1')) {
+    if (process.env.NODE_ENV === 'development') return null; // allow localhost in dev
     return `NEXT_PUBLIC_API_BASE_URL points to localhost (${BASE}). For staging, set it to the staging API URL and rebuild.`;
   }
   return null;
@@ -189,9 +190,9 @@ export async function api<T = unknown>(
     }
     const networkErr: ApiError = {
       code: 'NETWORK_ERROR',
-      message: err instanceof Error ? err.message : 'Network error — check your connection',
+      message: 'Network error — check your connection or the server may be down',
       requestId: null,
-      details: { url, method },
+      details: { url, method, originalError: err instanceof Error ? err.message : String(err) },
       status: 0,
     };
     throw networkErr;
