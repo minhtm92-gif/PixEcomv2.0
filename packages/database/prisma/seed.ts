@@ -441,6 +441,23 @@ async function main() {
 
   console.log('Creative seeded with 3 asset slots (ready to validate)');
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // SUPERADMIN ACCOUNT
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // bcrypt hash of "admin123456" at cost 10 — pre-computed for idempotency
+  await prisma.user.upsert({
+    where: { email: 'admin@pixecom.com' },
+    update: { isSuperadmin: true },
+    create: {
+      email: 'admin@pixecom.com',
+      passwordHash: '$2b$10$cUujddZFj9TelHT.IQTGgeHpZx.Tp59yCx0dR82aADolWZz4gq6n.',
+      displayName: 'PixEcom Admin',
+      isSuperadmin: true,
+    },
+  });
+  console.log('Superadmin seeded: admin@pixecom.com / admin123456');
+
   const pc = await prisma.product.count();
   const vc = await prisma.productVariant.count();
   const lc = await prisma.productLabel.count();

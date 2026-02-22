@@ -74,7 +74,7 @@ async function main() {
   console.log('🔍 Looking up Admin PixelXLab seller...');
 
   // Find the seller by email
-  const targetEmail = process.env.ALPHA_SEED_EMAIL || 'admin@pixelxlab.com';
+  const targetEmail = process.env.ALPHA_SEED_EMAIL || 'admin@pixecom.com';
   console.log(`  Using email: ${targetEmail}`);
   const adminUser = await prisma.user.findFirst({
     where: { email: targetEmail },
@@ -84,7 +84,7 @@ async function main() {
   });
 
   if (!adminUser || adminUser.sellerUsers.length === 0) {
-    console.error('❌ User admin@pixelxlab.com not found or has no seller. Register first.');
+    console.error(`❌ User ${targetEmail} not found or has no seller. Register first or set ALPHA_SEED_EMAIL env var.`);
     process.exit(1);
   }
 

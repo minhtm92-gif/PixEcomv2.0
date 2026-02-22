@@ -33,7 +33,7 @@ export interface AuthPayload {
     id: string;
     name: string;
     slug: string;
-  };
+  } | null;
 }
 
 @Injectable()
@@ -137,6 +137,31 @@ export class AuthService {
       throw new UnauthorizedException('Not an admin account');
     }
 
+    // Admin login: seller context is optional
+    if (loginType === 'admin') {
+      const sellerUser = await this.prisma.sellerUser.findFirst({
+        where: { userId: user.id, isActive: true },
+        include: { seller: { select: { id: true, name: true, slug: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const tokens = await this.generateTokens(
+        user.id,
+        sellerUser?.sellerId ?? 'ADMIN',
+        sellerUser?.role ?? 'ADMIN',
+        true,
+      );
+
+      return {
+        ...tokens,
+        user: { id: user.id, email: user.email, displayName: user.displayName },
+        seller: sellerUser
+          ? { id: sellerUser.seller.id, name: sellerUser.seller.name, slug: sellerUser.seller.slug }
+          : null,
+      };
+    }
+
+    // Seller login: seller context is REQUIRED
     const sellerUser = await this.prisma.sellerUser.findFirst({
       where: { userId: user.id, isActive: true },
       include: { seller: { select: { id: true, name: true, slug: true } } },
@@ -191,24 +216,26 @@ export class AuthService {
     // Rotation: delete old token before issuing new one
     await this.prisma.refreshToken.delete({ where: { id: stored.id } });
 
-    const sellerUser = await this.prisma.sellerUser.findFirst({
-      where: { userId: stored.userId, isActive: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    const [sellerUser, user] = await Promise.all([
+      this.prisma.sellerUser.findFirst({
+        where: { userId: stored.userId, isActive: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: stored.userId },
+        select: { isSuperadmin: true },
+      }),
+    ]);
 
-    if (!sellerUser) {
+    // Superadmin may have no sellerUser — allowed
+    if (!sellerUser && !user?.isSuperadmin) {
       throw new UnauthorizedException('No active seller account found');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: stored.userId },
-      select: { isSuperadmin: true },
-    });
-
     return this.generateTokens(
       stored.userId,
-      sellerUser.sellerId,
-      sellerUser.role,
+      sellerUser?.sellerId ?? 'ADMIN',
+      sellerUser?.role ?? 'ADMIN',
       user?.isSuperadmin ?? false,
     );
   }
@@ -237,6 +264,19 @@ export class AuthService {
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User not found or inactive');
+    }
+
+    // Admin JWT has sellerId='ADMIN' — no real seller context
+    if (sellerId === 'ADMIN') {
+      return {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        sellerId: null,
+        role: null,
+        isSuperadmin: user.isSuperadmin,
+      };
     }
 
     const sellerUser = await this.prisma.sellerUser.findFirst({
