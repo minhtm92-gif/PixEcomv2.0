@@ -226,9 +226,16 @@ export default function OrdersPage() {
         return;
       }
 
-      const result: ImportTrackingResult = await res.json();
+      const raw = await res.json();
+      const result: ImportTrackingResult = {
+        updated: raw.updated ?? 0,
+        failed: Array.isArray(raw.failed) ? raw.failed : [],
+      };
       setImportResult(result);
-      addToast(`Tracking imported: ${result.updated} updated, ${result.failed} failed`, result.failed > 0 ? 'warning' : 'success');
+      addToast(
+        `Tracking imported: ${result.updated} updated, ${result.failed.length} failed`,
+        result.failed.length > 0 ? 'warning' : 'success',
+      );
 
       // Refresh the list
       fetchOrders(cursors[currentPage]);
@@ -552,21 +559,21 @@ export default function OrdersPage() {
                       <CheckCircle2 size={16} className="text-green-400" />
                       <span className="text-foreground">{importResult.updated} updated</span>
                     </div>
-                    {importResult.failed > 0 && (
+                    {importResult.failed.length > 0 && (
                       <div className="flex items-center gap-2 text-sm">
                         <AlertTriangle size={16} className="text-amber-400" />
-                        <span className="text-foreground">{importResult.failed} failed</span>
+                        <span className="text-foreground">{importResult.failed.length} failed</span>
                       </div>
                     )}
                   </div>
 
-                  {importResult.errors.length > 0 && (
+                  {importResult.failed.length > 0 && (
                     <div className="border border-red-500/20 bg-red-500/5 rounded-lg overflow-hidden">
                       <p className="text-xs text-red-400 px-3 py-2 border-b border-red-500/20 font-medium">Errors</p>
                       <div className="max-h-32 overflow-y-auto">
-                        {importResult.errors.map((err, i) => (
-                          <div key={i} className="px-3 py-1.5 text-xs border-b border-red-500/10 last:border-0">
-                            <span className="text-muted-foreground">Row {err.row}</span>{' '}
+                        {importResult.failed.map((err, idx) => (
+                          <div key={idx} className="px-3 py-1.5 text-xs border-b border-red-500/10 last:border-0">
+                            <span className="text-muted-foreground">Row {idx + 1}</span>{' '}
                             <span className="font-mono text-foreground">{err.orderNumber}</span>{' '}
                             <span className="text-red-400">— {err.reason}</span>
                           </div>

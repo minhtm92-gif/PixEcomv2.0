@@ -83,8 +83,7 @@ export interface OrderDetail {
 
 export interface ImportTrackingResult {
   updated: number;
-  failed: number;
-  errors: { row: number; orderNumber: string; reason: string }[];
+  failed: Array<{ orderNumber: string; reason: string }>;
 }
 
 // ── Ads Manager metrics shape (shared by campaign/adset/ad) ──
