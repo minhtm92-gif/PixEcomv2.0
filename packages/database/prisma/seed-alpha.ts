@@ -74,8 +74,10 @@ async function main() {
   console.log('🔍 Looking up Admin PixelXLab seller...');
 
   // Find the seller by email
+  const targetEmail = process.env.ALPHA_SEED_EMAIL || 'admin@pixelxlab.com';
+  console.log(`  Using email: ${targetEmail}`);
   const adminUser = await prisma.user.findFirst({
-    where: { email: 'admin@pixelxlab.com' },
+    where: { email: targetEmail },
     include: {
       sellerUsers: { include: { seller: true } },
     },
