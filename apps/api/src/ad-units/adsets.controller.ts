@@ -98,7 +98,7 @@ export class AdsetsController {
   pause(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  ): Promise<any> {
     return this.campaignsService.pauseAdset(user.sellerId, id);
   }
 
@@ -111,7 +111,7 @@ export class AdsetsController {
   resume(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
-  ) {
+  ): Promise<any> {
     return this.campaignsService.resumeAdset(user.sellerId, id);
   }
 }

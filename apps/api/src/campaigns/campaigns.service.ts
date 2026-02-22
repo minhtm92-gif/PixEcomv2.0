@@ -439,7 +439,7 @@ export class CampaignsService {
    * PATCH /adsets/:id/pause
    * Inline pause — graceful Meta sync.
    */
-  async pauseAdset(sellerId: string, adsetId: string) {
+  async pauseAdset(sellerId: string, adsetId: string): Promise<any> {
     const adset = await this.assertAdsetBelongsToSeller(sellerId, adsetId);
 
     if (adset.status !== 'ACTIVE') {
@@ -468,7 +468,7 @@ export class CampaignsService {
    * PATCH /adsets/:id/resume
    * Inline resume — graceful Meta sync.
    */
-  async resumeAdset(sellerId: string, adsetId: string) {
+  async resumeAdset(sellerId: string, adsetId: string): Promise<any> {
     const adset = await this.assertAdsetBelongsToSeller(sellerId, adsetId);
 
     if (adset.status !== 'PAUSED') {
