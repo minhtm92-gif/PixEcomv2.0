@@ -85,13 +85,22 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 
 ---
 
+## Phase 2.4 — Frontend Preview & Admin Portal
+
+| Task | Log | Description | Branch | Commits | Build |
+|------|-----|-------------|--------|---------|-------|
+| C2-Frontend | [TASK-C2-FRONTEND-WORKING-LOG.md](./TASK-C2-FRONTEND-WORKING-LOG.md) | Ads Manager inline actions + bulk + sync; Sellpage domain/pixel/linked-ads; Orders status transitions; C2-FIX (3 regression bugs) | `feature/2.4.2-alpha-ads-seed-v1` | `0e27205`, `0c874de` | GREEN (34 routes) |
+| D-PREVIEW-1 | [TASK-D-PREVIEW-1-WORKING-LOG.md](./TASK-D-PREVIEW-1-WORKING-LOG.md) | Admin portal UI — 20 pages with static mock data (Dashboard, Sellers, Orders, Products, Stores, Analytics, Settings hub + 10 sub-pages) | `feature/2.4.2-alpha-ads-seed-v1` | `4749b51` | GREEN (35 routes) |
+
+---
+
 ## Up Next
 
 | Milestone | Description | Spec | Status |
 |-----------|-------------|------|--------|
 | **2.3.4-B** | Ads Manager 3-Tier Read Layer (Campaign/Adset/Ad + metrics contract) | — | ✅ Done |
 | **2.3.X** | Ads Manager Full Read Layer + Store Funnel Join + Orders Tracking Upgrade | [`TECH-SPEC-V1-ADDENDUM-2.3.X.md`](../TECH-SPEC-V1-ADDENDUM-2.3.X.md) | 🔄 Pending |
-| **2.3.5** | Seller dashboard frontend wiring (Next.js) | — | Pending |
+| **D-PREVIEW-2** | Admin portal API wiring (replace mock data with real endpoints) | — | Pending |
 
 ### 2.3.X Phase Tracker
 
