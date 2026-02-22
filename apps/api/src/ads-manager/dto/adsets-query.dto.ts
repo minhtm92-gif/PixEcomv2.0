@@ -2,7 +2,7 @@ import { IsDateString, IsIn, IsOptional, IsUUID } from 'class-validator';
 import { CAMPAIGN_STATUSES } from '../ads-manager.constants';
 
 export class AdsetsQueryDto {
-  @IsUUID()
+  @IsUUID('all')
   campaignId!: string;
 
   @IsOptional()

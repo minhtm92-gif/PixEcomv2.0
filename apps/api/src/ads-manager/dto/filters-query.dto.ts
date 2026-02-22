@@ -2,10 +2,10 @@ import { IsOptional, IsUUID } from 'class-validator';
 
 export class FiltersQueryDto {
   @IsOptional()
-  @IsUUID()
+  @IsUUID('all')
   campaignId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID('all')
   adsetId?: string;
 }
