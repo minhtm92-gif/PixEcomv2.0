@@ -18,6 +18,7 @@ import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { ListCampaignsDto } from './dto/list-campaigns.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
+import { InlineBudgetDto } from '../ads-manager/dto/bulk-action.dto';
 
 /**
  * Campaigns — seller-scoped CRUD + Meta lifecycle.
@@ -98,5 +99,17 @@ export class CampaignsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.service.resumeCampaign(user.sellerId, id);
+  }
+
+  // ─── PATCH /campaigns/:id/budget ──────────────────────────────────────────
+
+  @Patch(':id/budget')
+  @HttpCode(HttpStatus.OK)
+  updateBudget(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: InlineBudgetDto,
+  ) {
+    return this.service.updateCampaignBudget(user.sellerId, id, dto);
   }
 }

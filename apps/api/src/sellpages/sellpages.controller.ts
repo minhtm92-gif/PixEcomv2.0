@@ -18,6 +18,12 @@ import { CreateSellpageDto } from './dto/create-sellpage.dto';
 import { ListSellpagesDto } from './dto/list-sellpages.dto';
 import { UpdateSellpageDto } from './dto/update-sellpage.dto';
 import { SellpagesService } from './sellpages.service';
+import { IsOptional, IsString } from 'class-validator';
+
+class CheckDomainQueryDto {
+  @IsString()
+  domain!: string;
+}
 
 /**
  * Sellpage management endpoints — seller-scoped.
@@ -44,6 +50,17 @@ export class SellpagesController {
     @Body() dto: CreateSellpageDto,
   ) {
     return this.sellpagesService.createSellpage(user.sellerId, dto);
+  }
+
+  /**
+   * GET /api/sellpages/check-domain?domain=xxx
+   * B.1 — Check if a customDomain value is available.
+   * Static route — MUST be declared before /:id.
+   */
+  @Get('check-domain')
+  @HttpCode(HttpStatus.OK)
+  async checkDomain(@Query() query: CheckDomainQueryDto) {
+    return this.sellpagesService.checkDomainAvailability(query.domain);
   }
 
   /**
@@ -85,8 +102,7 @@ export class SellpagesController {
    * GET /api/sellpages/:id/linked-ads
    *
    * Returns the Campaign → Adset → Ad → AdPost chain for a sellpage.
-   * Read-only. Single DB query (no N+1).
-   * 404 if the sellpage does not exist or belongs to another seller.
+   * B.3: Enhanced with metrics (last 7 days) + asset details (thumbnailUrl, adText, pageName).
    */
   @Get(':id/linked-ads')
   @HttpCode(HttpStatus.OK)
@@ -95,6 +111,19 @@ export class SellpagesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.sellpagesService.getLinkedAds(user.sellerId, id);
+  }
+
+  /**
+   * GET /api/sellpages/:id/pixel
+   * B.2 — Return pixel info assigned to this sellpage.
+   */
+  @Get(':id/pixel')
+  @HttpCode(HttpStatus.OK)
+  async getPixel(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.sellpagesService.getPixel(user.sellerId, id);
   }
 
   /**
@@ -144,5 +173,18 @@ export class SellpagesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.sellpagesService.unpublishSellpage(user.sellerId, id);
+  }
+
+  /**
+   * POST /api/sellpages/:id/verify-domain
+   * B.1 — Mock DNS verification. Always returns verified: true in alpha.
+   */
+  @Post(':id/verify-domain')
+  @HttpCode(HttpStatus.OK)
+  async verifyDomain(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.sellpagesService.verifyDomain(user.sellerId, id);
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BulkStatusDto } from './dto/bulk-status.dto';
+import { canTransition } from './orders.service';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -10,8 +11,6 @@ export interface BulkStatusResult {
 }
 
 // ─── Map order status → event type ───────────────────────────────────────────
-// Only statuses that have a matching OrderEventType are mapped.
-// NOTE_ADDED is excluded — it's only used for manual notes, not bulk status.
 const STATUS_TO_EVENT: Record<string, string> = {
   CONFIRMED:  'CONFIRMED',
   PROCESSING: 'PROCESSING',
@@ -29,9 +28,8 @@ export class OrdersBulkService {
 
   /**
    * Bulk update order status.
-   * Each order is validated to belong to the seller before update.
-   * Creates an OrderEvent per updated order inside a Prisma transaction.
-   * Returns per-order success/failure summary.
+   * C.2: Now validates status transitions before updating.
+   * Orders with invalid transitions are skipped and added to failed[].
    */
   async bulkUpdateStatus(
     sellerId: string,
@@ -59,6 +57,16 @@ export class OrdersBulkService {
         // Skip if already at target status
         if (order.status === dto.status) {
           failed.push({ orderId, reason: `Order is already ${dto.status}` });
+          continue;
+        }
+
+        // C.2: Validate transition
+        const current = order.status.toString();
+        if (!canTransition(current, dto.status)) {
+          failed.push({
+            orderId,
+            reason: `Cannot transition from ${current} to ${dto.status}`,
+          });
           continue;
         }
 

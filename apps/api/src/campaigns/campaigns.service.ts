@@ -10,6 +10,7 @@ import { MetaService } from '../meta/meta.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { ListCampaignsDto } from './dto/list-campaigns.dto';
+import { InlineBudgetDto } from '../ads-manager/dto/bulk-action.dto';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,33 @@ function decodeCursor(cursor: string): { createdAt: Date; id: string } | null {
   }
 }
 
-// ─── Select shape ─────────────────────────────────────────────────────────────
+// ─── Select shapes ────────────────────────────────────────────────────────────
+
+const ADSET_SELECT = {
+  id: true,
+  campaignId: true,
+  sellerId: true,
+  externalAdsetId: true,
+  name: true,
+  status: true,
+  deliveryStatus: true,
+  optimizationGoal: true,
+  targeting: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+const AD_SELECT = {
+  id: true,
+  adsetId: true,
+  sellerId: true,
+  externalAdId: true,
+  name: true,
+  status: true,
+  deliveryStatus: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 const CAMPAIGN_SELECT = {
   id: true,
@@ -362,7 +389,206 @@ export class CampaignsService {
     return mapCampaign(updated);
   }
 
+  // ─── BUDGET ────────────────────────────────────────────────────────────────
+
+  /**
+   * PATCH /campaigns/:id/budget
+   * Inline budget edit. Graceful Meta sync (local update succeeds even if Meta fails).
+   */
+  async updateCampaignBudget(sellerId: string, campaignId: string, dto: InlineBudgetDto) {
+    const campaign = await this.assertBelongsToSeller(sellerId, campaignId);
+
+    if (dto.budget <= 0) {
+      throw new BadRequestException('Budget must be greater than 0');
+    }
+
+    // Graceful Meta sync
+    if (campaign.externalCampaignId) {
+      try {
+        const metaPayload: Record<string, unknown> =
+          (dto.budgetType ?? 'DAILY') === 'DAILY'
+            ? { daily_budget: Math.round(dto.budget * 100) }
+            : { lifetime_budget: Math.round(dto.budget * 100) };
+        await this.metaService.post(
+          campaign.adAccountId,
+          campaign.externalCampaignId,
+          metaPayload,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Meta budget update failed for campaign ${campaignId}: ${(err as Error).message}`,
+        );
+      }
+    }
+
+    const updated = await this.prisma.campaign.update({
+      where: { id: campaignId },
+      data: {
+        budget: dto.budget,
+        ...(dto.budgetType !== undefined && { budgetType: dto.budgetType as any }),
+      },
+      select: CAMPAIGN_SELECT,
+    });
+
+    return mapCampaign(updated);
+  }
+
+  // ─── ADSET PAUSE / RESUME ──────────────────────────────────────────────────
+
+  /**
+   * PATCH /adsets/:id/pause
+   * Inline pause — graceful Meta sync.
+   */
+  async pauseAdset(sellerId: string, adsetId: string) {
+    const adset = await this.assertAdsetBelongsToSeller(sellerId, adsetId);
+
+    if (adset.status !== 'ACTIVE') {
+      throw new ConflictException(
+        `Adset ${adsetId} cannot be paused — current status: ${adset.status}`,
+      );
+    }
+
+    // Graceful Meta sync
+    if (adset.externalAdsetId) {
+      try {
+        await this.metaService.post(adset.adAccountId, adset.externalAdsetId, { status: 'PAUSED' });
+      } catch (err) {
+        this.logger.warn(`Meta adset pause failed (${adsetId}): ${(err as Error).message}`);
+      }
+    }
+
+    return this.prisma.adset.update({
+      where: { id: adsetId },
+      data: { status: 'PAUSED' as any },
+      select: ADSET_SELECT,
+    });
+  }
+
+  /**
+   * PATCH /adsets/:id/resume
+   * Inline resume — graceful Meta sync.
+   */
+  async resumeAdset(sellerId: string, adsetId: string) {
+    const adset = await this.assertAdsetBelongsToSeller(sellerId, adsetId);
+
+    if (adset.status !== 'PAUSED') {
+      throw new ConflictException(
+        `Adset ${adsetId} cannot be resumed — current status: ${adset.status}`,
+      );
+    }
+
+    if (adset.externalAdsetId) {
+      try {
+        await this.metaService.post(adset.adAccountId, adset.externalAdsetId, { status: 'ACTIVE' });
+      } catch (err) {
+        this.logger.warn(`Meta adset resume failed (${adsetId}): ${(err as Error).message}`);
+      }
+    }
+
+    return this.prisma.adset.update({
+      where: { id: adsetId },
+      data: { status: 'ACTIVE' as any },
+      select: ADSET_SELECT,
+    });
+  }
+
+  // ─── AD PAUSE / RESUME ────────────────────────────────────────────────────
+
+  /**
+   * PATCH /ads/:id/pause
+   * Inline pause — graceful Meta sync.
+   */
+  async pauseAd(sellerId: string, adId: string) {
+    const ad = await this.assertAdBelongsToSeller(sellerId, adId);
+
+    if (ad.status !== 'ACTIVE') {
+      throw new ConflictException(
+        `Ad ${adId} cannot be paused — current status: ${ad.status}`,
+      );
+    }
+
+    if (ad.externalAdId) {
+      try {
+        await this.metaService.post(ad.adAccountId, ad.externalAdId, { status: 'PAUSED' });
+      } catch (err) {
+        this.logger.warn(`Meta ad pause failed (${adId}): ${(err as Error).message}`);
+      }
+    }
+
+    return this.prisma.ad.update({
+      where: { id: adId },
+      data: { status: 'PAUSED' as any },
+      select: AD_SELECT,
+    });
+  }
+
+  /**
+   * PATCH /ads/:id/resume
+   * Inline resume — graceful Meta sync.
+   */
+  async resumeAd(sellerId: string, adId: string) {
+    const ad = await this.assertAdBelongsToSeller(sellerId, adId);
+
+    if (ad.status !== 'PAUSED') {
+      throw new ConflictException(
+        `Ad ${adId} cannot be resumed — current status: ${ad.status}`,
+      );
+    }
+
+    if (ad.externalAdId) {
+      try {
+        await this.metaService.post(ad.adAccountId, ad.externalAdId, { status: 'ACTIVE' });
+      } catch (err) {
+        this.logger.warn(`Meta ad resume failed (${adId}): ${(err as Error).message}`);
+      }
+    }
+
+    return this.prisma.ad.update({
+      where: { id: adId },
+      data: { status: 'ACTIVE' as any },
+      select: AD_SELECT,
+    });
+  }
+
   // ─── PRIVATE ───────────────────────────────────────────────────────────────
+
+  private async assertAdsetBelongsToSeller(sellerId: string, adsetId: string) {
+    const adset = await this.prisma.adset.findFirst({
+      where: { id: adsetId, sellerId },
+      select: {
+        id: true,
+        status: true,
+        externalAdsetId: true,
+        campaign: { select: { adAccountId: true } },
+      },
+    });
+    if (!adset) throw new NotFoundException(`Adset ${adsetId} not found`);
+    return {
+      id: adset.id,
+      status: adset.status.toString(),
+      externalAdsetId: adset.externalAdsetId,
+      adAccountId: adset.campaign?.adAccountId ?? '',
+    };
+  }
+
+  private async assertAdBelongsToSeller(sellerId: string, adId: string) {
+    const ad = await this.prisma.ad.findFirst({
+      where: { id: adId, sellerId },
+      select: {
+        id: true,
+        status: true,
+        externalAdId: true,
+        adset: { select: { campaign: { select: { adAccountId: true } } } },
+      },
+    });
+    if (!ad) throw new NotFoundException(`Ad ${adId} not found`);
+    return {
+      id: ad.id,
+      status: ad.status.toString(),
+      externalAdId: ad.externalAdId,
+      adAccountId: ad.adset?.campaign?.adAccountId ?? '',
+    };
+  }
 
   private async assertBelongsToSeller(sellerId: string, campaignId: string) {
     const campaign = await this.prisma.campaign.findFirst({

@@ -1,6 +1,34 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListOrdersQueryDto } from './dto/list-orders.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+
+// ─── Status transition map ────────────────────────────────────────────────────
+
+/** Valid transitions: currentStatus → allowed target statuses */
+export const ORDER_TRANSITIONS: Record<string, string[]> = {
+  PENDING:    ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED:  ['PROCESSING', 'CANCELLED'],
+  PROCESSING: ['SHIPPED', 'CANCELLED'],
+  SHIPPED:    ['DELIVERED', 'REFUNDED'],
+  DELIVERED:  ['REFUNDED'],
+  CANCELLED:  [],
+  REFUNDED:   [],
+};
+
+/** Map order target status → OrderEventType enum string */
+const STATUS_TO_EVENT: Record<string, string> = {
+  CONFIRMED:  'CONFIRMED',
+  PROCESSING: 'PROCESSING',
+  SHIPPED:    'SHIPPED',
+  DELIVERED:  'DELIVERED',
+  CANCELLED:  'CANCELLED',
+  REFUNDED:   'REFUNDED',
+};
+
+export function canTransition(current: string, target: string): boolean {
+  return (ORDER_TRANSITIONS[current] ?? []).includes(target);
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -345,6 +373,77 @@ export class OrdersService {
         at: e.createdAt,
         note: e.description ?? null,
       })),
+    };
+  }
+
+  // ─── C.1: SINGLE ORDER STATUS CHANGE ─────────────────────────────────────
+
+  async updateOrderStatus(
+    sellerId: string,
+    orderId: string,
+    dto: UpdateOrderStatusDto,
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, sellerId },
+      select: { id: true, status: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    const current = order.status.toString();
+    const target = dto.status;
+
+    if (!canTransition(current, target)) {
+      throw new BadRequestException(
+        `Cannot transition from ${current} to ${target}`,
+      );
+    }
+
+    const eventType = STATUS_TO_EVENT[target] ?? 'CONFIRMED';
+    const description = dto.note ?? `Status changed to ${target}`;
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: target as never },
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.orderEvent.create({
+        data: {
+          orderId,
+          sellerId,
+          eventType: eventType as never,
+          description,
+        },
+      }),
+    ]);
+
+    return updated;
+  }
+
+  // ─── C.3: GET VALID TRANSITIONS ──────────────────────────────────────────
+
+  async getOrderTransitions(sellerId: string, orderId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, sellerId },
+      select: { id: true, status: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    const current = order.status.toString();
+    return {
+      currentStatus: current,
+      validTransitions: ORDER_TRANSITIONS[current] ?? [],
     };
   }
 }

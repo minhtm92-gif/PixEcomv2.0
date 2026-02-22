@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -109,6 +110,8 @@ const SELLPAGE_DETAIL_SELECT = {
 
 @Injectable()
 export class SellpagesService {
+  private readonly logger = new Logger(SellpagesService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -260,7 +263,9 @@ export class SellpagesService {
       dto.slug !== undefined ||
       dto.domainId !== undefined ||
       dto.titleOverride !== undefined ||
-      dto.descriptionOverride !== undefined;
+      dto.descriptionOverride !== undefined ||
+      dto.customDomain !== undefined ||
+      dto.pixelId !== undefined;
 
     if (!hasFields) {
       throw new BadRequestException(
@@ -289,6 +294,39 @@ export class SellpagesService {
       }
     }
 
+    // B.2: Validate pixelId if provided
+    let resolvedPixelId: string | null | undefined = undefined;
+    if (dto.pixelId !== undefined) {
+      if (dto.pixelId === null) {
+        resolvedPixelId = null;
+      } else {
+        const pixel = await this.prisma.fbConnection.findFirst({
+          where: { id: dto.pixelId, sellerId, connectionType: 'PIXEL', isActive: true },
+          select: { id: true },
+        });
+        if (!pixel) {
+          throw new BadRequestException(
+            `FbConnection ${dto.pixelId} is not an active PIXEL connection for this seller`,
+          );
+        }
+        resolvedPixelId = dto.pixelId;
+      }
+    }
+
+    // Build headerConfig update if pixelId changed
+    let headerConfigUpdate: Record<string, unknown> | undefined;
+    if (resolvedPixelId !== undefined) {
+      // Load current headerConfig
+      const current = await this.prisma.sellpage.findUnique({
+        where: { id },
+        select: { headerConfig: true },
+      });
+      const existing = (current?.headerConfig as Record<string, unknown>) ?? {};
+      headerConfigUpdate = resolvedPixelId === null
+        ? { ...existing, pixelId: null }
+        : { ...existing, pixelId: resolvedPixelId };
+    }
+
     const updated = await this.prisma.sellpage.update({
       where: { id },
       data: {
@@ -300,11 +338,13 @@ export class SellpagesService {
         ...(dto.descriptionOverride !== undefined && {
           descriptionOverride: dto.descriptionOverride,
         }),
-      },
+        ...(dto.customDomain !== undefined && { customDomain: dto.customDomain }),
+        ...(headerConfigUpdate !== undefined && { headerConfig: headerConfigUpdate }),
+      } as any,
       select: SELLPAGE_CARD_SELECT,
     });
 
-    return mapToCardDto(updated as SellpageCardRow);
+    return mapToCardDto(updated as unknown as SellpageCardRow);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -376,13 +416,88 @@ export class SellpagesService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // LINKED ADS
+  // DOMAIN CHECK / VERIFY  (B.1)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * GET /api/sellpages/check-domain?domain=xxx
+   * Check if a customDomain value is already in use by another sellpage.
+   */
+  async checkDomainAvailability(domain: string): Promise<{ available: boolean }> {
+    const existing = await this.prisma.sellpage.findFirst({
+      where: { customDomain: domain },
+      select: { id: true },
+    });
+    return { available: !existing };
+  }
+
+  /**
+   * POST /api/sellpages/:id/verify-domain
+   * Mock DNS verification (always succeeds in alpha).
+   */
+  async verifyDomain(sellerId: string, id: string) {
+    const sellpage = await this.assertSellpageBelongsToSeller(sellerId, id);
+    const domain = await this.prisma.sellpage.findUnique({
+      where: { id },
+      select: { customDomain: true },
+    });
+    const cname = `cname.pixecom.io`;
+    return {
+      verified: true,
+      domain: domain?.customDomain ?? null,
+      expectedCname: cname,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PIXEL  (B.2)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * GET /api/sellpages/:id/pixel
+   * Return the pixel assigned to this sellpage via headerConfig.pixelId.
+   */
+  async getPixel(sellerId: string, id: string) {
+    const sellpage = await this.prisma.sellpage.findUnique({
+      where: { id },
+      select: { sellerId: true, headerConfig: true },
+    });
+    if (!sellpage || sellpage.sellerId !== sellerId) {
+      throw new NotFoundException('Sellpage not found');
+    }
+
+    const header = (sellpage.headerConfig as Record<string, unknown>) ?? {};
+    const pixelId = typeof header['pixelId'] === 'string' ? header['pixelId'] : null;
+
+    if (!pixelId) {
+      return { pixelId: null, pixelName: null, pixelExternalId: null };
+    }
+
+    const pixel = await this.prisma.fbConnection.findFirst({
+      where: { id: pixelId, sellerId, connectionType: 'PIXEL' },
+      select: { id: true, name: true, externalId: true },
+    });
+
+    if (!pixel) {
+      return { pixelId, pixelName: null, pixelExternalId: null };
+    }
+
+    return {
+      pixelId: pixel.id,
+      pixelName: pixel.name ?? null,
+      pixelExternalId: pixel.externalId,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LINKED ADS  (B.3 — enhanced with metrics + asset details)
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Returns the full Campaign → Adset → Ad → AdPost chain for a sellpage.
+   * Enhanced (B.3): includes thumbnailUrl, adText, and last-7-day metrics.
    *
-   * Single Prisma query with nested selects — no N+1.
+   * Single Prisma query + 1 batch stats query — no N+1.
    * Throws 404 if the sellpage does not exist or belongs to another seller.
    */
   async getLinkedAds(sellerId: string, sellpageId: string) {
@@ -395,7 +510,7 @@ export class SellpagesService {
       throw new NotFoundException('Sellpage not found');
     }
 
-    // Single query: Campaign (sellpageId+sellerId) → Adset → Ad → AdPost
+    // Single query: Campaign → Adset → Ad → AdPost (with asset + page details)
     const campaigns = await this.prisma.campaign.findMany({
       where: { sellpageId, sellerId },
       orderBy: { createdAt: 'desc' },
@@ -422,6 +537,9 @@ export class SellpagesService {
                     externalPostId: true,
                     pageId: true,
                     createdAt: true,
+                    page: { select: { name: true } },
+                    assetThumbnail: { select: { url: true } },
+                    assetAdtext: { select: { primaryText: true } },
                   },
                 },
               },
@@ -430,6 +548,75 @@ export class SellpagesService {
         },
       },
     });
+
+    // Collect all ad IDs for batch stats query
+    const allAdIds: string[] = [];
+    for (const camp of campaigns) {
+      for (const adset of camp.adsets) {
+        for (const ad of adset.ads) {
+          allAdIds.push(ad.id);
+        }
+      }
+    }
+
+    // Batch stats query: sum last 7 days for all ad IDs (no N+1)
+    const statsMap = new Map<string, {
+      spend: number;
+      impressions: number;
+      clicks: number;
+      purchases: number;
+      roas: number;
+    }>();
+
+    if (allAdIds.length > 0) {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const statsRows = await this.prisma.adStatsDaily.findMany({
+        where: {
+          sellerId,
+          entityType: 'AD',
+          entityId: { in: allAdIds },
+          statDate: { gte: sevenDaysAgo },
+        },
+        select: {
+          entityId: true,
+          spend: true,
+          impressions: true,
+          linkClicks: true,
+          purchases: true,
+          purchaseValue: true,
+        },
+      });
+
+      // Aggregate per adId
+      for (const row of statsRows) {
+        const existing = statsMap.get(row.entityId) ?? {
+          spend: 0, impressions: 0, clicks: 0, purchases: 0,
+          _purchaseValue: 0, _spend: 0,
+        } as any;
+        existing.spend += Number(row.spend);
+        existing.impressions += row.impressions;
+        existing.clicks += row.linkClicks;
+        existing.purchases += row.purchases;
+        existing._purchaseValue = (existing._purchaseValue ?? 0) + Number(row.purchaseValue);
+        existing._spend = existing.spend;
+        statsMap.set(row.entityId, existing);
+      }
+
+      // Compute ROAS: purchaseValue / spend
+      for (const [adId, stats] of statsMap.entries()) {
+        const raw = stats as any;
+        const roas = raw._spend > 0 ? raw._purchaseValue / raw._spend : 0;
+        statsMap.set(adId, {
+          spend: raw.spend,
+          impressions: raw.impressions,
+          clicks: raw.clicks,
+          purchases: raw.purchases,
+          roas: Math.round(roas * 100) / 100,
+        });
+      }
+    }
 
     return {
       campaigns: campaigns.map((campaign) => ({
@@ -440,19 +627,26 @@ export class SellpagesService {
           id: adset.id,
           name: adset.name,
           status: adset.status,
-          ads: adset.ads.map((ad) => ({
-            id: ad.id,
-            name: ad.name,
-            status: ad.status,
-            adPost:
-              ad.adPosts.length > 0
+          ads: adset.ads.map((ad) => {
+            const post = ad.adPosts[0] ?? null;
+            const metrics = statsMap.get(ad.id) ?? null;
+            return {
+              id: ad.id,
+              name: ad.name,
+              status: ad.status,
+              adPost: post
                 ? {
-                    externalPostId: ad.adPosts[0].externalPostId,
-                    pageId: ad.adPosts[0].pageId,
-                    createdAt: ad.adPosts[0].createdAt,
+                    externalPostId: post.externalPostId ?? null,
+                    pageId: post.pageId,
+                    pageName: post.page?.name ?? null,
+                    thumbnailUrl: post.assetThumbnail?.url ?? null,
+                    adText: post.assetAdtext?.primaryText ?? null,
+                    createdAt: post.createdAt.toISOString(),
                   }
                 : null,
-          })),
+              metrics,
+            };
+          }),
         })),
       })),
     };

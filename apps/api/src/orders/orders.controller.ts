@@ -19,6 +19,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/strategies/jwt.strategy';
 import { BulkStatusDto } from './dto/bulk-status.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { ListOrdersQueryDto } from './dto/list-orders.dto';
 import { OrdersBulkService } from './orders-bulk.service';
 import { OrdersExportService } from './orders-export.service';
@@ -150,5 +151,33 @@ export class OrdersController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.service.getOrder(user.sellerId, id);
+  }
+
+  /**
+   * GET /api/orders/:id/transitions
+   * C.3 — Return current status and valid next transitions.
+   */
+  @Get(':id/transitions')
+  @HttpCode(200)
+  getOrderTransitions(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getOrderTransitions(user.sellerId, id);
+  }
+
+  /**
+   * PATCH /api/orders/:id/status
+   * C.1 — Manual single order status change with transition validation.
+   * Body: { status: OrderStatus, note?: string }
+   */
+  @Patch(':id/status')
+  @HttpCode(200)
+  updateOrderStatus(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateOrderStatusDto,
+  ) {
+    return this.service.updateOrderStatus(user.sellerId, id, dto);
   }
 }

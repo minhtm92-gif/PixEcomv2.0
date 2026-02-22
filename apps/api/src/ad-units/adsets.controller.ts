@@ -5,7 +5,6 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -16,6 +15,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/strategies/jwt.strategy';
 import { AdUnitsService } from './ad-units.service';
+import { CampaignsService } from '../campaigns/campaigns.service';
 import { CreateAdsetDto } from './dto/create-adset.dto';
 import { UpdateAdsetDto } from './dto/update-adset.dto';
 
@@ -25,6 +25,8 @@ import { UpdateAdsetDto } from './dto/update-adset.dto';
  *   GET    /api/campaigns/:campaignId/adsets
  *   GET    /api/adsets/:id
  *   PATCH  /api/adsets/:id
+ *   PATCH  /api/adsets/:id/pause
+ *   PATCH  /api/adsets/:id/resume
  */
 
 // ─── Nested: /campaigns/:campaignId/adsets ────────────────────────────────────
@@ -65,7 +67,10 @@ export class CampaignAdsetsController {
 @Controller('adsets')
 @UseGuards(JwtAuthGuard)
 export class AdsetsController {
-  constructor(private readonly service: AdUnitsService) {}
+  constructor(
+    private readonly service: AdUnitsService,
+    private readonly campaignsService: CampaignsService,
+  ) {}
 
   @Get(':id')
   getOne(
@@ -82,5 +87,31 @@ export class AdsetsController {
     @Body() dto: UpdateAdsetDto,
   ) {
     return this.service.updateAdset(user.sellerId, id, dto);
+  }
+
+  /**
+   * PATCH /api/adsets/:id/pause
+   * Inline pause for adset. Graceful Meta sync.
+   */
+  @Patch(':id/pause')
+  @HttpCode(HttpStatus.OK)
+  pause(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.campaignsService.pauseAdset(user.sellerId, id);
+  }
+
+  /**
+   * PATCH /api/adsets/:id/resume
+   * Inline resume for adset. Graceful Meta sync.
+   */
+  @Patch(':id/resume')
+  @HttpCode(HttpStatus.OK)
+  resume(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.campaignsService.resumeAdset(user.sellerId, id);
   }
 }

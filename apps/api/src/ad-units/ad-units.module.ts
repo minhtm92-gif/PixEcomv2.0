@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CampaignsModule } from '../campaigns/campaigns.module';
 import { AdUnitsService } from './ad-units.service';
 import { AdsetsController, CampaignAdsetsController } from './adsets.controller';
 import { AdsController, AdsetAdsController } from './ads.controller';
@@ -8,11 +9,14 @@ import { AdsController, AdsetAdsController } from './ads.controller';
  *
  * Controllers registered:
  *   CampaignAdsetsController  →  /campaigns/:campaignId/adsets
- *   AdsetsController          →  /adsets/:id
+ *   AdsetsController          →  /adsets/:id  (+ /pause, /resume)
  *   AdsetAdsController        →  /adsets/:adsetId/ads
- *   AdsController             →  /ads/:id  +  /ads/:adId/ad-post
+ *   AdsController             →  /ads/:id  +  /ads/:adId/ad-post  (+ /pause, /resume)
+ *
+ * Imports CampaignsModule for pause/resume lifecycle (MetaService already wired there).
  */
 @Module({
+  imports: [CampaignsModule],
   providers: [AdUnitsService],
   controllers: [
     CampaignAdsetsController,
