@@ -131,7 +131,7 @@ export default function SettingsPage() {
     setConnectionsLoading(true);
     try {
       const res = await apiGet<FbConnectionsResponse>('/fb/connections');
-      setConnections(res.data);
+      setConnections(res.data ?? []);
     } catch (err) {
       toastApiError(err as ApiError);
     } finally {

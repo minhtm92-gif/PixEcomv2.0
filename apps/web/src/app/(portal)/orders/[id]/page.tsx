@@ -16,7 +16,7 @@ import {
 import { apiGet, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { StatusBadge } from '@/components/StatusBadge';
-import { money, fmtDateTime } from '@/lib/format';
+import { moneyWhole, fmtDateTime } from '@/lib/format';
 import type { OrderDetail } from '@/types/api';
 
 const EVENT_ICONS: Record<string, string> = {
@@ -129,14 +129,14 @@ export default function OrderDetailPage() {
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="text-sm font-medium text-muted-foreground mb-3">Totals</h2>
           <div className="space-y-1 text-sm">
-            <Row label="Subtotal" value={money(order.totals.subtotal, order.totals.currency)} />
-            <Row label="Shipping" value={money(order.totals.shipping, order.totals.currency)} />
-            <Row label="Tax" value={money(order.totals.tax, order.totals.currency)} />
+            <Row label="Subtotal" value={moneyWhole(order.totals.subtotal, order.totals.currency)} />
+            <Row label="Shipping" value={moneyWhole(order.totals.shipping, order.totals.currency)} />
+            <Row label="Tax" value={moneyWhole(order.totals.tax, order.totals.currency)} />
             {order.totals.discount > 0 && (
-              <Row label="Discount" value={`-${money(order.totals.discount, order.totals.currency)}`} />
+              <Row label="Discount" value={`-${moneyWhole(order.totals.discount, order.totals.currency)}`} />
             )}
             <div className="border-t border-border pt-1 mt-1">
-              <Row label="Total" value={money(order.totals.total, order.totals.currency)} bold />
+              <Row label="Total" value={moneyWhole(order.totals.total, order.totals.currency)} bold />
             </div>
           </div>
         </div>
@@ -276,8 +276,8 @@ export default function OrderDetailPage() {
                 <td className="px-4 py-3 text-foreground">{item.productTitle}</td>
                 <td className="px-4 py-3 text-muted-foreground">{item.variantTitle ?? '—'}</td>
                 <td className="px-4 py-3 text-center text-foreground">{item.qty}</td>
-                <td className="px-4 py-3 text-right font-mono text-foreground">{money(item.unitPrice, order.totals.currency)}</td>
-                <td className="px-4 py-3 text-right font-mono text-foreground">{money(item.lineTotal, order.totals.currency)}</td>
+                <td className="px-4 py-3 text-right font-mono text-foreground">{moneyWhole(item.unitPrice, order.totals.currency)}</td>
+                <td className="px-4 py-3 text-right font-mono text-foreground">{moneyWhole(item.lineTotal, order.totals.currency)}</td>
               </tr>
             ))}
           </tbody>

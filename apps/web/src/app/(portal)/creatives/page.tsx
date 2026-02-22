@@ -83,8 +83,8 @@ export default function CreativesPage() {
       if (search.trim()) params.set('q', search.trim());
 
       const res = await apiGet<CreativesListResponse>(`/creatives?${params.toString()}`);
-      setData(res.data);
-      setTotal(res.total);
+      setData(res.data ?? []);
+      setTotal(res.total ?? 0);
     } catch (err) {
       const e = err as ApiError;
       setError(e.message ?? 'Failed to load creatives');
@@ -116,7 +116,7 @@ export default function CreativesPage() {
       setProductsLoading(true);
       try {
         const res = await apiGet<ProductsListResponse>('/products?limit=100');
-        setProducts(res.data);
+        setProducts(res.data ?? []);
       } catch (err) {
         toastApiError(err as ApiError);
       } finally {

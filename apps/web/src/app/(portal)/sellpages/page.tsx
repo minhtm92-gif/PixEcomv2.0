@@ -59,8 +59,8 @@ export default function SellpagesPage() {
       if (search.trim()) params.set('q', search.trim());
 
       const res = await apiGet<SellpagesListResponse>(`/sellpages?${params.toString()}`);
-      setData(res.data);
-      setTotal(res.total);
+      setData(res.data ?? []);
+      setTotal(res.total ?? 0);
     } catch (err) {
       const e = err as ApiError;
       setError(e.message ?? 'Failed to load sellpages');
@@ -93,7 +93,7 @@ export default function SellpagesPage() {
       setProductsLoading(true);
       try {
         const res = await apiGet<ProductsListResponse>('/products?limit=100');
-        setProducts(res.data);
+        setProducts(res.data ?? []);
       } catch (err) {
         toastApiError(err as ApiError);
       } finally {

@@ -19,7 +19,7 @@ import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
-import { fmtDateTime, money, today, daysAgo } from '@/lib/format';
+import { fmtDateTime, moneyWhole, today, daysAgo } from '@/lib/format';
 import type { OrderListItem, OrderListResponse, ImportTrackingResult } from '@/types/api';
 
 const STATUSES = ['ALL', 'PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'];
@@ -87,12 +87,12 @@ export default function OrdersPage() {
       params.set('dateTo', dateTo);
       params.set('limit', '20');
       if (status !== 'ALL') params.set('status', status);
-      if (source !== 'ALL') params.set('source', source);
+      if (source !== 'ALL') params.set('source', source.toLowerCase());
       if (search.trim()) params.set('search', search.trim());
       if (cursor) params.set('cursor', cursor);
 
       const res = await apiGet<OrderListResponse>(`/orders?${params.toString()}`);
-      setData(res.items);
+      setData(res.items ?? []);
       setNextCursor(res.nextCursor);
     } catch (err) {
       const e = err as ApiError;
@@ -139,7 +139,7 @@ export default function OrdersPage() {
       params.set('dateFrom', dateFrom);
       params.set('dateTo', dateTo);
       if (status !== 'ALL') params.set('status', status);
-      if (source !== 'ALL') params.set('source', source);
+      if (source !== 'ALL') params.set('source', source.toLowerCase());
       if (search.trim()) params.set('search', search.trim());
 
       const base = getApiBaseUrl();
@@ -264,7 +264,7 @@ export default function OrdersPage() {
       key: 'total',
       label: 'Total',
       className: 'text-right',
-      render: (r) => <span className="font-mono text-foreground">{money(r.total, r.currency)}</span>,
+      render: (r) => <span className="font-mono text-foreground">{moneyWhole(r.total, r.currency)}</span>,
     },
     {
       key: 'customer',

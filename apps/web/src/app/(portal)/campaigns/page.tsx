@@ -149,7 +149,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
   useEffect(() => {
     setSellpagesLoading(true);
     apiGet<SellpagesListResponse>('/sellpages?limit=100')
-      .then((res) => setSellpages(res.data))
+      .then((res) => setSellpages(res.data ?? []))
       .catch((err) => toastApiError(err as ApiError))
       .finally(() => setSellpagesLoading(false));
   }, []);
@@ -158,7 +158,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
     if (step !== 2) return;
     setAdAccountsLoading(true);
     apiGet<FbConnectionsResponse>('/fb/connections?connectionType=AD_ACCOUNT')
-      .then((res) => setAdAccounts(res.data))
+      .then((res) => setAdAccounts(res.data ?? []))
       .catch((err) => toastApiError(err as ApiError))
       .finally(() => setAdAccountsLoading(false));
   }, [step]);
@@ -478,7 +478,7 @@ export default function CampaignsPage() {
       const res = await apiGet<CampaignsListResponse>(`/campaigns?${params.toString()}`);
 
       // client-side status filter
-      let items = res.data;
+      let items = res.data ?? [];
       if (statusFilter !== 'ALL') {
         items = items.filter((c) => getDisplayStatus(c) === statusFilter);
       }
@@ -553,7 +553,7 @@ export default function CampaignsPage() {
     },
   ];
 
-  const total = data.length;
+  const total = data?.length ?? 0;
 
   return (
     <>

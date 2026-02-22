@@ -187,7 +187,14 @@ export async function api<T = unknown>(
       _onDebugEntry?.({ method, url, status: 0, requestId: null, ms: timeoutMs });
       throw timeoutErr;
     }
-    throw err;
+    const networkErr: ApiError = {
+      code: 'NETWORK_ERROR',
+      message: err instanceof Error ? err.message : 'Network error — check your connection',
+      requestId: null,
+      details: { url, method },
+      status: 0,
+    };
+    throw networkErr;
   }
 
   clearTimeout(timeoutId);
