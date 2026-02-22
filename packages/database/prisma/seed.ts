@@ -391,62 +391,27 @@ async function main() {
     },
   });
 
-  // CreativeAsset slot 1: PRIMARY_VIDEO (seller asset 1 — own video)
-  await prisma.creativeAsset.upsert({
-    where: {
-      uq_creative_asset_role: {
-        creativeId: seedCreative1.id,
-        role: 'PRIMARY_VIDEO',
-      },
-    },
-    update: {},
-    create: {
-      creativeId: seedCreative1.id,
-      assetId: sellerAsset1.id,
-      role: 'PRIMARY_VIDEO',
-    },
-  });
+  // CreativeAsset slots — deleteMany + create for idempotency
+  // (CreativeAsset has no Prisma @@unique; uniqueness is a conditional SQL index)
+  await prisma.creativeAsset.deleteMany({ where: { creativeId: seedCreative1.id, role: 'PRIMARY_VIDEO' } });
+  await prisma.creativeAsset.create({ data: { creativeId: seedCreative1.id, assetId: sellerAsset1.id, role: 'PRIMARY_VIDEO' } });
 
-  // CreativeAsset slot 2: THUMBNAIL (platform image asset 2)
-  await prisma.creativeAsset.upsert({
-    where: {
-      uq_creative_asset_role: {
-        creativeId: seedCreative1.id,
-        role: 'THUMBNAIL',
-      },
-    },
-    update: {},
-    create: {
-      creativeId: seedCreative1.id,
-      assetId: platformAsset2.id,
-      role: 'THUMBNAIL',
-    },
-  });
+  await prisma.creativeAsset.deleteMany({ where: { creativeId: seedCreative1.id, role: 'THUMBNAIL' } });
+  await prisma.creativeAsset.create({ data: { creativeId: seedCreative1.id, assetId: platformAsset2.id, role: 'THUMBNAIL' } });
 
-  // CreativeAsset slot 3: PRIMARY_TEXT (seller text asset)
-  await prisma.creativeAsset.upsert({
-    where: {
-      uq_creative_asset_role: {
-        creativeId: seedCreative1.id,
-        role: 'PRIMARY_TEXT',
-      },
-    },
-    update: {},
-    create: {
-      creativeId: seedCreative1.id,
-      assetId: sellerAsset2.id,
-      role: 'PRIMARY_TEXT',
-    },
-  });
+  await prisma.creativeAsset.deleteMany({ where: { creativeId: seedCreative1.id, role: 'PRIMARY_TEXT' } });
+  await prisma.creativeAsset.create({ data: { creativeId: seedCreative1.id, assetId: sellerAsset2.id, role: 'PRIMARY_TEXT' } });
 
   console.log('Creative seeded with 3 asset slots (ready to validate)');
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SUPERADMIN ACCOUNT
+  // SUPERADMIN ACCOUNT + ALPHA TEST SELLER
   // ─────────────────────────────────────────────────────────────────────────
 
+  const ALPHA_SELLER_ID = '00000000-0000-0000-0000-000000009001';
+
   // bcrypt hash of "admin123456" at cost 10 — pre-computed for idempotency
-  await prisma.user.upsert({
+  const adminUserRecord = await prisma.user.upsert({
     where: { email: 'admin@pixecom.com' },
     update: { isSuperadmin: true },
     create: {
@@ -456,7 +421,42 @@ async function main() {
       isSuperadmin: true,
     },
   });
-  console.log('Superadmin seeded: admin@pixecom.com / admin123456');
+
+  // Alpha Test Seller — owned by admin, used for alpha seed data
+  await prisma.seller.upsert({
+    where: { id: ALPHA_SELLER_ID },
+    update: {},
+    create: {
+      id: ALPHA_SELLER_ID,
+      name: 'Alpha Test Seller',
+      slug: 'alpha-test-seller',
+      isActive: true,
+    },
+  });
+
+  await prisma.sellerUser.upsert({
+    where: { uq_seller_user: { sellerId: ALPHA_SELLER_ID, userId: adminUserRecord.id } },
+    update: {},
+    create: {
+      sellerId: ALPHA_SELLER_ID,
+      userId: adminUserRecord.id,
+      role: 'OWNER',
+      isActive: true,
+    },
+  });
+
+  await prisma.sellerSettings.upsert({
+    where: { sellerId: ALPHA_SELLER_ID },
+    update: {},
+    create: {
+      sellerId: ALPHA_SELLER_ID,
+      brandName: 'Alpha Test Seller',
+      defaultCurrency: 'USD',
+      timezone: 'Asia/Ho_Chi_Minh',
+    },
+  });
+
+  console.log(`Superadmin seeded: admin@pixecom.com / admin123456 (alpha seller: ${ALPHA_SELLER_ID})`);
 
   const pc = await prisma.product.count();
   const vc = await prisma.productVariant.count();

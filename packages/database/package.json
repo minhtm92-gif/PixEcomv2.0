@@ -14,12 +14,15 @@
     "db:migrate:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "seed:alpha": "tsx prisma/seed.alpha.ts",
+    "seed:alpha": "tsx prisma/seed-alpha.ts",
     "seed:alpha:reset": "tsx prisma/seed.alpha.reset.ts",
     "seed:alpha:verify": "tsx prisma/seed.alpha.verify.ts",
     "seed:alpha:ads": "tsx prisma/seed.ads.alpha.ts",
     "seed:alpha:ads:reset": "tsx prisma/seed.ads.alpha.reset.ts",
-    "seed:alpha:ads:verify": "tsx prisma/seed.ads.alpha.verify.ts"
+    "seed:alpha:ads:verify": "tsx prisma/seed.ads.alpha.verify.ts",
+    "seed:alpha:stats": "tsx prisma/seed.alpha.stats.ts",
+    "seed:alpha:stats:reset": "tsx prisma/seed.alpha.stats.reset.ts",
+    "seed:alpha:stats:verify": "tsx prisma/seed.alpha.stats.verify.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0"

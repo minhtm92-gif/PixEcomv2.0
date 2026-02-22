@@ -88,8 +88,13 @@ async function main() {
     process.exit(1);
   }
 
-  const sellerId = adminUser.sellerUsers[0].sellerId;
-  console.log(`✅ Found seller: ${adminUser.sellerUsers[0].seller.name} (${sellerId})`);
+  // Prefer the dedicated alpha test seller if it exists (created by main seed)
+  const ALPHA_SELLER_ID = '00000000-0000-0000-0000-000000009001';
+  const preferredSellerUser =
+    adminUser.sellerUsers.find((su) => su.sellerId === ALPHA_SELLER_ID) ??
+    adminUser.sellerUsers[0];
+  const sellerId = preferredSellerUser.sellerId;
+  console.log(`✅ Found seller: ${preferredSellerUser.seller.name} (${sellerId})`);
 
   // Find products from main seed
   const product1 = await prisma.product.findUnique({ where: { productCode: 'MOUSE-001' } });
@@ -319,6 +324,33 @@ async function main() {
   console.log('   ✅ 5 orders (CONFIRMED/facebook, SHIPPED/tiktok, DELIVERED/facebook, PENDING/direct, CANCELLED/direct)');
 
   // ═══════════════════════════════════════════════════════════════════════
+  // B.2 ORDER PAYMENT ENRICHMENT
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n💳 Enriching orders with payment data...');
+
+  await prisma.order.update({
+    where: { id: ID.ORD1 },
+    data: {
+      paymentMethod: 'STRIPE',
+      paymentId: 'pi_3PxTest12345678',
+      transactionId: 'txn_alpha_001_stripe',
+      paidAt: new Date('2026-02-15T10:30:00Z'),
+    },
+  });
+
+  await prisma.order.update({
+    where: { id: ID.ORD3 },
+    data: {
+      paymentMethod: 'COD',
+      paymentId: null,
+      transactionId: 'txn_alpha_003_cod',
+      paidAt: new Date('2026-02-12T14:00:00Z'),
+    },
+  });
+
+  console.log('   ✅ ALPHA-001 → STRIPE (pi_3PxTest12345678) | ALPHA-003 → COD (txn_alpha_003_cod)');
+
+  // ═══════════════════════════════════════════════════════════════════════
   // C. FB CONNECTION (AD_ACCOUNT — required for campaigns)
   // ═══════════════════════════════════════════════════════════════════════
   console.log('\n🔗 Seeding FB connection...');
@@ -339,6 +371,54 @@ async function main() {
   });
 
   console.log('   ✅ 1 AD_ACCOUNT connection');
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // C.2 FB CONNECTION ENRICHMENT (mock token + PAGE + PIXEL)
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n🔗 Enriching FB connections...');
+
+  // Update AD_ACCOUNT with mock encrypted token
+  await prisma.fbConnection.update({
+    where: { id: ID.FB1 },
+    data: {
+      accessTokenEnc: 'MOCK_ENC_TOKEN_FOR_ALPHA_TEST_DO_NOT_USE_IN_PRODUCTION',
+      isPrimary: true,
+    },
+  });
+
+  // PAGE connection
+  await prisma.fbConnection.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000302' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000302',
+      sellerId,
+      connectionType: 'PAGE',
+      externalId: 'page_123456789',
+      name: 'Alpha Test Page',
+      accessTokenEnc: 'MOCK_PAGE_TOKEN',
+      isActive: true,
+      metadata: { pageCategory: 'E-commerce', followers: 5000 },
+    },
+  });
+
+  // PIXEL connection (child of AD_ACCOUNT)
+  await prisma.fbConnection.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000303' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000303',
+      sellerId,
+      connectionType: 'PIXEL',
+      externalId: 'pixel_987654321',
+      name: 'Alpha Test Pixel',
+      parentId: '00000000-0000-0000-000a-000000000301',
+      isActive: true,
+      metadata: { pixelCode: 'fbq("init", "987654321")' },
+    },
+  });
+
+  console.log('   ✅ AD_ACCOUNT mock token set | PAGE (page_123456789) + PIXEL (pixel_987654321) added');
 
   // ═══════════════════════════════════════════════════════════════════════
   // D. CAMPAIGNS
@@ -530,17 +610,170 @@ async function main() {
   console.log(`   ✅ ${statsCount} ad stats rows (9 entities × 7 days)`);
 
   // ═══════════════════════════════════════════════════════════════════════
+  // H. ASSETS — Products 2 & 3
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n🖼️  Seeding assets for Products 2 & 3...');
+
+  // ── Product 2 (STAND-001) assets ──────────────────────────────────────
+
+  const assetStandImage = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000601' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000601',
+      ownerSellerId: null, // platform asset — visible to all sellers
+      sourceType: 'PIXCON',
+      mediaType: 'IMAGE',
+      url: 'https://cdn.pixelxlab.com/assets/alpha/stand-hero.jpg',
+      mimeType: 'image/jpeg',
+      fileSizeBytes: BigInt(245000),
+      width: 1200,
+      height: 800,
+      metadata: { alt: 'Adjustable Laptop Stand' },
+    },
+  });
+
+  const assetStandVideo = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000602' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000602',
+      ownerSellerId: null,
+      sourceType: 'PIXCON',
+      mediaType: 'VIDEO',
+      url: 'https://cdn.pixelxlab.com/assets/alpha/stand-demo.mp4',
+      mimeType: 'video/mp4',
+      fileSizeBytes: BigInt(8500000),
+      durationSec: 30,
+      width: 1920,
+      height: 1080,
+      metadata: { alt: 'Stand Demo Video' },
+    },
+  });
+
+  const assetStandAdtext = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000603' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000603',
+      ownerSellerId: sellerId, // seller-authored copy
+      sourceType: 'USER_UPLOAD',
+      mediaType: 'TEXT',
+      url: '',
+      metadata: {
+        primaryText: 'Nâng cao tư thế làm việc với Stand Pro - giá chỉ từ 299K!',
+        headline: 'Laptop Stand Pro - Giảm 40%',
+        description: 'Chất liệu nhôm cao cấp, điều chỉnh 6 góc, gấp gọn dễ dàng.',
+      },
+    },
+  });
+
+  // ── Product 3 (DESKPAD-001) assets ────────────────────────────────────
+
+  const assetDeskpadImage = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000604' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000604',
+      ownerSellerId: null,
+      sourceType: 'PIXCON',
+      mediaType: 'IMAGE',
+      url: 'https://cdn.pixelxlab.com/assets/alpha/deskpad-hero.jpg',
+      mimeType: 'image/jpeg',
+      fileSizeBytes: BigInt(310000),
+      width: 1200,
+      height: 800,
+      metadata: { alt: 'Premium Desk Pad' },
+    },
+  });
+
+  const assetDeskpadAdtext = await prisma.asset.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000605' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000605',
+      ownerSellerId: sellerId,
+      sourceType: 'USER_UPLOAD',
+      mediaType: 'TEXT',
+      url: '',
+      metadata: {
+        primaryText: 'Desk Pad size lớn, da PU chống nước - setup bàn đẹp ngay hôm nay!',
+        headline: 'Desk Pad Premium - Free Ship',
+        description: 'Kích thước 90x40cm, da PU cao cấp, mặt sau chống trượt.',
+      },
+    },
+  });
+
+  console.log('   ✅ 5 assets (3 PIXCON platform + 2 USER_UPLOAD seller)');
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // I. CREATIVES — Products 2 & 3
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('\n🎨 Seeding creatives for Products 2 & 3...');
+
+  // Creative for Product 2 — READY (VIDEO_AD, 3 slots)
+  await prisma.creative.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000701' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000701',
+      sellerId,
+      name: 'Stand Pro - Video Ad v1',
+      creativeType: 'VIDEO_AD',
+      productId: product2.id,
+      status: 'READY',
+    },
+  });
+
+  // CreativeAsset slots — deleteMany + create for idempotency
+  // (CreativeAsset has no Prisma @@unique; uniqueness is a conditional SQL index)
+  await prisma.creativeAsset.deleteMany({ where: { creativeId: '00000000-0000-0000-000a-000000000701', role: 'PRIMARY_VIDEO' } });
+  await prisma.creativeAsset.create({ data: { creativeId: '00000000-0000-0000-000a-000000000701', assetId: assetStandVideo.id, role: 'PRIMARY_VIDEO' } });
+
+  await prisma.creativeAsset.deleteMany({ where: { creativeId: '00000000-0000-0000-000a-000000000701', role: 'THUMBNAIL' } });
+  await prisma.creativeAsset.create({ data: { creativeId: '00000000-0000-0000-000a-000000000701', assetId: assetStandImage.id, role: 'THUMBNAIL' } });
+
+  await prisma.creativeAsset.deleteMany({ where: { creativeId: '00000000-0000-0000-000a-000000000701', role: 'PRIMARY_TEXT' } });
+  await prisma.creativeAsset.create({ data: { creativeId: '00000000-0000-0000-000a-000000000701', assetId: assetStandAdtext.id, role: 'PRIMARY_TEXT' } });
+
+  // Creative for Product 3 — DRAFT (IMAGE_AD, 2 slots)
+  await prisma.creative.upsert({
+    where: { id: '00000000-0000-0000-000a-000000000702' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-000a-000000000702',
+      sellerId,
+      name: 'Desk Pad - Image Ad v1',
+      creativeType: 'IMAGE_AD',
+      productId: product3.id,
+      status: 'DRAFT',
+    },
+  });
+
+  await prisma.creativeAsset.deleteMany({ where: { creativeId: '00000000-0000-0000-000a-000000000702', role: 'THUMBNAIL' } });
+  await prisma.creativeAsset.create({ data: { creativeId: '00000000-0000-0000-000a-000000000702', assetId: assetDeskpadImage.id, role: 'THUMBNAIL' } });
+
+  await prisma.creativeAsset.deleteMany({ where: { creativeId: '00000000-0000-0000-000a-000000000702', role: 'PRIMARY_TEXT' } });
+  await prisma.creativeAsset.create({ data: { creativeId: '00000000-0000-0000-000a-000000000702', assetId: assetDeskpadAdtext.id, role: 'PRIMARY_TEXT' } });
+
+  console.log('   ✅ 2 creatives (Stand Pro READY/3-slots, Desk Pad DRAFT/2-slots)');
+
+  // ═══════════════════════════════════════════════════════════════════════
   // SUMMARY
   // ═══════════════════════════════════════════════════════════════════════
   const sp = await prisma.sellpage.count({ where: { sellerId } });
   const ord = await prisma.order.count({ where: { sellerId } });
+  const fb = await prisma.fbConnection.count({ where: { sellerId } });
   const cmp = await prisma.campaign.count({ where: { sellerId } });
   const ads = await prisma.adset.count({ where: { sellerId } });
   const ad = await prisma.ad.count({ where: { sellerId } });
   const st = await prisma.adStatsDaily.count({ where: { sellerId } });
+  const crt = await prisma.creative.count({ where: { sellerId } });
 
   console.log(`\n🎉 Alpha seed complete for seller: ${sellerId}`);
-  console.log(`   Sellpages: ${sp} | Orders: ${ord} | Campaigns: ${cmp} | Adsets: ${ads} | Ads: ${ad} | Stats: ${st}`);
+  console.log(`   Sellpages: ${sp} | Orders: ${ord} | FB connections: ${fb}`);
+  console.log(`   Campaigns: ${cmp} | Adsets: ${ads} | Ads: ${ad} | Stats: ${st}`);
+  console.log(`   Creatives: ${crt}`);
 }
 
 main()
