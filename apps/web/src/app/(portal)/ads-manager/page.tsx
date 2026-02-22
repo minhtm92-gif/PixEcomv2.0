@@ -207,7 +207,7 @@ export default function AdsManagerPage() {
         });
       } else {
         result = await apiPatch<BulkActionResult>('/ads-manager/bulk-status', {
-          entityType: tier,
+          entityType: tier === 'campaigns' ? 'campaign' : tier === 'adsets' ? 'adset' : 'ad',
           entityIds: selectedIds,
           action: bulkAction,
         });

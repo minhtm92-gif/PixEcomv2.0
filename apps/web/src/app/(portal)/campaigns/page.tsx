@@ -478,7 +478,7 @@ export default function CampaignsPage() {
       const res = await apiGet<CampaignsListResponse>(`/campaigns?${params.toString()}`);
 
       // client-side status filter
-      let items = res.data ?? [];
+      let items = res.items ?? [];
       if (statusFilter !== 'ALL') {
         items = items.filter((c) => getDisplayStatus(c) === statusFilter);
       }

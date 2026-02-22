@@ -5,7 +5,7 @@ import { Pause, Play, Loader2, Check, X } from 'lucide-react';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { num, pct, moneyWhole, metricOrNA } from '@/lib/format';
-import { apiPost, apiPatch, type ApiError } from '@/lib/apiClient';
+import { apiPatch, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import type { AdsMetrics } from '@/types/api';
 
@@ -88,7 +88,7 @@ export function AdsMetricsTable({
     setActionLoadingId(row.id);
     try {
       const path = tier === 'adsets' ? 'adsets' : tier === 'ads' ? 'ads' : 'campaigns';
-      await apiPost(`/ads-manager/${path}/${row.id}/${action}`);
+      await apiPatch(`/${path}/${row.id}/${action}`);
       addToast(`${action === 'pause' ? 'Paused' : 'Resumed'} "${row.name}"`, 'success');
       onAction?.();
     } catch (err) {

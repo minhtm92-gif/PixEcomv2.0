@@ -487,7 +487,7 @@ export interface CampaignDetail extends CampaignListItem {
 }
 
 export interface CampaignsListResponse {
-  data: CampaignListItem[];
+  items: CampaignListItem[];
   nextCursor: string | null;
 }
 
