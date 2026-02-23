@@ -56,6 +56,8 @@ export default function AdsManagerPage() {
 
   // Filters
   const [status, setStatus] = useState('ALL');
+  const [adAccountId, setAdAccountId] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [dateFrom, setDateFrom] = useState(daysAgo(30));
   const [dateTo, setDateTo] = useState(today());
   const [activePreset, setActivePreset] = useState('30d');
@@ -102,6 +104,8 @@ export default function AdsManagerPage() {
     if (dateFrom) params.set('dateFrom', dateFrom);
     if (dateTo) params.set('dateTo', dateTo);
     if (status !== 'ALL') params.set('status', status);
+    if (adAccountId) params.set('adAccountId', adAccountId);
+    if (searchQuery) params.set('search', searchQuery);
 
     try {
       if (tier === 'campaigns') {
@@ -126,7 +130,7 @@ export default function AdsManagerPage() {
     } finally {
       setLoading(false);
     }
-  }, [tier, campaignId, adsetId, dateFrom, dateTo, status]);
+  }, [tier, campaignId, adsetId, dateFrom, dateTo, status, adAccountId, searchQuery]);
 
   useEffect(() => {
     fetchData();
@@ -309,6 +313,16 @@ export default function AdsManagerPage() {
           ))}
         </select>
 
+        <select
+          value={adAccountId}
+          onChange={(e) => setAdAccountId(e.target.value)}
+          className="bg-input border border-border rounded-lg px-3 py-2 text-sm text-foreground"
+        >
+          <option value="">All Ad Accounts</option>
+          <option value="act_123456">act_123456 (Main)</option>
+          <option value="act_789012">act_789012 (Test)</option>
+        </select>
+
         {/* Date presets */}
         <div className="flex gap-1">
           {DATE_PRESETS.map((p) => (
@@ -352,6 +366,18 @@ export default function AdsManagerPage() {
           <Filter size={12} />
           <span>Meta only</span>
         </div>
+      </div>
+
+      {/* Search */}
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search by campaign name..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full max-w-sm px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground
+                     placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+        />
       </div>
 
       {/* Error */}

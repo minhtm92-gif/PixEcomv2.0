@@ -1,4 +1,4 @@
-import { Zap, Tag, ShoppingCart } from 'lucide-react';
+import { Zap, Tag } from 'lucide-react';
 import { MockBoostModule } from '@/mock/storefront';
 
 interface BoostModuleProps {
@@ -55,15 +55,12 @@ export function BoostModule({ modules }: BoostModuleProps) {
           return (
             <div
               key={i}
-              className="rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 px-4 py-3 flex items-start gap-3"
+              className="border border-dashed border-green-500 rounded bg-green-50 py-2 px-1.5 flex flex-col items-center justify-center text-center"
             >
-              <ShoppingCart size={17} className="text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-bold text-green-800 dark:text-green-300">{m.title}</p>
-                {m.description && (
-                  <p className="text-xs text-green-700 dark:text-green-400 mt-0.5 leading-relaxed">{m.description}</p>
-                )}
-              </div>
+              <span className="text-base font-extrabold uppercase tracking-wide text-green-700">{m.title}</span>
+              {m.description && (
+                <span className="text-base font-medium text-green-600">{m.description}</span>
+              )}
             </div>
           );
         }

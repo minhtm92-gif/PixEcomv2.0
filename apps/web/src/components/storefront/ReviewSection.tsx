@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { Star } from 'lucide-react';
 import { MockReview } from '@/mock/storefront';
 
@@ -26,6 +29,8 @@ interface ReviewSectionProps {
 }
 
 export function ReviewSection({ reviews, rating, reviewCount }: ReviewSectionProps) {
+  const [lightboxImg, setLightboxImg] = useState<string | null>(null);
+
   const breakdown = [5, 4, 3, 2, 1].map(star => ({
     star,
     count: reviews.filter(r => Math.round(r.rating) === star).length,
@@ -91,8 +96,13 @@ export function ReviewSection({ reviews, rating, reviewCount }: ReviewSectionPro
             {r.images && r.images.length > 0 && (
               <div className="flex gap-2 mt-2">
                 {r.images.map((img, i) => (
-                  <div key={i} className="w-16 h-16 rounded-lg overflow-hidden border border-border">
-                    <img src={img} alt="" className="w-full h-full object-cover hover:scale-110 transition-transform" />
+                  <div key={i} className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 cursor-pointer">
+                    <img
+                      src={img}
+                      alt=""
+                      className="w-full h-full object-cover hover:scale-110 transition-transform"
+                      onClick={() => setLightboxImg(img)}
+                    />
                   </div>
                 ))}
               </div>
@@ -100,6 +110,20 @@ export function ReviewSection({ reviews, rating, reviewCount }: ReviewSectionPro
           </div>
         ))}
       </div>
+
+      {lightboxImg && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setLightboxImg(null)}
+        >
+          <img
+            src={lightboxImg}
+            alt="Review"
+            className="max-w-full max-h-[90vh] rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
