@@ -9,6 +9,8 @@ export default function SettingsLegalPage() {
       icon={<FileText size={20} className="text-amber-400" />}
       title="Legal"
       subtitle="Terms of service, privacy policy, and compliance documents"
+      backHref="/admin/settings"
+      backLabel="Settings"
     >
       <div className="max-w-2xl space-y-4">
         {[

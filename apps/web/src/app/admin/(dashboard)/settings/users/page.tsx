@@ -10,6 +10,7 @@ const ROLE_COLORS: Record<string, string> = {
   SUPERADMIN: 'bg-amber-500/15 text-amber-400',
   SUPPORT: 'bg-blue-500/15 text-blue-400',
   FINANCE: 'bg-purple-500/15 text-purple-400',
+  CONTENT: 'bg-green-500/15 text-green-400',
 };
 
 export default function SettingsUsersPage() {
@@ -59,6 +60,8 @@ export default function SettingsUsersPage() {
       icon={<Users size={20} className="text-amber-400" />}
       title="Admin Users"
       subtitle="Manage admin accounts, roles, and permissions"
+      backHref="/admin/settings"
+      backLabel="Settings"
       actions={
         <button className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-medium rounded-lg transition-colors opacity-60 cursor-default">
           + Invite Admin (Preview)
@@ -66,8 +69,8 @@ export default function SettingsUsersPage() {
       }
     >
       {/* Role summary */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {(['SUPERADMIN', 'SUPPORT', 'FINANCE'] as const).map((role) => (
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        {(['SUPERADMIN', 'CONTENT', 'SUPPORT', 'FINANCE'] as const).map((role) => (
           <div key={role} className="bg-card border border-border rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-foreground font-mono">
               {MOCK_ADMIN_USERS.filter((u) => u.role === role).length}

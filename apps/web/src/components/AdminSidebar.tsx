@@ -15,12 +15,16 @@ import {
   LogOut,
   Shield,
   ExternalLink,
+  FileText,
+  Palette,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
-const NAV = [
+/** Full admin navigation */
+const ADMIN_NAV = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Sellers', href: '/admin/sellers', icon: Users },
   { label: 'Orders', href: '/admin/orders', icon: ClipboardList },
@@ -30,12 +34,26 @@ const NAV = [
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
+/** Content role: restricted navigation (FB-20) */
+const CONTENT_NAV = [
+  { label: 'Products', href: '/admin/products', icon: ShoppingBag },
+  { label: 'Sellpages', href: '/admin/sellpages', icon: FileText },
+  { label: 'Creatives', href: '/admin/creatives', icon: Palette },
+  { label: 'Performance', href: '/admin/content-performance', icon: TrendingUp },
+];
+
+// Toggle this to preview Content role nav (preview-only)
+const PREVIEW_AS_CONTENT = false;
+
 export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const addToast = useToastStore((s) => s.add);
+
+  const isContentRole = PREVIEW_AS_CONTENT; // In real mode: derived from JWT role
+  const NAV = isContentRole ? CONTENT_NAV : ADMIN_NAV;
 
   async function handleLogout() {
     try {
@@ -51,9 +69,9 @@ export function AdminSidebar() {
     <aside className="fixed left-0 top-0 bottom-0 w-56 bg-card border-r border-border flex flex-col z-50">
       {/* Brand */}
       <div className="h-14 flex items-center px-4 border-b border-border">
-        <Link href="/admin/dashboard" className="text-lg font-bold text-foreground flex items-center gap-2">
+        <Link href={isContentRole ? '/admin/products' : '/admin/dashboard'} className="text-lg font-bold text-foreground flex items-center gap-2">
           <Shield size={18} className="text-amber-400" />
-          PixEcom Admin
+          {isContentRole ? 'PixEcom Content' : 'PixEcom Admin'}
           {IS_PREVIEW && (
             <span className="ml-1 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] font-bold rounded uppercase">
               Preview
@@ -110,13 +128,13 @@ export function AdminSidebar() {
         {IS_PREVIEW ? (
           <div className="mb-2 px-1">
             <p className="text-sm font-medium text-foreground">Preview Mode</p>
-            <p className="text-xs text-amber-400">No auth required</p>
+            <p className="text-xs text-amber-400">{isContentRole ? 'Content Role' : 'No auth required'}</p>
           </div>
         ) : (
           user && (
             <div className="mb-2 px-1">
               <p className="text-sm font-medium text-foreground truncate">{user.displayName}</p>
-              <p className="text-xs text-amber-400 truncate">Superadmin</p>
+              <p className="text-xs text-amber-400 truncate">{isContentRole ? 'Content' : 'Superadmin'}</p>
             </div>
           )
         )}

@@ -88,6 +88,15 @@ export function ReviewSection({ reviews, rating, reviewCount }: ReviewSectionPro
             </div>
             <p className="text-sm font-semibold text-gray-900 mb-1">{r.title}</p>
             <p className="text-sm text-gray-600 leading-relaxed">{r.body}</p>
+            {r.images && r.images.length > 0 && (
+              <div className="flex gap-2 mt-2">
+                {r.images.map((img, i) => (
+                  <div key={i} className="w-16 h-16 rounded-lg overflow-hidden border border-border">
+                    <img src={img} alt="" className="w-full h-full object-cover hover:scale-110 transition-transform" />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>

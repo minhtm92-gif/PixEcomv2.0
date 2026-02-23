@@ -47,6 +47,8 @@ export default function SettingsBillingPage() {
       icon={<Receipt size={20} className="text-amber-400" />}
       title="Billing & Plans"
       subtitle="Subscription plans, seller fees, and invoicing"
+      backHref="/admin/settings"
+      backLabel="Settings"
     >
       {/* Current plan */}
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 flex items-center justify-between">

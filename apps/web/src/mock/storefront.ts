@@ -13,10 +13,11 @@ export interface MockVariant {
 }
 
 export interface MockBoostModule {
-  type: 'BUNDLE_DISCOUNT' | 'EXTRA_OFF';
+  type: 'BUNDLE_DISCOUNT' | 'EXTRA_OFF' | 'UPSELL_NEXT_ITEM';
   title: string;
   tiers?: { qty: number; discount: string }[];
   description?: string;
+  upsellPercent?: number;
 }
 
 export interface MockStorefrontProduct {
@@ -48,6 +49,7 @@ export interface MockReview {
   title: string;
   body: string;
   verified: boolean;
+  images?: string[];
 }
 
 export interface MockCheckoutDiscount {
@@ -166,6 +168,12 @@ export const MOCK_PRODUCTS: MockStorefrontProduct[] = [
         type: 'EXTRA_OFF',
         title: '🎁 Gift-Ready Packaging Included',
         description: 'Every set comes in a premium jewelry box — perfect for gifting.',
+      },
+      {
+        type: 'UPSELL_NEXT_ITEM',
+        title: 'EXTRA 35% OFF FOR NEXT ITEM IN CART',
+        upsellPercent: 35,
+        description: 'Add any item and get 35% off!',
       },
     ],
     description: `The **Lynsie Charm Bracelet Set** is our best-selling signature collection — delicate, layerable, and designed to be worn every day.\n\nHandcrafted from 18K gold-plated brass with a waterproof coating, each bracelet features hand-set cubic zirconia charms that catch the light beautifully. The set includes 3 bracelets that can be stacked or worn individually.\n\n✅ Waterproof & tarnish-resistant\n✅ Hypoallergenic — nickel free\n✅ 18K gold / sterling silver / rose gold plating\n✅ Adjustable clasp fits most wrist sizes\n✅ Gift box included`,
@@ -327,6 +335,7 @@ export const MOCK_REVIEWS: MockReview[] = [
     title: 'Absolutely gorgeous! Better than expected.',
     body: 'I bought the gold set and it is stunning. The clasp is smooth and secure, and the charms are beautifully detailed. I\'ve received so many compliments. Will definitely order again.',
     verified: true,
+    images: ['https://picsum.photos/seed/rev1/200/200', 'https://picsum.photos/seed/rev2/200/200'],
   },
   {
     id: 'rev_002',
@@ -336,6 +345,7 @@ export const MOCK_REVIEWS: MockReview[] = [
     title: 'Perfect gift — arrived beautifully packaged',
     body: 'Ordered as a birthday gift for my daughter. The box presentation was elegant and she absolutely loved it. Great quality for the price. Ships fast too!',
     verified: true,
+    images: ['https://picsum.photos/seed/rev3/200/200'],
   },
   {
     id: 'rev_003',
@@ -345,6 +355,7 @@ export const MOCK_REVIEWS: MockReview[] = [
     title: 'Love the rose gold — slight size issue resolved quickly',
     body: 'The rose gold color is beautiful and exactly as pictured. I ordered an M but needed an S — contacted support and they shipped a replacement the same day. Great customer service.',
     verified: true,
+    images: [],
   },
   {
     id: 'rev_004',

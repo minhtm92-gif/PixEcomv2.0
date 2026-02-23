@@ -12,6 +12,8 @@ export default function SettingsFulfillmentPage() {
       icon={<Truck size={20} className="text-amber-400" />}
       title="Fulfillment Settings"
       subtitle="Shipping carriers, warehouses, and fulfillment rules"
+      backHref="/admin/settings"
+      backLabel="Settings"
     >
       <div className="max-w-2xl space-y-6">
         {/* Default Carrier */}

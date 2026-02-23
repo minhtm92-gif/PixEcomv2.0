@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { ShoppingBag } from 'lucide-react';
+import { ShoppingBag, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -11,6 +13,7 @@ import { MOCK_ADMIN_PRODUCTS, type MockAdminProduct } from '@/mock/admin';
 const ALL_STATUSES = ['All', 'ACTIVE', 'DRAFT', 'ARCHIVED'];
 
 export default function AdminProductsPage() {
+  const router = useRouter();
   const [statusTab, setStatusTab] = useState('All');
   const [search, setSearch] = useState('');
 
@@ -21,7 +24,7 @@ export default function AdminProductsPage() {
       !q ||
       p.name.toLowerCase().includes(q) ||
       p.sku.toLowerCase().includes(q) ||
-      p.sellerName.toLowerCase().includes(q);
+      p.makerName.toLowerCase().includes(q);
     return matchStatus && matchSearch;
   });
 
@@ -37,9 +40,9 @@ export default function AdminProductsPage() {
       ),
     },
     {
-      key: 'sellerName',
-      label: 'Seller',
-      render: (r) => <span className="text-sm text-muted-foreground">{r.sellerName}</span>,
+      key: 'makerName',
+      label: 'Maker',
+      render: (r) => <span className="text-sm text-muted-foreground">{r.makerName}</span>,
     },
     {
       key: 'status',
@@ -71,6 +74,26 @@ export default function AdminProductsPage() {
       render: (r) => <span className="font-mono text-sm text-foreground">{moneyWhole(r.revenue)}</span>,
     },
     {
+      key: 'roas',
+      label: 'ROAS',
+      className: 'text-right',
+      render: (r) => (
+        <span
+          className={`font-mono text-sm ${
+            r.roas === 0
+              ? 'text-muted-foreground'
+              : r.roas >= 3
+                ? 'text-green-400'
+                : r.roas >= 2
+                  ? 'text-amber-400'
+                  : 'text-red-400'
+          }`}
+        >
+          {r.roas === 0 ? '\u2014' : r.roas.toFixed(1)}
+        </span>
+      ),
+    },
+    {
       key: 'createdAt',
       label: 'Created',
       className: 'text-right',
@@ -83,6 +106,15 @@ export default function AdminProductsPage() {
       icon={<ShoppingBag size={20} className="text-amber-400" />}
       title="Products"
       subtitle="All products across all sellers"
+      actions={
+        <Link
+          href="/admin/products/new"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-medium rounded-lg text-sm transition-colors"
+        >
+          <Plus size={16} />
+          Add Product
+        </Link>
+      }
     >
       {/* Status tabs */}
       <div className="flex items-center gap-1 mb-4 bg-muted/50 rounded-lg p-1 w-fit">
@@ -112,7 +144,7 @@ export default function AdminProductsPage() {
       <div className="mb-4">
         <input
           type="text"
-          placeholder="Search products, SKUs, sellers…"
+          placeholder="Search products, SKUs, makers…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full max-w-sm px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors"
@@ -124,6 +156,7 @@ export default function AdminProductsPage() {
         data={filtered}
         loading={false}
         emptyMessage="No products found."
+        onRowClick={(r) => router.push(`/admin/products/${r.id}`)}
         rowKey={(r) => r.id}
       />
     </PageShell>

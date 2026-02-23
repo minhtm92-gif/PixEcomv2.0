@@ -12,6 +12,8 @@ export default function SettingsSmsPage() {
       icon={<MessageSquare size={20} className="text-amber-400" />}
       title="SMS Settings"
       subtitle="SMS gateway, opt-in flows, and notification templates"
+      backHref="/admin/settings"
+      backLabel="Settings"
     >
       <div className="max-w-2xl space-y-6">
         {/* Provider */}

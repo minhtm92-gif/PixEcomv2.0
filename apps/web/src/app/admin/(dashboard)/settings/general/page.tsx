@@ -12,6 +12,8 @@ export default function SettingsGeneralPage() {
       icon={<Globe size={20} className="text-amber-400" />}
       title="General Settings"
       subtitle="Platform name, timezone, language, and branding"
+      backHref="/admin/settings"
+      backLabel="Settings"
     >
       <div className="max-w-2xl space-y-6">
         {/* Platform Identity */}

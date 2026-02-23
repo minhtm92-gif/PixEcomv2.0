@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, Upload, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -59,6 +59,20 @@ export default function AdminOrdersPage() {
       render: (r) => <StatusBadge status={r.status} />,
     },
     {
+      key: 'trackingNumber',
+      label: 'Tracking #',
+      render: (r) => (
+        <span className="text-xs font-mono text-muted-foreground">{r.trackingNumber ?? '\u2014'}</span>
+      ),
+    },
+    {
+      key: 'transactionId',
+      label: 'Transaction',
+      render: (r) => (
+        <span className="text-xs font-mono text-muted-foreground">{r.transactionId ?? '\u2014'}</span>
+      ),
+    },
+    {
       key: 'total',
       label: 'Total',
       className: 'text-right',
@@ -72,6 +86,25 @@ export default function AdminOrdersPage() {
       className: 'text-right',
       render: (r) => <span className="text-xs text-muted-foreground">{r.createdAt}</span>,
     },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: () => (
+        <select
+          className="bg-card border border-border rounded px-2 py-1 text-xs"
+          defaultValue=""
+          onClick={(e) => e.stopPropagation()}
+        >
+          <option value="" disabled>Change…</option>
+          <option>CONFIRMED</option>
+          <option>PROCESSING</option>
+          <option>SHIPPED</option>
+          <option>DELIVERED</option>
+          <option>CANCELLED</option>
+          <option>REFUNDED</option>
+        </select>
+      ),
+    },
   ];
 
   return (
@@ -79,6 +112,24 @@ export default function AdminOrdersPage() {
       icon={<ClipboardList size={20} className="text-amber-400" />}
       title="Orders"
       subtitle="All platform orders across sellers"
+      actions={
+        <>
+          <button
+            disabled
+            className="inline-flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground font-medium rounded-lg text-sm transition-colors opacity-50 cursor-not-allowed"
+          >
+            <Upload size={16} />
+            Upload Tracking
+          </button>
+          <button
+            disabled
+            className="inline-flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground font-medium rounded-lg text-sm transition-colors opacity-50 cursor-not-allowed"
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
+        </>
+      }
     >
       {/* Status tabs */}
       <div className="flex items-center gap-1 mb-4 bg-muted/50 rounded-lg p-1 w-fit flex-wrap">

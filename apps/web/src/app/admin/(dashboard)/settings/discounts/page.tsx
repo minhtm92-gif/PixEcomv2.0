@@ -15,6 +15,15 @@ export default function SettingsDiscountsPage() {
       render: (r) => <span className="font-mono text-sm font-bold text-amber-400">{r.code}</span>,
     },
     {
+      key: 'sellpageName',
+      label: 'Sellpage',
+      render: (r) => (
+        r.sellpageName
+          ? <span className="text-sm text-foreground">{r.sellpageName}</span>
+          : <span className="text-sm text-muted-foreground italic">Platform-wide</span>
+      ),
+    },
+    {
       key: 'type',
       label: 'Type',
       render: (r) => (

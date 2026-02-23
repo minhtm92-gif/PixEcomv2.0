@@ -47,7 +47,7 @@ export default function SellerDetailPage() {
   }
 
   const sellerStores = MOCK_STORES.filter((s) => s.sellerId === seller.id);
-  const sellerProducts = MOCK_ADMIN_PRODUCTS.filter((p) => p.sellerName === seller.name);
+  const sellerProducts = MOCK_ADMIN_PRODUCTS.filter((p) => p.makerName === seller.name || p.makerName === 'Admin (PixEcom)');
   const sellerOrders = MOCK_ADMIN_ORDERS.filter((o) => o.sellerId === seller.id);
 
   const storeColumns: Column<MockStore>[] = [

@@ -18,10 +18,12 @@ export default function AdminAnalyticsPage() {
       revenue: acc.revenue + d.revenue,
       orders: acc.orders + d.orders,
       spend: acc.spend + d.spend,
+      productCost: acc.productCost + d.productCost,
+      paymentFee: acc.paymentFee + d.paymentFee,
+      profit: acc.profit + d.profit,
     }),
-    { revenue: 0, orders: 0, spend: 0 },
+    { revenue: 0, orders: 0, spend: 0, productCost: 0, paymentFee: 0, profit: 0 },
   );
-  const avgRoas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
   const maxRevenue = Math.max(...ANALYTICS_DATA.byDate.map((d) => d.revenue));
 
   return (
@@ -31,11 +33,18 @@ export default function AdminAnalyticsPage() {
       subtitle="Platform-wide performance — last 7 days"
     >
       {/* KPI Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <KpiCard label="Total Revenue" value={moneyWhole(totals.revenue)} />
         <KpiCard label="Total Orders" value={num(totals.orders)} />
         <KpiCard label="Total Spend" value={moneyWhole(totals.spend)} />
-        <KpiCard label="Avg ROAS" value={avgRoas.toFixed(2)} />
+        <KpiCard label="Product Cost" value={moneyWhole(totals.productCost)} />
+        <KpiCard label="Payment Fee" value={moneyWhole(totals.paymentFee)} />
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Profit</span>
+          </div>
+          <p className="text-2xl font-bold text-green-400">{moneyWhole(totals.profit)}</p>
+        </div>
       </div>
 
       {/* Revenue chart */}
@@ -88,6 +97,9 @@ export default function AdminAnalyticsPage() {
                 <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Revenue</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Orders</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Spend</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Product Cost</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Payment Fee</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">Profit</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground">ROAS</th>
               </tr>
             </thead>
@@ -106,6 +118,15 @@ export default function AdminAnalyticsPage() {
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-foreground text-right">
                     {moneyWhole(d.spend)}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-foreground text-right">
+                    {moneyWhole(d.productCost)}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-foreground text-right">
+                    {moneyWhole(d.paymentFee)}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-right text-green-400">
+                    {moneyWhole(d.profit)}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-right">
                     <span

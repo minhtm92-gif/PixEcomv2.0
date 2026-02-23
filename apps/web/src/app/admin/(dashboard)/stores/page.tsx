@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Globe } from 'lucide-react';
+import { Globe, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -11,6 +13,7 @@ import { MOCK_STORES, type MockStore } from '@/mock/admin';
 const ALL_STATUSES = ['All', 'ACTIVE', 'PENDING', 'INACTIVE'];
 
 export default function AdminStoresPage() {
+  const router = useRouter();
   const [statusTab, setStatusTab] = useState('All');
   const [search, setSearch] = useState('');
 
@@ -54,6 +57,22 @@ export default function AdminStoresPage() {
       ),
     },
     {
+      key: 'sellpageCount',
+      label: 'Sellpages',
+      className: 'text-right',
+      render: (r) => (
+        <span className="font-mono text-sm text-foreground">{num(r.sellpageCount)}</span>
+      ),
+    },
+    {
+      key: 'monthlyVolume',
+      label: 'Monthly Vol.',
+      className: 'text-right',
+      render: (r) => (
+        <span className="font-mono text-sm text-foreground">${r.monthlyVolume.toLocaleString()}</span>
+      ),
+    },
+    {
       key: 'createdAt',
       label: 'Created',
       className: 'text-right',
@@ -66,6 +85,15 @@ export default function AdminStoresPage() {
       icon={<Globe size={20} className="text-amber-400" />}
       title="Stores & Domains"
       subtitle="All seller storefronts and domain assignments"
+      actions={
+        <Link
+          href="/admin/stores/new"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-medium rounded-lg text-sm transition-colors"
+        >
+          <Plus size={16} />
+          Add Store
+        </Link>
+      }
     >
       {/* Status tabs */}
       <div className="flex items-center gap-1 mb-4 bg-muted/50 rounded-lg p-1 w-fit">
@@ -107,6 +135,7 @@ export default function AdminStoresPage() {
         data={filtered}
         loading={false}
         emptyMessage="No stores found."
+        onRowClick={(r) => router.push(`/admin/stores/${r.id}`)}
         rowKey={(r) => r.id}
       />
     </PageShell>

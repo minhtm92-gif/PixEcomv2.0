@@ -51,6 +51,8 @@ export default function SettingsAppsPage() {
       icon={<Puzzle size={20} className="text-amber-400" />}
       title="Apps & Integrations"
       subtitle="Third-party app connections and webhook endpoints"
+      backHref="/admin/settings"
+      backLabel="Settings"
     >
       <div className="max-w-2xl space-y-6">
         {/* Integrations */}

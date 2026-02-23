@@ -12,6 +12,8 @@ export default function SettingsEmailPage() {
       icon={<Mail size={20} className="text-amber-400" />}
       title="Email Settings"
       subtitle="Transactional email provider, templates, and sender info"
+      backHref="/admin/settings"
+      backLabel="Settings"
     >
       <div className="max-w-2xl space-y-6">
         {/* SMTP */}
