@@ -17,6 +17,8 @@ const BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
 // ── Runtime env guard ──
 export function validateApiBase(): string | null {
+  // Preview mode uses mock data — no API needed
+  if (process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true') return null;
   if (!BASE || BASE.trim() === '') {
     return 'NEXT_PUBLIC_API_BASE_URL is not set. Rebuild with the correct .env.local.';
   }
