@@ -92,6 +92,7 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 | C2-Frontend | [TASK-C2-FRONTEND-WORKING-LOG.md](./TASK-C2-FRONTEND-WORKING-LOG.md) | Ads Manager inline actions + bulk + sync; Sellpage domain/pixel/linked-ads; Orders status transitions; C2-FIX (3 regression bugs) | `feature/2.4.2-alpha-ads-seed-v1` | `0e27205`, `0c874de` | GREEN (34 routes) |
 | D-PREVIEW-1 | [TASK-D-PREVIEW-1-WORKING-LOG.md](./TASK-D-PREVIEW-1-WORKING-LOG.md) | Admin portal UI — 20 pages with static mock data (Dashboard, Sellers, Orders, Products, Stores, Analytics, Settings hub + 10 sub-pages) | `feature/2.4.2-alpha-ads-seed-v1` | `4749b51` | GREEN (35 routes) |
 | D-PREVIEW-2 | [TASK-D-PREVIEW-2-WORKING-LOG.md](./TASK-D-PREVIEW-2-WORKING-LOG.md) | Customer-facing Storefront UI — LynsieCharm sellpage + cart + checkout + tracking + policy pages (light theme, 13 components, 5 page types) | `feature/2.4.2-alpha-ads-seed-v1` | `98537d9` | GREEN (45 routes) |
+| D-PREVIEW-3A | [TASK-D-PREVIEW-3A-WORKING-LOG.md](./TASK-D-PREVIEW-3A-WORKING-LOG.md) | Preview mode bypass — NEXT_PUBLIC_PREVIEW_MODE flag skips admin auth; /preview hub landing page; cross-nav (AdminSidebar ↔ StorefrontFooter) | `feature/2.4.2-alpha-ads-seed-v1` | `64cc142` | GREEN (46 routes) |
 
 ---
 
