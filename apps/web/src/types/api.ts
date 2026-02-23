@@ -13,6 +13,7 @@ export interface OrderListItem {
   currency: string;
   status: string;
   itemsCount: number;
+  totalQuantity: number;
   source: string | null;
   trackingNumber: string | null;
   trackingUrl: string | null;
@@ -308,6 +309,12 @@ export interface ProductCardItem {
   /** Prisma Decimal serialized as string | null */
   youTakeEstimate: string | null;
   labels: ProductLabel[];
+  stats?: {
+    ordersCount: number;
+    revenue: number;
+    spend: number;
+    roas: number;
+  };
 }
 
 export interface ProductsListResponse {

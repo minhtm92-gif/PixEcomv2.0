@@ -309,7 +309,7 @@ export default function OrdersPage() {
       key: 'items',
       label: 'Items',
       className: 'text-center',
-      render: (r) => <span className="text-muted-foreground">{r.itemsCount}</span>,
+      render: (r) => <span className="text-muted-foreground">{r.totalQuantity ?? r.itemsCount}</span>,
     },
     {
       key: 'action',

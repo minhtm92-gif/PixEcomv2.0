@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiGet, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
-import { moneyDecimal } from '@/lib/format';
+import { moneyDecimal, moneyWhole } from '@/lib/format';
 import { ShoppingBag, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ProductCardItem, ProductsListResponse } from '@/types/api';
 
@@ -136,6 +136,9 @@ export default function ProductsPage() {
               <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Code</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Suggested Price</th>
               <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">You Take</th>
+              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Orders</th>
+              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue</th>
+              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">ROAS</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Labels</th>
               <th className="w-8 px-4 py-3" />
             </tr>
@@ -148,13 +151,16 @@ export default function ProductsPage() {
                   <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-20 animate-pulse" /></td>
                   <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-16 animate-pulse ml-auto" /></td>
                   <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-16 animate-pulse ml-auto" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-10 animate-pulse ml-auto" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-16 animate-pulse ml-auto" /></td>
+                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-12 animate-pulse ml-auto" /></td>
                   <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-16 animate-pulse" /></td>
                   <td className="px-4 py-3" />
                 </tr>
               ))
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                   <p>No products found.</p>
                   <p className="mt-2 text-xs text-muted-foreground/60">
                     Hint: <code className="bg-muted/40 px-1.5 py-0.5 rounded text-[11px]">If staging DB is empty, run: pnpm seed:staging</code>
@@ -195,6 +201,20 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-foreground">
                     {p.youTakeEstimate ? moneyDecimal(p.youTakeEstimate) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right text-muted-foreground">
+                    {p.stats?.ordersCount ?? 0}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-foreground">
+                    {moneyWhole(p.stats?.revenue ?? 0)}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono">
+                    {(() => {
+                      const roas = p.stats?.roas ?? 0;
+                      if (roas === 0) return <span className="text-muted-foreground">—</span>;
+                      const cls = roas >= 3 ? 'text-green-400' : roas >= 2 ? 'text-amber-400' : 'text-red-400';
+                      return <span className={cls}>{roas.toFixed(1)}x</span>;
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
