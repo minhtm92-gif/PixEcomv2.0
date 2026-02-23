@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { safeDivide } from '../ads-manager/ads-manager.constants';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProductCardDto, ProductLabelDto } from './dto/product-card.dto';
+import { ProductCardDto, ProductLabelDto, ProductStatsDto } from './dto/product-card.dto';
 import { ProductDetailDto, ProductVariantDto } from './dto/product-detail.dto';
 import { ListProductsDto } from './dto/list-products.dto';
 
@@ -22,7 +23,7 @@ export class ProductsService {
    *  - label  → products must have the label with this slug attached
    *  - q      → case-insensitive contains match on product name OR productCode
    */
-  async listProducts(dto: ListProductsDto): Promise<{
+  async listProducts(dto: ListProductsDto, sellerId: string): Promise<{
     data: ProductCardDto[];
     total: number;
     page: number;
@@ -84,12 +85,57 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
+    // ── Seller-scoped stats (ordersCount + revenue) per product ───────────────
+    const statsMap = await this.fetchProductStats(products.map(p => p.id), sellerId);
+
     return {
-      data: products.map((p) => this.mapToCard(p)),
+      data: products.map((p) => ({
+        ...this.mapToCard(p),
+        stats: statsMap.get(p.id) ?? { ordersCount: 0, revenue: 0, spend: 0, roas: 0 },
+      })),
       total,
       page,
       limit,
     };
+  }
+
+  /**
+   * Fetches per-product order count + revenue for the given seller.
+   * Uses Prisma groupBy on OrderItem filtered by the seller's orders.
+   * Returns a Map<productId, ProductStatsDto>.
+   *
+   * Phase 1: spend = 0, roas = 0 (no Product→Campaign→AdStatsDaily link yet).
+   */
+  private async fetchProductStats(
+    productIds: string[],
+    sellerId: string,
+  ): Promise<Map<string, ProductStatsDto>> {
+    if (productIds.length === 0) return new Map();
+
+    const rows = await this.prisma.orderItem.groupBy({
+      by: ['productId'],
+      where: {
+        productId: { in: productIds },
+        order: { sellerId },
+      },
+      _sum: { lineTotal: true },
+      // Counts OrderItem rows per productId — equivalent to ordersCount when
+      // each order has at most one line per product (standard e-commerce pattern).
+      _count: { orderId: true },
+    });
+
+    const map = new Map<string, ProductStatsDto>();
+    for (const row of rows) {
+      if (!row.productId) continue;
+      const revenue = Number(row._sum.lineTotal ?? 0);
+      map.set(row.productId, {
+        ordersCount: row._count.orderId,
+        revenue,
+        spend: 0,
+        roas: safeDivide(revenue, 0), // always 0 in Phase 1
+      });
+    }
+    return map;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

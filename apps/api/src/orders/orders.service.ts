@@ -90,6 +90,7 @@ export interface OrderListItem {
   currency: string;
   status: string;
   itemsCount: number;
+  totalQuantity: number;
   trackingNumber: string | null;
   source: string | null;
 }
@@ -227,6 +228,7 @@ export class OrdersService {
           },
         },
         _count: { select: { items: true } },
+        items: { select: { quantity: true } },
       },
     });
 
@@ -255,6 +257,7 @@ export class OrdersService {
       currency: r.currency,
       status: r.status,
       itemsCount: r._count.items,
+      totalQuantity: r.items.reduce((acc, it) => acc + it.quantity, 0),
       trackingNumber: r.trackingNumber ?? null,
       source: r.source ?? null,
     }));

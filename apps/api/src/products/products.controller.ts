@@ -8,7 +8,9 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthUser } from '../auth/strategies/jwt.strategy';
 import { ListProductsDto } from './dto/list-products.dto';
 import { ProductsService } from './products.service';
 
@@ -37,8 +39,11 @@ export class ProductsController {
    */
   @Get()
   @HttpCode(HttpStatus.OK)
-  async listProducts(@Query() query: ListProductsDto) {
-    return this.productsService.listProducts(query);
+  async listProducts(
+    @CurrentUser() user: AuthUser,
+    @Query() query: ListProductsDto,
+  ) {
+    return this.productsService.listProducts(query, user.sellerId);
   }
 
   /**
