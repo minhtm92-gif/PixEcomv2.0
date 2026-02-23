@@ -6,12 +6,21 @@ import { useAuthStore } from '@/stores/authStore';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { Shield } from 'lucide-react';
 
+const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+
 export default function AdminLoginPage() {
   const router = useRouter();
   const adminLogin = useAuthStore((s) => s.adminLogin);
   const user = useAuthStore((s) => s.user);
   const initializing = useAuthStore((s) => s.initializing);
   const addToast = useToastStore((s) => s.add);
+
+  // Preview mode: skip login, go straight to dashboard
+  useEffect(() => {
+    if (IS_PREVIEW) {
+      router.replace('/admin/dashboard');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Already authenticated — redirect based on role
   useEffect(() => {
@@ -45,6 +54,14 @@ export default function AdminLoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (IS_PREVIEW) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground text-sm">Loading preview...</p>
+      </div>
+    );
   }
 
   // Seller is logged in — show conflict message

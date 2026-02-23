@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Instagram, Facebook } from 'lucide-react';
 import { STORE_CONFIG } from '@/mock/storefront';
 
+const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+
 interface StorefrontFooterProps {
   storeSlug: string;
 }
@@ -96,6 +98,18 @@ export function StorefrontFooter({ storeSlug }: StorefrontFooterProps) {
           <span>© {new Date().getFullYear()} {STORE_CONFIG.name}. All rights reserved.</span>
           <span>Powered by <span className="text-purple-400">PixEcom</span></span>
         </div>
+
+        {IS_PREVIEW && (
+          <div className="border-t border-gray-700 mt-6 pt-4 text-center">
+            <a href="/admin/dashboard" className="text-amber-400 hover:text-amber-300 text-sm font-medium transition-colors">
+              🛡 View Admin Portal →
+            </a>
+            <span className="mx-3 text-gray-600">|</span>
+            <a href="/preview" className="text-gray-400 hover:text-gray-300 text-sm transition-colors">
+              ← Preview Hub
+            </a>
+          </div>
+        )}
       </div>
     </footer>
   );

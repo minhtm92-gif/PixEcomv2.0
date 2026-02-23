@@ -14,8 +14,11 @@ import {
   Settings,
   LogOut,
   Shield,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+
+const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
 const NAV = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
@@ -51,6 +54,11 @@ export function AdminSidebar() {
         <Link href="/admin/dashboard" className="text-lg font-bold text-foreground flex items-center gap-2">
           <Shield size={18} className="text-amber-400" />
           PixEcom Admin
+          {IS_PREVIEW && (
+            <span className="ml-1 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] font-bold rounded uppercase">
+              Preview
+            </span>
+          )}
         </Link>
       </div>
 
@@ -74,24 +82,54 @@ export function AdminSidebar() {
             </Link>
           );
         })}
+
+        {/* Storefront cross-link (preview only) */}
+        {IS_PREVIEW && (
+          <>
+            <div className="h-px bg-border my-2" />
+            <a
+              href="/demo-store"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <ExternalLink size={18} />
+              Storefront ↗
+            </a>
+            <a
+              href="/preview"
+              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <ExternalLink size={16} />
+              ← Preview Hub
+            </a>
+          </>
+        )}
       </nav>
 
       {/* User / Logout */}
       <div className="border-t border-border p-3">
-        {user && (
+        {IS_PREVIEW ? (
           <div className="mb-2 px-1">
-            <p className="text-sm font-medium text-foreground truncate">{user.displayName}</p>
-            <p className="text-xs text-amber-400 truncate">Superadmin</p>
+            <p className="text-sm font-medium text-foreground">Preview Mode</p>
+            <p className="text-xs text-amber-400">No auth required</p>
           </div>
+        ) : (
+          user && (
+            <div className="mb-2 px-1">
+              <p className="text-sm font-medium text-foreground truncate">{user.displayName}</p>
+              <p className="text-xs text-amber-400 truncate">Superadmin</p>
+            </div>
+          )
         )}
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground
-                     hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <LogOut size={16} />
-          Sign out
-        </button>
+        {!IS_PREVIEW && (
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground
+                       hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <LogOut size={16} />
+            Sign out
+          </button>
+        )}
       </div>
     </aside>
   );
