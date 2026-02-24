@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'LynsieCharm — Charm Your World',
-  description: 'Premium jewelry & accessories. Free shipping on orders over $50.',
+  title: {
+    template: '%s | PixEcom',
+    default: 'Shop | PixEcom',
+  },
+  description: 'Premium products at great prices. Free shipping on orders over $50.',
 };
 
 // Storefront layout: light theme — overrides dark globals.css body

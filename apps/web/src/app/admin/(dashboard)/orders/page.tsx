@@ -1,34 +1,96 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ClipboardList, Upload, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { moneyWhole } from '@/lib/format';
+import { useAdminApi } from '@/hooks/useAdminApi';
 import { MOCK_ADMIN_ORDERS, type MockAdminOrder } from '@/mock/admin';
 
-const ALL_STATUSES = ['All', 'PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'];
+const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+
+// ── API response type ───────────────────────────────────────────────────────
+
+interface OrderRow {
+  id: string;
+  orderNumber: string;
+  sellerName: string;
+  sellerId: string;
+  customer: string;
+  product: string;
+  total: number;
+  status: 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'REFUNDED';
+  trackingNumber: string | null;
+  transactionId: string | null;
+  createdAt: string;
+}
+
+interface OrdersResponse {
+  data: OrderRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+const ALL_STATUSES = ['All', 'PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'];
 
 export default function AdminOrdersPage() {
   const router = useRouter();
   const [statusTab, setStatusTab] = useState('All');
   const [search, setSearch] = useState('');
 
-  const filtered = MOCK_ADMIN_ORDERS.filter((o) => {
-    const matchStatus = statusTab === 'All' || o.status === statusTab;
-    const q = search.toLowerCase();
-    const matchSearch =
-      !q ||
-      o.orderNumber.toLowerCase().includes(q) ||
-      o.customer.toLowerCase().includes(q) ||
-      o.sellerName.toLowerCase().includes(q) ||
-      o.product.toLowerCase().includes(q);
-    return matchStatus && matchSearch;
-  });
+  // Build API query string
+  const apiPath = useMemo(() => {
+    if (IS_PREVIEW) return null;
+    const params = new URLSearchParams();
+    params.set('limit', '100');
+    if (statusTab !== 'All') params.set('status', statusTab);
+    if (search.trim()) params.set('search', search.trim());
+    return `/admin/orders?${params.toString()}`;
+  }, [statusTab, search]);
 
-  const columns: Column<MockAdminOrder>[] = [
+  const { data: apiData, loading, error } = useAdminApi<OrdersResponse>(apiPath);
+
+  // Resolve data source
+  const allOrders: OrderRow[] = IS_PREVIEW
+    ? (MOCK_ADMIN_ORDERS as OrderRow[])
+    : apiData?.data ?? [];
+
+  // Client-side filtering for preview mode (API handles filtering in real mode)
+  const filtered = useMemo(() => {
+    if (!IS_PREVIEW) return allOrders;
+    return allOrders.filter((o) => {
+      const matchStatus = statusTab === 'All' || o.status === statusTab;
+      const q = search.toLowerCase();
+      const matchSearch =
+        !q ||
+        o.orderNumber.toLowerCase().includes(q) ||
+        o.customer.toLowerCase().includes(q) ||
+        o.sellerName.toLowerCase().includes(q) ||
+        o.product.toLowerCase().includes(q);
+      return matchStatus && matchSearch;
+    });
+  }, [allOrders, statusTab, search]);
+
+  // Tab counts — for preview use full mock list, for API use unfiltered count
+  const tabCounts = useMemo(() => {
+    const src = IS_PREVIEW ? (MOCK_ADMIN_ORDERS as OrderRow[]) : allOrders;
+    return {
+      All: src.length,
+      PENDING: src.filter((o) => o.status === 'PENDING').length,
+      CONFIRMED: src.filter((o) => o.status === 'CONFIRMED').length,
+      PROCESSING: src.filter((o) => o.status === 'PROCESSING').length,
+      SHIPPED: src.filter((o) => o.status === 'SHIPPED').length,
+      DELIVERED: src.filter((o) => o.status === 'DELIVERED').length,
+      CANCELLED: src.filter((o) => o.status === 'CANCELLED').length,
+      REFUNDED: src.filter((o) => o.status === 'REFUNDED').length,
+    };
+  }, [allOrders]);
+
+  const columns: Column<OrderRow>[] = [
     {
       key: 'orderNumber',
       label: 'Order #',
@@ -84,26 +146,10 @@ export default function AdminOrdersPage() {
       key: 'createdAt',
       label: 'Date',
       className: 'text-right',
-      render: (r) => <span className="text-xs text-muted-foreground">{r.createdAt}</span>,
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: () => (
-        <select
-          className="bg-card border border-border rounded px-2 py-1 text-xs"
-          defaultValue=""
-          onClick={(e) => e.stopPropagation()}
-        >
-          <option value="" disabled>Change…</option>
-          <option>CONFIRMED</option>
-          <option>PROCESSING</option>
-          <option>SHIPPED</option>
-          <option>DELIVERED</option>
-          <option>CANCELLED</option>
-          <option>REFUNDED</option>
-        </select>
-      ),
+      render: (r) => {
+        const d = new Date(r.createdAt);
+        return <span className="text-xs text-muted-foreground">{d.toISOString().slice(0, 10)}</span>;
+      },
     },
   ];
 
@@ -133,26 +179,20 @@ export default function AdminOrdersPage() {
     >
       {/* Status tabs */}
       <div className="flex items-center gap-1 mb-4 bg-muted/50 rounded-lg p-1 w-fit flex-wrap">
-        {ALL_STATUSES.map((s) => {
-          const count =
-            s === 'All'
-              ? MOCK_ADMIN_ORDERS.length
-              : MOCK_ADMIN_ORDERS.filter((o) => o.status === s).length;
-          return (
-            <button
-              key={s}
-              onClick={() => setStatusTab(s)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                statusTab === s
-                  ? 'bg-card text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {s === 'All' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}{' '}
-              <span className="ml-1 text-muted-foreground">{count}</span>
-            </button>
-          );
-        })}
+        {ALL_STATUSES.map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusTab(s)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              statusTab === s
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {s === 'All' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}{' '}
+            <span className="ml-1 text-muted-foreground">{tabCounts[s as keyof typeof tabCounts]}</span>
+          </button>
+        ))}
       </div>
 
       {/* Search */}
@@ -166,10 +206,17 @@ export default function AdminOrdersPage() {
         />
       </div>
 
+      {/* Error */}
+      {!IS_PREVIEW && error && (
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
+          {error}
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         data={filtered}
-        loading={false}
+        loading={!IS_PREVIEW && loading}
         emptyMessage="No orders found."
         onRowClick={(r) => router.push(`/admin/orders/${r.id}`)}
         rowKey={(r) => r.id}

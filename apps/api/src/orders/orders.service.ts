@@ -1,5 +1,6 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
 import { ListOrdersQueryDto } from './dto/list-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
@@ -147,7 +148,12 @@ export interface OrderDetail {
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(OrdersService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly email: EmailService,
+  ) {}
 
   async listOrders(sellerId: string, query: ListOrdersQueryDto): Promise<OrderListResult> {
     const dateFrom = query.dateFrom ?? todayUTC();
@@ -428,6 +434,13 @@ export class OrdersService {
       }),
     ]);
 
+    // F.3: Send shipping notification email when status → SHIPPED
+    if (target === 'SHIPPED') {
+      this.sendShippingEmail(orderId).catch((err) =>
+        this.logger.error(`Failed to send shipping email for ${orderId}: ${err.message}`),
+      );
+    }
+
     return updated;
   }
 
@@ -448,5 +461,49 @@ export class OrdersService {
       currentStatus: current,
       validTransitions: ORDER_TRANSITIONS[current] ?? [],
     };
+  }
+
+  // ─── F.3: SHIPPING EMAIL HELPER ─────────────────────────────────────────
+
+  private async sendShippingEmail(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        trackingNumber: true,
+        trackingUrl: true,
+        seller: { select: { name: true, slug: true } },
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: { select: { name: true } },
+            variant: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    await this.email.sendShippingNotification({
+      orderNumber: order.orderNumber,
+      customerName: order.customerName ?? 'Customer',
+      customerEmail: order.customerEmail,
+      trackingNumber: order.trackingNumber,
+      trackingUrl: order.trackingUrl,
+      items: order.items.map((i) => ({
+        productName: i.product?.name ?? 'Product',
+        variantName: i.variant?.name ?? null,
+        quantity: i.quantity,
+        unitPrice: Number(i.unitPrice),
+        lineTotal: Number(i.lineTotal),
+      })),
+      storeName: order.seller.name,
+      storeSlug: order.seller.slug,
+    });
   }
 }

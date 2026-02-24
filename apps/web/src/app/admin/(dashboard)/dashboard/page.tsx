@@ -4,12 +4,83 @@ import { Shield, ClipboardList, Star } from 'lucide-react';
 import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { moneyWhole, num } from '@/lib/format';
+import { useAdminApi } from '@/hooks/useAdminApi';
 import { DASHBOARD_KPIS, MOCK_ADMIN_ORDERS } from '@/mock/admin';
 
+const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+
+// ── API response types ──────────────────────────────────────────────────────
+
+interface DashboardKpis {
+  totalSellers: number;
+  activeSellers: number;
+  pendingApprovals: number;
+  totalProducts: number;
+  totalOrders: number;
+  totalRevenue: number;
+  totalUsers: number;
+  avgRoas: number;
+  revenueByDay: { date: string; revenue: number; orders: number }[];
+  topSellers: { name: string; revenue: number; orders: number; roas: number }[];
+}
+
+interface RecentOrder {
+  id: string;
+  orderNumber: string;
+  customer: string;
+  sellerName: string;
+  sellerId: string;
+  total: number;
+  status: string;
+  createdAt: string;
+}
+
+interface DashboardResponse {
+  kpis: DashboardKpis;
+  recentOrders: RecentOrder[];
+}
+
 export default function AdminDashboardPage() {
-  const kpis = DASHBOARD_KPIS;
-  const recentOrders = MOCK_ADMIN_ORDERS.slice(0, 5);
-  const maxRevenue = Math.max(...kpis.revenueByDay.map((d) => d.revenue));
+  // Real API call (skip when in preview mode)
+  const { data: apiData, loading, error } = useAdminApi<DashboardResponse>(
+    IS_PREVIEW ? null : '/admin/dashboard',
+  );
+
+  // Resolve data source
+  const kpis = IS_PREVIEW
+    ? DASHBOARD_KPIS
+    : apiData?.kpis ?? null;
+
+  const recentOrders = IS_PREVIEW
+    ? MOCK_ADMIN_ORDERS.slice(0, 5)
+    : apiData?.recentOrders ?? [];
+
+  // Loading state
+  if (!IS_PREVIEW && loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (!IS_PREVIEW && error) {
+    return (
+      <div className="p-6">
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-8 text-center">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!kpis) return null;
+
+  const maxRevenue = Math.max(...kpis.revenueByDay.map((d) => d.revenue), 1);
   const todayRevenue = kpis.revenueByDay[kpis.revenueByDay.length - 1]?.revenue ?? 0;
 
   return (

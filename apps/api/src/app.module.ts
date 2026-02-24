@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EmailModule } from './email/email.module';
 import { AdsManagerModule } from './ads-manager/ads-manager.module';
 import { AdStrategiesModule } from './ad-strategies/ad-strategies.module';
 import { AdUnitsModule } from './ad-units/ad-units.module';
+import { AdminModule } from './admin/admin.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { OrdersModule } from './orders/orders.module';
 import { AssetRegistryModule } from './asset-registry/asset-registry.module';
@@ -18,6 +20,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { SellerModule } from './seller/seller.module';
 import { SellpagesModule } from './sellpages/sellpages.module';
+import { StorefrontModule } from './storefront/storefront.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -26,6 +30,7 @@ import { SellpagesModule } from './sellpages/sellpages.module';
       envFilePath: '../../.env',
     }),
     PrismaModule,
+    EmailModule,
     HealthModule,
     AuthModule,
     SellerModule,
@@ -43,6 +48,9 @@ import { SellpagesModule } from './sellpages/sellpages.module';
     MetaModule,
     CampaignsModule,
     AdUnitsModule,
+    AdminModule,
+    StorefrontModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}

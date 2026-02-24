@@ -1,18 +1,72 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, User, CreditCard, Globe, ShoppingBag, ClipboardList } from 'lucide-react';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { moneyWhole, num, fmtDate, fmtDateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useAdminApi } from '@/hooks/useAdminApi';
 import {
   MOCK_SELLERS, MOCK_STORES, MOCK_ADMIN_PRODUCTS, MOCK_ADMIN_ORDERS,
   type MockStore, type MockAdminProduct, type MockAdminOrder,
 } from '@/mock/admin';
 
+const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+
 const inputCls = 'w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors';
+
+// ── API response type ───────────────────────────────────────────────────────
+
+interface SellerDetailApi {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  settings: {
+    supportEmail: string | null;
+  } | null;
+  domains: Array<{
+    id: string;
+    hostname: string;
+    status: string;
+    isPrimary: boolean;
+    createdAt: string;
+  }>;
+  paymentGateway: {
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+  } | null;
+  sellerUsers: Array<{
+    role: string;
+    user: {
+      id: string;
+      email: string;
+      displayName: string | null;
+      role: string;
+    };
+  }>;
+  _count: {
+    orders: number;
+    sellpages: number;
+    campaigns: number;
+  };
+}
+
+// Unified types for sub-tables
+interface DomainRow {
+  id: string;
+  domain: string;
+  status: string;
+  productCount: number;
+  isDefault: boolean;
+  createdAt: string;
+}
 
 const MOCK_FB = [
   { id: 'fb1', name: 'TechGear Ad Account', type: 'AD_ACCOUNT', status: 'ACTIVE', externalId: 'act_123456789' },
@@ -34,8 +88,83 @@ export default function SellerDetailPage() {
   const [tab, setTab] = useState('profile');
   const [selectedGateway, setSelectedGateway] = useState('stripe');
 
-  const seller = MOCK_SELLERS.find((s) => s.id === id);
-  if (!seller) {
+  // API call
+  const { data: apiSeller, loading, error } = useAdminApi<SellerDetailApi>(
+    IS_PREVIEW ? null : `/admin/sellers/${id}`,
+  );
+
+  // Preview mode: find mock seller
+  const mockSeller = IS_PREVIEW ? MOCK_SELLERS.find((s) => s.id === id) : null;
+
+  // Resolve seller data (must stay before any early returns — Rules of Hooks)
+  const sellerName = IS_PREVIEW ? mockSeller?.name : apiSeller?.name;
+  const sellerStatus = IS_PREVIEW ? mockSeller?.status : apiSeller?.status;
+  const sellerEmail = IS_PREVIEW
+    ? mockSeller?.email
+    : apiSeller?.sellerUsers?.[0]?.user?.email ?? '';
+  const sellerPhone = IS_PREVIEW ? mockSeller?.phone : '';
+  const sellerCreatedAt = IS_PREVIEW ? mockSeller?.createdAt : apiSeller?.createdAt;
+  const paymentGateway = IS_PREVIEW
+    ? mockSeller?.paymentGateway
+    : apiSeller?.paymentGateway?.type ?? null;
+  const stripeAccountId = IS_PREVIEW ? mockSeller?.stripeAccountId : null;
+  const paypalEmail = IS_PREVIEW ? mockSeller?.paypalEmail : null;
+
+  // Sub-data (useMemo must be called unconditionally — Rules of Hooks)
+  const sellerStores: DomainRow[] = useMemo(() => {
+    if (IS_PREVIEW) {
+      return (MOCK_STORES.filter((s) => s.sellerId === mockSeller?.id) as unknown as DomainRow[]).map((s: any) => ({
+        id: s.id,
+        domain: s.domain,
+        status: s.status,
+        productCount: s.productCount ?? 0,
+        isDefault: s.isDefault ?? false,
+        createdAt: s.createdAt,
+      }));
+    }
+    return (apiSeller?.domains ?? []).map((d) => ({
+      id: d.id,
+      domain: d.hostname,
+      status: d.status,
+      productCount: 0,
+      isDefault: d.isPrimary,
+      createdAt: d.createdAt,
+    }));
+  }, [apiSeller, mockSeller]);
+
+  const sellerProducts = IS_PREVIEW
+    ? MOCK_ADMIN_PRODUCTS.filter((p) => p.makerName === mockSeller?.name || p.makerName === 'Admin (PixEcom)')
+    : [];
+
+  const sellerOrders = IS_PREVIEW
+    ? MOCK_ADMIN_ORDERS.filter((o) => o.sellerId === mockSeller?.id)
+    : [];
+
+  // Loading state
+  if (!IS_PREVIEW && loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading seller details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error / not found
+  if (!IS_PREVIEW && error) {
+    return (
+      <div className="p-6">
+        <button onClick={() => router.push('/admin/sellers')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4">
+          <ArrowLeft size={16} /> Sellers
+        </button>
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-8 text-center">{error}</div>
+      </div>
+    );
+  }
+
+  if (IS_PREVIEW && !mockSeller) {
     return (
       <div className="p-6">
         <button onClick={() => router.push('/admin/sellers')} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4">
@@ -46,11 +175,9 @@ export default function SellerDetailPage() {
     );
   }
 
-  const sellerStores = MOCK_STORES.filter((s) => s.sellerId === seller.id);
-  const sellerProducts = MOCK_ADMIN_PRODUCTS.filter((p) => p.makerName === seller.name || p.makerName === 'Admin (PixEcom)');
-  const sellerOrders = MOCK_ADMIN_ORDERS.filter((o) => o.sellerId === seller.id);
+  if (!IS_PREVIEW && !apiSeller) return null;
 
-  const storeColumns: Column<MockStore>[] = [
+  const storeColumns: Column<DomainRow>[] = [
     { key: 'domain', label: 'Domain', render: (r) => <span className="font-mono text-sm text-foreground">{r.domain}</span> },
     { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} /> },
     { key: 'products', label: 'Products', className: 'text-right', render: (r) => <span className="font-mono">{r.productCount}</span> },
@@ -83,8 +210,8 @@ export default function SellerDetailPage() {
       </button>
 
       <div className="flex items-center gap-4 mb-6">
-        <h1 className="text-xl font-bold text-foreground">{seller.name}</h1>
-        <StatusBadge status={seller.status} />
+        <h1 className="text-xl font-bold text-foreground">{sellerName}</h1>
+        <StatusBadge status={sellerStatus ?? ''} />
         <button className="ml-auto px-3 py-1.5 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors opacity-60 cursor-default">
           Edit
         </button>
@@ -116,19 +243,19 @@ export default function SellerDetailPage() {
             <div className="space-y-3">
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Store Name</label>
-                <input type="text" defaultValue={seller.name} className={inputCls} />
+                <input type="text" defaultValue={sellerName ?? ''} className={inputCls} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Email</label>
-                <input type="email" defaultValue={seller.email} className={inputCls} />
+                <input type="email" defaultValue={sellerEmail ?? ''} className={inputCls} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Phone</label>
-                <input type="text" defaultValue={seller.phone} className={inputCls} />
+                <input type="text" defaultValue={sellerPhone ?? ''} className={inputCls} />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Status</label>
-                <select defaultValue={seller.status} className={inputCls}>
+                <select defaultValue={sellerStatus ?? ''} className={inputCls}>
                   {['ACTIVE', 'PENDING', 'DEACTIVATED', 'REJECTED'].map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
@@ -136,7 +263,7 @@ export default function SellerDetailPage() {
               </div>
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Created</label>
-                <p className="text-sm text-foreground">{fmtDateTime(seller.createdAt)}</p>
+                <p className="text-sm text-foreground">{sellerCreatedAt ? fmtDateTime(sellerCreatedAt) : '—'}</p>
               </div>
             </div>
             <button className="mt-4 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium opacity-60 cursor-default w-full">
@@ -150,13 +277,13 @@ export default function SellerDetailPage() {
             </h2>
             <div className="mb-4">
               <p className="text-xs text-muted-foreground mb-1">Current</p>
-              {seller.paymentGateway ? (
+              {paymentGateway ? (
                 <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                  seller.paymentGateway === 'stripe' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-blue-500/15 text-blue-400'
+                  paymentGateway === 'stripe' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-blue-500/15 text-blue-400'
                 }`}>
-                  {seller.paymentGateway === 'stripe' ? 'Stripe' : 'PayPal'}
-                  {seller.stripeAccountId && ` — ${seller.stripeAccountId}`}
-                  {seller.paypalEmail && ` — ${seller.paypalEmail}`}
+                  {paymentGateway === 'stripe' ? 'Stripe' : 'PayPal'}
+                  {stripeAccountId && ` — ${stripeAccountId}`}
+                  {paypalEmail && ` — ${paypalEmail}`}
                 </span>
               ) : (
                 <span className="text-xs text-muted-foreground">Not Assigned</span>
@@ -177,13 +304,13 @@ export default function SellerDetailPage() {
               {selectedGateway === 'stripe' && (
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">Stripe Account ID</label>
-                  <input type="text" defaultValue={seller.stripeAccountId ?? ''} className={inputCls} placeholder="acct_..." />
+                  <input type="text" defaultValue={stripeAccountId ?? ''} className={inputCls} placeholder="acct_..." />
                 </div>
               )}
               {selectedGateway === 'paypal' && (
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">PayPal Email</label>
-                  <input type="email" defaultValue={seller.paypalEmail ?? ''} className={inputCls} placeholder="paypal@email.com" />
+                  <input type="email" defaultValue={paypalEmail ?? ''} className={inputCls} placeholder="paypal@email.com" />
                 </div>
               )}
               <button className="w-full px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium opacity-60 cursor-default">
@@ -229,16 +356,28 @@ export default function SellerDetailPage() {
 
       {/* Tab: Products */}
       {tab === 'products' && (
-        sellerProducts.length > 0
-          ? <DataTable columns={productColumns} data={sellerProducts} loading={false} emptyMessage="No products." rowKey={r => r.id} />
-          : <p className="text-sm text-muted-foreground">No products for this seller.</p>
+        IS_PREVIEW ? (
+          sellerProducts.length > 0
+            ? <DataTable columns={productColumns} data={sellerProducts} loading={false} emptyMessage="No products." rowKey={r => r.id} />
+            : <p className="text-sm text-muted-foreground">No products for this seller.</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Products: {apiSeller?._count.sellpages ?? 0} sellpages, {apiSeller?._count.orders ?? 0} orders
+          </p>
+        )
       )}
 
       {/* Tab: Orders */}
       {tab === 'orders' && (
-        sellerOrders.length > 0
-          ? <DataTable columns={orderColumns} data={sellerOrders} loading={false} emptyMessage="No orders." rowKey={r => r.id} />
-          : <p className="text-sm text-muted-foreground">No orders for this seller.</p>
+        IS_PREVIEW ? (
+          sellerOrders.length > 0
+            ? <DataTable columns={orderColumns} data={sellerOrders} loading={false} emptyMessage="No orders." rowKey={r => r.id} />
+            : <p className="text-sm text-muted-foreground">No orders for this seller.</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Total orders: {apiSeller?._count.orders ?? 0}
+          </p>
+        )
       )}
     </div>
   );

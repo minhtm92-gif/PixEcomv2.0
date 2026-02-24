@@ -8,7 +8,34 @@ import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { moneyWhole, num, fmtDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useAdminApi } from '@/hooks/useAdminApi';
 import { MOCK_SELLERS, type MockSeller } from '@/mock/admin';
+
+const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+
+// ── API response type ───────────────────────────────────────────────────────
+
+interface SellerRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  status: 'ACTIVE' | 'PENDING' | 'DEACTIVATED' | 'REJECTED';
+  paymentGateway: string | null;
+  stores: number;
+  products: number;
+  orders: number;
+  revenue: number;
+  roas: number;
+  createdAt: string;
+}
+
+interface SellersResponse {
+  data: SellerRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 const STATUS_TABS = [
   { label: 'All', value: 'ALL' },
@@ -36,24 +63,47 @@ export default function AdminSellersPage() {
   const [tab, setTab] = useState('ALL');
   const [search, setSearch] = useState('');
 
-  const counts = useMemo(() => ({
-    ALL: MOCK_SELLERS.length,
-    ACTIVE: MOCK_SELLERS.filter(s => s.status === 'ACTIVE').length,
-    PENDING: MOCK_SELLERS.filter(s => s.status === 'PENDING').length,
-    DEACTIVATED: MOCK_SELLERS.filter(s => s.status === 'DEACTIVATED').length,
-    REJECTED: MOCK_SELLERS.filter(s => s.status === 'REJECTED').length,
-  }), []);
-
-  const filtered = useMemo(() => {
-    let data = tab === 'ALL' ? MOCK_SELLERS : MOCK_SELLERS.filter(s => s.status === tab);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      data = data.filter(s => s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q));
-    }
-    return data;
+  // Build API query string
+  const apiPath = useMemo(() => {
+    if (IS_PREVIEW) return null;
+    const params = new URLSearchParams();
+    params.set('limit', '100'); // fetch all for client-side filtering
+    if (tab !== 'ALL') params.set('status', tab);
+    if (search.trim()) params.set('search', search.trim());
+    return `/admin/sellers?${params.toString()}`;
   }, [tab, search]);
 
-  const columns: Column<MockSeller>[] = [
+  const { data: apiData, loading, error } = useAdminApi<SellersResponse>(apiPath);
+
+  // Resolve data source
+  const allSellers: SellerRow[] = IS_PREVIEW
+    ? (MOCK_SELLERS as SellerRow[])
+    : apiData?.data ?? [];
+
+  // Client-side filtering for preview mode (API handles filtering in real mode)
+  const filtered = useMemo(() => {
+    if (!IS_PREVIEW) return allSellers;
+    let data = tab === 'ALL' ? allSellers : allSellers.filter((s) => s.status === tab);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      data = data.filter((s) => s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q));
+    }
+    return data;
+  }, [allSellers, tab, search]);
+
+  // Counts for tabs
+  const counts = useMemo(() => {
+    const src = IS_PREVIEW ? (MOCK_SELLERS as SellerRow[]) : allSellers;
+    return {
+      ALL: src.length,
+      ACTIVE: src.filter((s) => s.status === 'ACTIVE').length,
+      PENDING: src.filter((s) => s.status === 'PENDING').length,
+      DEACTIVATED: src.filter((s) => s.status === 'DEACTIVATED').length,
+      REJECTED: src.filter((s) => s.status === 'REJECTED').length,
+    };
+  }, [allSellers]);
+
+  const columns: Column<SellerRow>[] = [
     {
       key: 'name',
       label: 'Name',
@@ -116,10 +166,17 @@ export default function AdminSellersPage() {
         />
       </div>
 
+      {/* Error */}
+      {!IS_PREVIEW && error && (
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
+          {error}
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         data={filtered}
-        loading={false}
+        loading={!IS_PREVIEW && loading}
         emptyMessage="No sellers found."
         onRowClick={(r) => router.push(`/admin/sellers/${r.id}`)}
         rowKey={(r) => r.id}

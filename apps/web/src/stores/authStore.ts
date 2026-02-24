@@ -73,6 +73,10 @@ interface AuthState {
   clearError: () => void;
 }
 
+// Module-level lock to prevent concurrent ensureSession() calls
+// (React 18 Strict Mode double-mounts effects in development)
+let _sessionPromise: Promise<void> | null = null;
+
 export const useAuthStore = create<AuthState>((set, get) => {
   setForceLogoutCallback(() => {
     if (get().initializing) {
@@ -171,64 +175,78 @@ export const useAuthStore = create<AuthState>((set, get) => {
     ensureSession: async () => {
       if (!get().initializing) return;
 
-      const log: BootStep[] = [];
-      const pushLog = (entry: BootStep) => {
-        log.push(entry);
-        set({ bootLog: [...log] });
-      };
-
-      const t0 = performance.now();
-
-      pushLog({ step: 'refresh', status: 'start' });
-      try {
-        const refresh = await apiPost<{ accessToken: string }>(
-          '/auth/refresh',
-          undefined,
-          { noAuth: true, skipRefresh: true },
-        );
-        setAccessToken(refresh.accessToken);
-        const ms = Math.round(performance.now() - t0);
-        pushLog({ step: 'refresh', status: 'ok', ms, detail: 'Token acquired' });
-        console.info(`[Auth Boot] refresh OK (${ms}ms)`);
-      } catch (err) {
-        const ms = Math.round(performance.now() - t0);
-        const e = err as ApiError;
-        pushLog({ step: 'refresh', status: 'fail', ms, detail: e?.message ?? 'No refresh cookie' });
-        console.info(`[Auth Boot] refresh FAIL (${ms}ms) — ${e?.message ?? 'no cookie'}`);
-        setAccessToken(null);
-        set({ user: null, seller: null, loading: false, initializing: false, bootLog: [...log] });
+      // Deduplicate: React 18 Strict Mode double-mounts effects.
+      // Without this lock, two concurrent /auth/refresh calls race and
+      // refresh-token rotation causes the slower one to fail (500/401),
+      // setting user=null + initializing=false before the fast one resolves.
+      if (_sessionPromise) {
+        await _sessionPromise;
         return;
       }
 
-      const t1 = performance.now();
-      pushLog({ step: 'me', status: 'start' });
-      try {
-        const me = await apiGet<MeResponse>('/auth/me');
-        const ms = Math.round(performance.now() - t1);
-        pushLog({ step: 'me', status: 'ok', ms, detail: me.email });
-        console.info(`[Auth Boot] /me OK (${ms}ms) — ${me.email}`);
-        set({
-          user: {
-            id: me.id,
-            email: me.email,
-            displayName: me.displayName,
-            avatarUrl: me.avatarUrl,
-            sellerId: me.sellerId,
-            role: me.role,
-            isSuperadmin: me.isSuperadmin ?? false,
-          },
-          loading: false,
-          initializing: false,
-          bootLog: [...log],
-        });
-      } catch (err) {
-        const ms = Math.round(performance.now() - t1);
-        const e = err as ApiError;
-        pushLog({ step: 'me', status: 'fail', ms, detail: `${e?.status ?? '?'} ${e?.message ?? 'unknown'}` });
-        console.warn(`[Auth Boot] /me FAIL (${ms}ms) — ${e?.status} ${e?.message}`);
-        setAccessToken(null);
-        set({ user: null, seller: null, loading: false, initializing: false, bootLog: [...log] });
-      }
+      _sessionPromise = (async () => {
+        const log: BootStep[] = [];
+        const pushLog = (entry: BootStep) => {
+          log.push(entry);
+          set({ bootLog: [...log] });
+        };
+
+        const t0 = performance.now();
+
+        pushLog({ step: 'refresh', status: 'start' });
+        try {
+          const refresh = await apiPost<{ accessToken: string }>(
+            '/auth/refresh',
+            undefined,
+            { noAuth: true, skipRefresh: true },
+          );
+          setAccessToken(refresh.accessToken);
+          const ms = Math.round(performance.now() - t0);
+          pushLog({ step: 'refresh', status: 'ok', ms, detail: 'Token acquired' });
+          console.info(`[Auth Boot] refresh OK (${ms}ms)`);
+        } catch (err) {
+          const ms = Math.round(performance.now() - t0);
+          const e = err as ApiError;
+          pushLog({ step: 'refresh', status: 'fail', ms, detail: e?.message ?? 'No refresh cookie' });
+          console.info(`[Auth Boot] refresh FAIL (${ms}ms) — ${e?.message ?? 'no cookie'}`);
+          setAccessToken(null);
+          set({ user: null, seller: null, loading: false, initializing: false, bootLog: [...log] });
+          return;
+        }
+
+        const t1 = performance.now();
+        pushLog({ step: 'me', status: 'start' });
+        try {
+          const me = await apiGet<MeResponse>('/auth/me');
+          const ms = Math.round(performance.now() - t1);
+          pushLog({ step: 'me', status: 'ok', ms, detail: me.email });
+          console.info(`[Auth Boot] /me OK (${ms}ms) — ${me.email}`);
+          set({
+            user: {
+              id: me.id,
+              email: me.email,
+              displayName: me.displayName,
+              avatarUrl: me.avatarUrl,
+              sellerId: me.sellerId,
+              role: me.role,
+              isSuperadmin: me.isSuperadmin ?? false,
+            },
+            loading: false,
+            initializing: false,
+            bootLog: [...log],
+          });
+        } catch (err) {
+          const ms = Math.round(performance.now() - t1);
+          const e = err as ApiError;
+          pushLog({ step: 'me', status: 'fail', ms, detail: `${e?.status ?? '?'} ${e?.message ?? 'unknown'}` });
+          console.warn(`[Auth Boot] /me FAIL (${ms}ms) — ${e?.status} ${e?.message}`);
+          setAccessToken(null);
+          set({ user: null, seller: null, loading: false, initializing: false, bootLog: [...log] });
+        }
+      })();
+
+      await _sessionPromise;
+      _sessionPromise = null;
     },
 
     clearError: () => set({ error: null }),

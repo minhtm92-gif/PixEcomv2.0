@@ -4,7 +4,10 @@ import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    // Enable rawBody for Stripe webhook signature verification
+    rawBody: true,
+  });
 
   // Graceful shutdown hooks (handles SIGTERM from Railway/Docker)
   app.enableShutdownHooks();
@@ -19,7 +22,7 @@ async function bootstrap() {
     }),
   );
 
-  const rawOrigin = process.env.CORS_ORIGIN || "http://localhost:3000";
+  const rawOrigin = process.env.CORS_ORIGIN || "http://localhost:3000,http://127.0.0.1:3000";
   const allowedOrigins = rawOrigin.split(",").map((o) => o.trim());
   const corsOrigin = allowedOrigins.length === 1 ? allowedOrigins[0] : allowedOrigins;
   app.enableCors({

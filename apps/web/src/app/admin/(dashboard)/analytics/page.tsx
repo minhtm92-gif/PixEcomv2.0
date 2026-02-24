@@ -1,19 +1,103 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { PageShell } from '@/components/PageShell';
 import { KpiCard } from '@/components/KpiCard';
 import { DataTable, type Column } from '@/components/DataTable';
 import { moneyWhole, num, pct } from '@/lib/format';
+import { useAdminApi } from '@/hooks/useAdminApi';
 import { ANALYTICS_DATA } from '@/mock/admin';
+
+const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+
+// ── API response types ──────────────────────────────────────────────────────
+
+interface DateRow {
+  date: string;
+  revenue: number;
+  orders: number;
+  spend: number;
+  productCost: number;
+  paymentFee: number;
+  profit: number;
+  roas: number;
+}
+
+interface SellerRow {
+  name: string;
+  revenue: number;
+  orders: number;
+  spend: number;
+  roas: number;
+}
+
+interface ProductRow {
+  name: string;
+  orders: number;
+  revenue: number;
+  cr: number;
+}
+
+interface DomainRow {
+  domain: string;
+  revenue: number;
+  orders: number;
+  cr: number;
+}
+
+interface AnalyticsResponse {
+  byDate: DateRow[];
+  bySeller: SellerRow[];
+  byProduct: ProductRow[];
+  byDomain: DomainRow[];
+}
 
 const TABS = ['Overview', 'By Seller', 'By Product', 'By Domain'];
 
 export default function AdminAnalyticsPage() {
   const [tab, setTab] = useState('Overview');
 
-  const totals = ANALYTICS_DATA.byDate.reduce(
+  const { data: apiData, loading, error } = useAdminApi<AnalyticsResponse>(
+    IS_PREVIEW ? null : '/admin/analytics',
+  );
+
+  // Resolve data
+  const analyticsData = IS_PREVIEW ? ANALYTICS_DATA : apiData;
+
+  if (!IS_PREVIEW && loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!IS_PREVIEW && error) {
+    return (
+      <PageShell
+        icon={<BarChart3 size={20} className="text-amber-400" />}
+        title="Analytics"
+        subtitle="Platform-wide performance — last 7 days"
+      >
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-8 text-center">
+          {error}
+        </div>
+      </PageShell>
+    );
+  }
+
+  if (!analyticsData) return null;
+
+  const byDate = analyticsData.byDate ?? [];
+  const bySeller = analyticsData.bySeller ?? [];
+  const byProduct = analyticsData.byProduct ?? [];
+  const byDomain = analyticsData.byDomain ?? [];
+
+  const totals = byDate.reduce(
     (acc, d) => ({
       revenue: acc.revenue + d.revenue,
       orders: acc.orders + d.orders,
@@ -24,7 +108,7 @@ export default function AdminAnalyticsPage() {
     }),
     { revenue: 0, orders: 0, spend: 0, productCost: 0, paymentFee: 0, profit: 0 },
   );
-  const maxRevenue = Math.max(...ANALYTICS_DATA.byDate.map((d) => d.revenue));
+  const maxRevenue = Math.max(...byDate.map((d) => d.revenue), 1);
 
   return (
     <PageShell
@@ -51,7 +135,7 @@ export default function AdminAnalyticsPage() {
       <div className="bg-card border border-border rounded-xl p-5 mb-6">
         <h2 className="text-sm font-semibold text-foreground mb-4">Revenue — Last 7 Days</h2>
         <div className="flex items-end gap-2 h-36">
-          {ANALYTICS_DATA.byDate.map((d) => {
+          {byDate.map((d) => {
             const heightPct = maxRevenue > 0 ? (d.revenue / maxRevenue) * 100 : 0;
             const dateLabel = d.date.slice(5).replace('-', '/');
             return (
@@ -104,7 +188,7 @@ export default function AdminAnalyticsPage() {
               </tr>
             </thead>
             <tbody>
-              {ANALYTICS_DATA.byDate.map((d) => (
+              {byDate.map((d) => (
                 <tr
                   key={d.date}
                   className="border-b border-border/50 hover:bg-muted/20 transition-colors"
@@ -155,7 +239,7 @@ export default function AdminAnalyticsPage() {
               {
                 key: 'name',
                 label: 'Seller',
-                render: (r) => (
+                render: (r: SellerRow) => (
                   <span className="text-sm font-medium text-foreground">{r.name}</span>
                 ),
               },
@@ -163,7 +247,7 @@ export default function AdminAnalyticsPage() {
                 key: 'revenue',
                 label: 'Revenue',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: SellerRow) => (
                   <span className="font-mono text-sm text-foreground">{moneyWhole(r.revenue)}</span>
                 ),
               },
@@ -171,7 +255,7 @@ export default function AdminAnalyticsPage() {
                 key: 'orders',
                 label: 'Orders',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: SellerRow) => (
                   <span className="font-mono text-sm text-foreground">{num(r.orders)}</span>
                 ),
               },
@@ -179,7 +263,7 @@ export default function AdminAnalyticsPage() {
                 key: 'spend',
                 label: 'Spend',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: SellerRow) => (
                   <span className="font-mono text-sm text-foreground">{moneyWhole(r.spend)}</span>
                 ),
               },
@@ -187,7 +271,7 @@ export default function AdminAnalyticsPage() {
                 key: 'roas',
                 label: 'ROAS',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: SellerRow) => (
                   <span
                     className={`font-mono text-sm ${r.roas >= 3 ? 'text-green-400' : r.roas >= 2 ? 'text-amber-400' : 'text-red-400'}`}
                   >
@@ -195,9 +279,9 @@ export default function AdminAnalyticsPage() {
                   </span>
                 ),
               },
-            ] as Column<(typeof ANALYTICS_DATA.bySeller)[0]>[]
+            ] as Column<SellerRow>[]
           }
-          data={ANALYTICS_DATA.bySeller}
+          data={bySeller}
           loading={false}
           emptyMessage="No data."
           rowKey={(r) => r.name}
@@ -211,7 +295,7 @@ export default function AdminAnalyticsPage() {
               {
                 key: 'name',
                 label: 'Product',
-                render: (r) => (
+                render: (r: ProductRow) => (
                   <span className="text-sm font-medium text-foreground">{r.name}</span>
                 ),
               },
@@ -219,7 +303,7 @@ export default function AdminAnalyticsPage() {
                 key: 'revenue',
                 label: 'Revenue',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: ProductRow) => (
                   <span className="font-mono text-sm text-foreground">{moneyWhole(r.revenue)}</span>
                 ),
               },
@@ -227,7 +311,7 @@ export default function AdminAnalyticsPage() {
                 key: 'orders',
                 label: 'Orders',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: ProductRow) => (
                   <span className="font-mono text-sm text-foreground">{num(r.orders)}</span>
                 ),
               },
@@ -235,13 +319,13 @@ export default function AdminAnalyticsPage() {
                 key: 'cr',
                 label: 'CR',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: ProductRow) => (
                   <span className="font-mono text-sm text-foreground">{pct(r.cr)}</span>
                 ),
               },
-            ] as Column<(typeof ANALYTICS_DATA.byProduct)[0]>[]
+            ] as Column<ProductRow>[]
           }
-          data={ANALYTICS_DATA.byProduct}
+          data={byProduct}
           loading={false}
           emptyMessage="No data."
           rowKey={(r) => r.name}
@@ -255,7 +339,7 @@ export default function AdminAnalyticsPage() {
               {
                 key: 'domain',
                 label: 'Domain',
-                render: (r) => (
+                render: (r: DomainRow) => (
                   <span className="text-sm font-mono text-foreground">{r.domain}</span>
                 ),
               },
@@ -263,7 +347,7 @@ export default function AdminAnalyticsPage() {
                 key: 'revenue',
                 label: 'Revenue',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: DomainRow) => (
                   <span className="font-mono text-sm text-foreground">{moneyWhole(r.revenue)}</span>
                 ),
               },
@@ -271,7 +355,7 @@ export default function AdminAnalyticsPage() {
                 key: 'orders',
                 label: 'Orders',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: DomainRow) => (
                   <span className="font-mono text-sm text-foreground">{num(r.orders)}</span>
                 ),
               },
@@ -279,13 +363,13 @@ export default function AdminAnalyticsPage() {
                 key: 'cr',
                 label: 'CR',
                 className: 'text-right',
-                render: (r) => (
+                render: (r: DomainRow) => (
                   <span className="font-mono text-sm text-foreground">{pct(r.cr)}</span>
                 ),
               },
-            ] as Column<(typeof ANALYTICS_DATA.byDomain)[0]>[]
+            ] as Column<DomainRow>[]
           }
-          data={ANALYTICS_DATA.byDomain}
+          data={byDomain}
           loading={false}
           emptyMessage="No data."
           rowKey={(r) => r.domain}
