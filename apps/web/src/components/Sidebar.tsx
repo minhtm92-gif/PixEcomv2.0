@@ -17,6 +17,7 @@ import {
   Rocket,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const NAV = [
   { label: 'Orders', href: '/orders', icon: ClipboardList },
@@ -49,13 +50,13 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-card border-r border-border flex flex-col z-50">
+    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-sidebar border-r border-sidebar-border flex flex-col z-50">
       {/* Brand */}
-      <div className="h-14 flex items-center px-4 border-b border-border">
+      <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
         <Link href="/products" className="text-lg font-bold text-foreground">
-          PixEcom
+          PixEcom <span className="text-xs font-normal text-muted-foreground">v2</span>
         </Link>
-        <span className="ml-2 text-xs text-muted-foreground">v2</span>
+        <ThemeToggle />
       </div>
 
       {/* Nav */}
@@ -81,7 +82,7 @@ export function Sidebar() {
       </nav>
 
       {/* User / Logout */}
-      <div className="border-t border-border p-3">
+      <div className="border-t border-sidebar-border p-3">
         {user && (
           <div className="mb-2 px-1">
             <p className="text-sm font-medium text-foreground truncate">{user.displayName}</p>

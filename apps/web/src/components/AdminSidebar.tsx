@@ -20,6 +20,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
@@ -66,18 +67,19 @@ export function AdminSidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-card border-r border-border flex flex-col z-50">
+    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-sidebar border-r border-sidebar-border flex flex-col z-50">
       {/* Brand */}
-      <div className="h-14 flex items-center px-4 border-b border-border">
+      <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
         <Link href={isContentRole ? '/admin/products' : '/admin/dashboard'} className="text-lg font-bold text-foreground flex items-center gap-2">
           <Shield size={18} className="text-amber-400" />
-          {isContentRole ? 'PixEcom Content' : 'PixEcom Admin'}
+          {isContentRole ? 'Content' : 'Admin'}
           {IS_PREVIEW && (
             <span className="ml-1 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] font-bold rounded uppercase">
               Preview
             </span>
           )}
         </Link>
+        <ThemeToggle />
       </div>
 
       {/* Nav */}
@@ -124,7 +126,7 @@ export function AdminSidebar() {
       </nav>
 
       {/* User / Logout */}
-      <div className="border-t border-border p-3">
+      <div className="border-t border-sidebar-border p-3">
         {IS_PREVIEW ? (
           <div className="mb-2 px-1">
             <p className="text-sm font-medium text-foreground">Preview Mode</p>

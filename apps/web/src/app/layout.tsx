@@ -3,6 +3,7 @@ import { AuthProvider } from '@/components/AuthProvider';
 import { Toaster } from '@/components/Toaster';
 import { DebugPanel } from '@/components/DebugPanel';
 import { EnvGuard } from '@/components/EnvGuard';
+import { ThemeProvider } from '@/components/ThemeProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -12,15 +13,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <EnvGuard>
-          <AuthProvider>
-            {children}
-            <Toaster />
-            <DebugPanel />
-          </AuthProvider>
-        </EnvGuard>
+        <ThemeProvider>
+          <EnvGuard>
+            <AuthProvider>
+              {children}
+              <Toaster />
+              <DebugPanel />
+            </AuthProvider>
+          </EnvGuard>
+        </ThemeProvider>
       </body>
     </html>
   );
