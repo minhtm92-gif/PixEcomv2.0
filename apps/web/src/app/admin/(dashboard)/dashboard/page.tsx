@@ -5,9 +5,6 @@ import { KpiCard } from '@/components/KpiCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { moneyWhole, num } from '@/lib/format';
 import { useAdminApi } from '@/hooks/useAdminApi';
-import { DASHBOARD_KPIS, MOCK_ADMIN_ORDERS } from '@/mock/admin';
-
-const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
 // ── API response types ──────────────────────────────────────────────────────
 
@@ -41,22 +38,13 @@ interface DashboardResponse {
 }
 
 export default function AdminDashboardPage() {
-  // Real API call (skip when in preview mode)
-  const { data: apiData, loading, error } = useAdminApi<DashboardResponse>(
-    IS_PREVIEW ? null : '/admin/dashboard',
-  );
+  const { data: apiData, loading, error } = useAdminApi<DashboardResponse>('/admin/dashboard');
 
-  // Resolve data source
-  const kpis = IS_PREVIEW
-    ? DASHBOARD_KPIS
-    : apiData?.kpis ?? null;
-
-  const recentOrders = IS_PREVIEW
-    ? MOCK_ADMIN_ORDERS.slice(0, 5)
-    : apiData?.recentOrders ?? [];
+  const kpis = apiData?.kpis ?? null;
+  const recentOrders = apiData?.recentOrders ?? [];
 
   // Loading state
-  if (!IS_PREVIEW && loading) {
+  if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
@@ -68,7 +56,7 @@ export default function AdminDashboardPage() {
   }
 
   // Error state
-  if (!IS_PREVIEW && error) {
+  if (error) {
     return (
       <div className="p-6">
         <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-8 text-center">
@@ -149,6 +137,9 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
             ))}
+            {kpis.topSellers.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No seller data yet</p>
+            )}
           </div>
         </div>
 
@@ -170,6 +161,9 @@ export default function AdminDashboardPage() {
                 </span>
               </div>
             ))}
+            {recentOrders.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No orders yet</p>
+            )}
           </div>
         </div>
       </div>

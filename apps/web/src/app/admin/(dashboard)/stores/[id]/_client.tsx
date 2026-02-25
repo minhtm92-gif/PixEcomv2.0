@@ -5,19 +5,43 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Globe, Copy } from 'lucide-react';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
-import { moneyWhole, num, fmtDate } from '@/lib/format';
+import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
-import {
-  MOCK_STORES,
-  MOCK_SELLERS,
-  MOCK_ADMIN_PRODUCTS,
-  type MockAdminProduct,
-} from '@/mock/admin';
+import { useAdminApi, useAdminMutation } from '@/hooks/useAdminApi';
+import { useToastStore } from '@/stores/toastStore';
+
+// ── API response types ────────────────────────────────────────────────────────
+
+interface StoreSellpage {
+  id: string;
+  slug: string;
+  status: string;
+  titleOverride: string | null;
+}
+
+interface StoreDetailApi {
+  id: string;
+  hostname: string;
+  sellerId: string;
+  verificationMethod: string;
+  verificationToken: string;
+  status: string;
+  isPrimary: boolean;
+  verifiedAt: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  seller: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  sellpages: StoreSellpage[];
+}
 
 const TABS = [
   { label: 'Domain Info', value: 'domain' },
   { label: 'Seller', value: 'seller' },
-  { label: 'Products', value: 'products' },
   { label: 'Sellpages', value: 'sellpages' },
 ];
 
@@ -25,8 +49,60 @@ export default function StoreDetailClient() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [tab, setTab] = useState('domain');
+  const [copied, setCopied] = useState(false);
+  const toast = useToastStore((s) => s.add);
 
-  const store = MOCK_STORES.find((s) => s.id === id) ?? MOCK_STORES[0];
+  const { data: store, loading, error, refetch } = useAdminApi<StoreDetailApi>(
+    `/admin/stores/${id}`,
+  );
+
+  const { mutate: verifyDomain, loading: verifying } = useAdminMutation<{
+    verified: boolean;
+    message: string;
+  }>(`/admin/stores/${id}/verify`, 'POST');
+
+  async function handleVerify() {
+    try {
+      const result = await verifyDomain({});
+      if (result.verified) {
+        toast('Domain verified successfully!', 'success');
+      } else {
+        toast(result.message || 'Verification failed', 'error');
+      }
+      refetch();
+    } catch (err: any) {
+      toast(err?.message || 'Verification failed', 'error');
+    }
+  }
+
+  // Loading
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-muted-foreground text-sm">Loading store details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error
+  if (error) {
+    return (
+      <div className="p-6">
+        <button
+          onClick={() => router.push('/admin/stores')}
+          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4"
+        >
+          <ArrowLeft size={16} /> Stores
+        </button>
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-8 text-center">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   if (!store) {
     return (
@@ -44,42 +120,29 @@ export default function StoreDetailClient() {
     );
   }
 
-  const seller = MOCK_SELLERS.find((s) => s.id === store.sellerId);
-  // In preview mode, show a subset of products as a stand-in for this store's products
-  const sellerProducts = MOCK_ADMIN_PRODUCTS.slice(0, 4);
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
-  const productColumns: Column<MockAdminProduct>[] = [
+  const sellpageColumns: Column<StoreSellpage>[] = [
     {
-      key: 'name',
-      label: 'Name',
-      render: (r) => <span className="text-sm font-medium text-foreground">{r.name}</span>,
+      key: 'slug',
+      label: 'Slug',
+      render: (r) => <span className="font-mono text-sm text-foreground">{r.slug}</span>,
     },
     {
-      key: 'sku',
-      label: 'SKU',
-      render: (r) => <span className="font-mono text-xs text-muted-foreground">{r.sku}</span>,
-    },
-    {
-      key: 'price',
-      label: 'Price',
-      className: 'text-right',
-      render: (r) => <span className="font-mono">{moneyWhole(r.price)}</span>,
+      key: 'title',
+      label: 'Title',
+      render: (r) => (
+        <span className="text-sm text-foreground">{r.titleOverride ?? '—'}</span>
+      ),
     },
     {
       key: 'status',
       label: 'Status',
       render: (r) => <StatusBadge status={r.status} />,
-    },
-    {
-      key: 'orders',
-      label: 'Orders',
-      className: 'text-right',
-      render: (r) => <span className="font-mono">{num(r.orders)}</span>,
-    },
-    {
-      key: 'created',
-      label: 'Created',
-      render: (r) => <span className="text-xs text-muted-foreground">{fmtDate(r.createdAt)}</span>,
     },
   ];
 
@@ -95,7 +158,7 @@ export default function StoreDetailClient() {
       <div className="flex items-center gap-4 mb-6">
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Globe size={20} className="text-amber-400" />
-          {store.domain}
+          {store.hostname}
         </h1>
         <StatusBadge status={store.status} />
       </div>
@@ -125,7 +188,7 @@ export default function StoreDetailClient() {
           <div className="space-y-3">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">Domain</label>
-              <p className="text-sm font-mono text-foreground">{store.domain}</p>
+              <p className="text-sm font-mono text-foreground">{store.hostname}</p>
             </div>
             <div>
               <label className="text-xs text-muted-foreground block mb-1">Status</label>
@@ -143,14 +206,19 @@ export default function StoreDetailClient() {
                 <code className="text-sm font-mono text-foreground bg-muted px-2 py-1 rounded">
                   {store.verificationToken}
                 </code>
-                <button className="p-1 text-muted-foreground hover:text-foreground transition-colors">
+                <button
+                  onClick={() => handleCopy(store.verificationToken)}
+                  className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                  title="Copy token"
+                >
                   <Copy size={14} />
                 </button>
+                {copied && <span className="text-xs text-green-400">Copied!</span>}
               </div>
             </div>
             <div>
               <label className="text-xs text-muted-foreground block mb-1">Is Primary</label>
-              {store.isDefault ? (
+              {store.isPrimary ? (
                 <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/10 text-green-400">
                   Yes
                 </span>
@@ -159,6 +227,22 @@ export default function StoreDetailClient() {
                   No
                 </span>
               )}
+            </div>
+            {store.verifiedAt && (
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Verified At</label>
+                <p className="text-sm text-foreground">{fmtDate(store.verifiedAt)}</p>
+              </div>
+            )}
+            {store.failureReason && (
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Failure Reason</label>
+                <p className="text-sm text-red-400">{store.failureReason}</p>
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Created</label>
+              <p className="text-sm text-foreground">{fmtDate(store.createdAt)}</p>
             </div>
           </div>
 
@@ -176,18 +260,29 @@ export default function StoreDetailClient() {
               <p className="text-sm text-muted-foreground">
                 Add an A record pointing to:{' '}
                 <code className="font-mono bg-background px-1.5 py-0.5 rounded text-foreground">
-                  76.76.21.21
+                  143.198.24.81
                 </code>
               </p>
             )}
           </div>
 
-          <button
-            disabled
-            className="mt-4 w-full py-2.5 bg-amber-500 text-white rounded-lg text-sm font-medium opacity-60 cursor-default"
-          >
-            Verify Domain
-          </button>
+          {store.status === 'VERIFIED' ? (
+            <div className="mt-4 w-full py-2.5 bg-green-500/15 text-green-400 rounded-lg text-sm font-medium text-center">
+              Domain Verified
+            </div>
+          ) : (
+            <button
+              onClick={handleVerify}
+              disabled={verifying}
+              className="mt-4 w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {verifying
+                ? 'Verifying...'
+                : store.status === 'FAILED'
+                  ? 'Retry Verification'
+                  : 'Verify Domain'}
+            </button>
+          )}
         </div>
       )}
 
@@ -195,57 +290,46 @@ export default function StoreDetailClient() {
       {tab === 'seller' && (
         <div className="bg-card border border-border rounded-xl p-5 max-w-xl">
           <h2 className="text-sm font-semibold text-foreground mb-4">Seller Information</h2>
-          {seller ? (
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Name</label>
-                <p className="text-sm text-foreground font-medium">{seller.name}</p>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Email</label>
-                <p className="text-sm text-foreground">{seller.email}</p>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Status</label>
-                <StatusBadge status={seller.status} />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Stores</label>
-                <p className="text-sm font-mono text-foreground">{num(seller.stores)}</p>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Revenue</label>
-                <p className="text-sm font-mono text-foreground">{moneyWhole(seller.revenue)}</p>
-              </div>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Name</label>
+              <p className="text-sm text-foreground font-medium">{store.seller.name}</p>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Seller not found.</p>
-          )}
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Slug</label>
+              <p className="text-sm font-mono text-foreground">{store.seller.slug}</p>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Seller ID</label>
+              <p className="text-sm font-mono text-muted-foreground">{store.seller.id}</p>
+            </div>
+            <button
+              onClick={() => router.push(`/admin/sellers/${store.seller.id}`)}
+              className="text-sm text-amber-400 hover:text-amber-300 transition-colors"
+            >
+              View Seller Detail &rarr;
+            </button>
+          </div>
         </div>
-      )}
-
-      {/* Tab: Products */}
-      {tab === 'products' && (
-        sellerProducts.length > 0 ? (
-          <DataTable
-            columns={productColumns}
-            data={sellerProducts}
-            loading={false}
-            emptyMessage="No products."
-            rowKey={(r) => r.id}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">No products for this store&apos;s seller.</p>
-        )
       )}
 
       {/* Tab: Sellpages */}
       {tab === 'sellpages' && (
-        <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-sm text-muted-foreground text-center py-8">
-            Sellpages for this domain will appear here.
-          </p>
-        </div>
+        store.sellpages.length > 0 ? (
+          <DataTable
+            columns={sellpageColumns}
+            data={store.sellpages}
+            loading={false}
+            emptyMessage="No sellpages."
+            rowKey={(r) => r.id}
+          />
+        ) : (
+          <div className="bg-card border border-border rounded-xl p-5">
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No sellpages for this domain.
+            </p>
+          </div>
+        )
       )}
     </div>
   );

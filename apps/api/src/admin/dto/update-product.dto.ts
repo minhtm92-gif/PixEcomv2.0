@@ -17,6 +17,16 @@ export class UpdateProductDto {
   price?: number;
 
   @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
+  @IsNumber()
+  compareAtPrice?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
+  @IsNumber()
+  costPrice?: number;
+
+  @IsOptional()
   @IsString()
   status?: string;
 
@@ -28,4 +38,17 @@ export class UpdateProductDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  images?: string[];
+
+  @IsOptional()
+  @IsArray()
+  optionDefinitions?: unknown[];
+
+  @IsOptional()
+  @IsArray()
+  quantityCosts?: unknown[];
 }

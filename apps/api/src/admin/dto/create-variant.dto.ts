@@ -1,15 +1,16 @@
 import { Transform } from 'class-transformer';
 import {
-  IsArray,
-  IsNotEmpty,
+  IsBoolean,
+  IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
+  Min,
 } from 'class-validator';
 
-export class CreateProductDto {
+export class CreateVariantDto {
   @IsString()
-  @IsNotEmpty()
   name!: string;
 
   @IsOptional()
@@ -17,12 +18,9 @@ export class CreateProductDto {
   sku?: string;
 
   @IsOptional()
-  @IsString()
-  productCode?: string;
-
   @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
   @IsNumber()
-  price!: number;
+  priceOverride?: number;
 
   @IsOptional()
   @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
@@ -35,20 +33,31 @@ export class CreateProductDto {
   costPrice?: number;
 
   @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  tags?: string[];
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
+  @IsNumber()
+  fulfillmentCost?: number;
 
   @IsOptional()
   @IsString()
-  status?: string;
+  image?: string;
 
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  images?: string[];
+  @IsObject()
+  options?: Record<string, string>;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
+  @IsInt()
+  @Min(0)
+  stockQuantity?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => (value !== undefined ? Number(value) : undefined))
+  @IsInt()
+  @Min(0)
+  position?: number;
 }

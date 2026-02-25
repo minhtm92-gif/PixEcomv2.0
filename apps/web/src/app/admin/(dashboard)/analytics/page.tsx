@@ -5,11 +5,8 @@ import { BarChart3 } from 'lucide-react';
 import { PageShell } from '@/components/PageShell';
 import { KpiCard } from '@/components/KpiCard';
 import { DataTable, type Column } from '@/components/DataTable';
-import { moneyWhole, num, pct } from '@/lib/format';
+import { moneyWhole, num, pct, daysAgo, today } from '@/lib/format';
 import { useAdminApi } from '@/hooks/useAdminApi';
-import { ANALYTICS_DATA } from '@/mock/admin';
-
-const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
 // ── API response types ──────────────────────────────────────────────────────
 
@@ -55,17 +52,26 @@ interface AnalyticsResponse {
 
 const TABS = ['Overview', 'By Seller', 'By Product', 'By Domain'];
 
+const RANGE_OPTIONS = [
+  { label: 'Last 7 days', value: 7 },
+  { label: 'Last 14 days', value: 14 },
+  { label: 'Last 30 days', value: 30 },
+  { label: 'Last 90 days', value: 90 },
+];
+
 export default function AdminAnalyticsPage() {
   const [tab, setTab] = useState('Overview');
+  const [rangeDays, setRangeDays] = useState(7);
 
-  const { data: apiData, loading, error } = useAdminApi<AnalyticsResponse>(
-    IS_PREVIEW ? null : '/admin/analytics',
-  );
+  const apiPath = useMemo(() => {
+    const from = daysAgo(rangeDays);
+    const to = today();
+    return `/admin/analytics?from=${from}&to=${to}`;
+  }, [rangeDays]);
 
-  // Resolve data
-  const analyticsData = IS_PREVIEW ? ANALYTICS_DATA : apiData;
+  const { data: analyticsData, loading, error } = useAdminApi<AnalyticsResponse>(apiPath);
 
-  if (!IS_PREVIEW && loading) {
+  if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
         <div className="flex flex-col items-center gap-3">
@@ -76,12 +82,12 @@ export default function AdminAnalyticsPage() {
     );
   }
 
-  if (!IS_PREVIEW && error) {
+  if (error) {
     return (
       <PageShell
         icon={<BarChart3 size={20} className="text-amber-400" />}
         title="Analytics"
-        subtitle="Platform-wide performance — last 7 days"
+        subtitle={`Platform-wide performance — last ${rangeDays} days`}
       >
         <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-8 text-center">
           {error}
@@ -114,7 +120,20 @@ export default function AdminAnalyticsPage() {
     <PageShell
       icon={<BarChart3 size={20} className="text-amber-400" />}
       title="Analytics"
-      subtitle="Platform-wide performance — last 7 days"
+      subtitle={`Platform-wide performance — last ${rangeDays} days`}
+      actions={
+        <select
+          value={rangeDays}
+          onChange={(e) => setRangeDays(Number(e.target.value))}
+          className="px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors"
+        >
+          {RANGE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      }
     >
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
@@ -133,7 +152,7 @@ export default function AdminAnalyticsPage() {
 
       {/* Revenue chart */}
       <div className="bg-card border border-border rounded-xl p-5 mb-6">
-        <h2 className="text-sm font-semibold text-foreground mb-4">Revenue — Last 7 Days</h2>
+        <h2 className="text-sm font-semibold text-foreground mb-4">Revenue — Last {rangeDays} Days</h2>
         <div className="flex items-end gap-2 h-36">
           {byDate.map((d) => {
             const heightPct = maxRevenue > 0 ? (d.revenue / maxRevenue) * 100 : 0;
@@ -151,6 +170,9 @@ export default function AdminAnalyticsPage() {
               </div>
             );
           })}
+          {byDate.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center w-full py-8">No data for selected range</p>
+          )}
         </div>
       </div>
 
@@ -227,6 +249,13 @@ export default function AdminAnalyticsPage() {
                   </td>
                 </tr>
               ))}
+              {byDate.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="text-center py-8 text-sm text-muted-foreground">
+                    No data for selected range
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -283,7 +312,7 @@ export default function AdminAnalyticsPage() {
           }
           data={bySeller}
           loading={false}
-          emptyMessage="No data."
+          emptyMessage="No seller data for selected range."
           rowKey={(r) => r.name}
         />
       )}
@@ -327,7 +356,7 @@ export default function AdminAnalyticsPage() {
           }
           data={byProduct}
           loading={false}
-          emptyMessage="No data."
+          emptyMessage="No product data for selected range."
           rowKey={(r) => r.name}
         />
       )}
@@ -371,7 +400,7 @@ export default function AdminAnalyticsPage() {
           }
           data={byDomain}
           loading={false}
-          emptyMessage="No data."
+          emptyMessage="No domain data for selected range."
           rowKey={(r) => r.domain}
         />
       )}

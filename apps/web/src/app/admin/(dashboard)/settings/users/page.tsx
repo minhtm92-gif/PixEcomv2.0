@@ -7,9 +7,6 @@ import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { fmtDate } from '@/lib/format';
 import { useAdminApi } from '@/hooks/useAdminApi';
-import { MOCK_ADMIN_USERS, type MockAdminUser } from '@/mock/admin';
-
-const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
 // ── API response type ───────────────────────────────────────────────────────
 
@@ -43,22 +40,9 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export default function SettingsUsersPage() {
-  const { data: apiUsers, loading, error } = useAdminApi<AdminUserApi[]>(
-    IS_PREVIEW ? null : '/admin/users',
-  );
+  const { data: apiUsers, loading, error } = useAdminApi<AdminUserApi[]>('/admin/users');
 
   const users: UserRow[] = useMemo(() => {
-    if (IS_PREVIEW) {
-      return MOCK_ADMIN_USERS.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        status: u.status,
-        lastLogin: u.lastLogin,
-        createdAt: u.createdAt,
-      }));
-    }
     if (!apiUsers) return [];
     return apiUsers.map((u) => ({
       id: u.id,
@@ -66,7 +50,7 @@ export default function SettingsUsersPage() {
       email: u.email,
       role: u.role,
       status: u.isActive ? 'ACTIVE' : 'INACTIVE',
-      lastLogin: '—',
+      lastLogin: '\u2014',
       createdAt: u.createdAt,
     }));
   }, [apiUsers]);
@@ -121,7 +105,7 @@ export default function SettingsUsersPage() {
     },
   ];
 
-  if (!IS_PREVIEW && loading) {
+  if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[300px]">
         <div className="flex flex-col items-center gap-3">
@@ -145,7 +129,7 @@ export default function SettingsUsersPage() {
         </button>
       }
     >
-      {!IS_PREVIEW && error && (
+      {error && (
         <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
           {error}
         </div>

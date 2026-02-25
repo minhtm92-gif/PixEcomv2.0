@@ -42,4 +42,12 @@ export class AdminSellersController {
   ) {
     return this.adminService.updateSeller(id, dto);
   }
+
+  @Post(':id/reset-password')
+  resetSellerPassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { newPassword: string },
+  ) {
+    return this.adminService.resetSellerPassword(id, body.newPassword);
+  }
 }

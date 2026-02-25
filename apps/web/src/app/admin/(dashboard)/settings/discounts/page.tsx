@@ -7,9 +7,6 @@ import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { num, fmtDate } from '@/lib/format';
 import { useAdminApi } from '@/hooks/useAdminApi';
-import { MOCK_DISCOUNTS, type MockDiscount } from '@/mock/admin';
-
-const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
 // ── API response type ───────────────────────────────────────────────────────
 
@@ -40,24 +37,9 @@ interface DiscountRow {
 }
 
 export default function SettingsDiscountsPage() {
-  const { data: apiDiscounts, loading, error } = useAdminApi<DiscountApi[]>(
-    IS_PREVIEW ? null : '/admin/discounts',
-  );
+  const { data: apiDiscounts, loading, error } = useAdminApi<DiscountApi[]>('/admin/discounts');
 
   const discounts: DiscountRow[] = useMemo(() => {
-    if (IS_PREVIEW) {
-      return MOCK_DISCOUNTS.map((d) => ({
-        id: d.id,
-        code: d.code,
-        sellpageName: d.sellpageName,
-        type: d.type,
-        value: d.value,
-        uses: d.uses,
-        limit: d.limit,
-        status: d.status,
-        expiresAt: d.expiresAt,
-      }));
-    }
     if (!apiDiscounts) return [];
     return apiDiscounts.map((d) => ({
       id: d.id,
@@ -76,7 +58,7 @@ export default function SettingsDiscountsPage() {
   const totalUses = discounts.reduce((a, d) => a + d.uses, 0);
   const expiredCount = discounts.filter((d) => d.status === 'EXPIRED').length;
 
-  if (!IS_PREVIEW && loading) {
+  if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[300px]">
         <div className="flex flex-col items-center gap-3">
@@ -151,7 +133,7 @@ export default function SettingsDiscountsPage() {
         </button>
       }
     >
-      {!IS_PREVIEW && error && (
+      {error && (
         <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
           {error}
         </div>

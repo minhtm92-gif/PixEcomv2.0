@@ -203,6 +203,9 @@ model Product {
   shippingInfo      Json          @default("{}") @map("shipping_info") @db.JsonB
   tags              Json          @default("[]") @db.JsonB
   status            ProductStatus @default(DRAFT)
+  images            Json          @default("[]") @db.JsonB
+  optionDefinitions Json          @default("[]") @map("option_definitions") @db.JsonB
+  quantityCosts     Json          @default("[]") @map("quantity_costs") @db.JsonB
   rating            Decimal       @default(0) @db.Decimal(2, 1) // 0.0–5.0 (aggregated)
   reviewCount       Int           @default(0) @map("review_count")
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
@@ -230,6 +233,9 @@ model ProductVariant {
   priceOverride  Decimal? @map("price_override") @db.Decimal(10, 2)
   compareAtPrice Decimal? @map("compare_at_price") @db.Decimal(10, 2)
   options        Json     @default("{}") @db.JsonB
+  costPrice      Decimal? @map("cost_price") @db.Decimal(10, 2)
+  fulfillmentCost Decimal? @map("fulfillment_cost") @db.Decimal(10, 2)
+  image          String?  @db.VarChar(500)
   stockQuantity  Int      @default(0) @map("stock_quantity")
   isActive       Boolean  @default(true) @map("is_active")
   position       Int      @default(0)

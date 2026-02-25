@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, User, CreditCard, Globe, ShoppingBag, ClipboardList } from 'lucide-react';
+import { ArrowLeft, User, CreditCard, Globe, ShoppingBag, ClipboardList, KeyRound } from 'lucide-react';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { moneyWhole, num, fmtDate, fmtDateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { useAdminApi } from '@/hooks/useAdminApi';
+import { apiPatch, apiPost } from '@/lib/apiClient';
 import {
   MOCK_SELLERS, MOCK_STORES, MOCK_ADMIN_PRODUCTS, MOCK_ADMIN_ORDERS,
   type MockStore, type MockAdminProduct, type MockAdminOrder,
@@ -86,11 +87,23 @@ export default function SellerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [tab, setTab] = useState('profile');
-  const [selectedGateway, setSelectedGateway] = useState('stripe');
+  const [selectedGateway, setSelectedGateway] = useState('');
+  const [savingGateway, setSavingGateway] = useState(false);
+  const [resetPwOpen, setResetPwOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetPwLoading, setResetPwLoading] = useState(false);
+  const [resetPwMsg, setResetPwMsg] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // API call
+  // API calls
   const { data: apiSeller, loading, error } = useAdminApi<SellerDetailApi>(
     IS_PREVIEW ? null : `/admin/sellers/${id}`,
+    [refreshKey],
+  );
+
+  // Fetch available gateways
+  const { data: apiGateways } = useAdminApi<{ id: string; name: string; type: string; status: string }[]>(
+    IS_PREVIEW ? null : '/admin/payment-gateways',
   );
 
   // Preview mode: find mock seller
@@ -104,11 +117,13 @@ export default function SellerDetailPage() {
     : apiSeller?.sellerUsers?.[0]?.user?.email ?? '';
   const sellerPhone = IS_PREVIEW ? mockSeller?.phone : '';
   const sellerCreatedAt = IS_PREVIEW ? mockSeller?.createdAt : apiSeller?.createdAt;
-  const paymentGateway = IS_PREVIEW
+  const currentGateway = IS_PREVIEW
     ? mockSeller?.paymentGateway
-    : apiSeller?.paymentGateway?.type ?? null;
-  const stripeAccountId = IS_PREVIEW ? mockSeller?.stripeAccountId : null;
-  const paypalEmail = IS_PREVIEW ? mockSeller?.paypalEmail : null;
+    : apiSeller?.paymentGateway ?? null;
+  const currentGatewayName = IS_PREVIEW
+    ? (currentGateway as any)
+    : (currentGateway as any)?.name ?? null;
+  const currentGatewayId = IS_PREVIEW ? null : (currentGateway as any)?.id ?? null;
 
   // Sub-data (useMemo must be called unconditionally — Rules of Hooks)
   const sellerStores: DomainRow[] = useMemo(() => {
@@ -139,6 +154,35 @@ export default function SellerDetailPage() {
   const sellerOrders = IS_PREVIEW
     ? MOCK_ADMIN_ORDERS.filter((o) => o.sellerId === mockSeller?.id)
     : [];
+
+  // Handlers
+  const handleSaveGateway = useCallback(async () => {
+    if (!selectedGateway || !id) return;
+    setSavingGateway(true);
+    try {
+      await apiPatch(`/admin/sellers/${id}`, { paymentGatewayId: selectedGateway });
+      setRefreshKey((k) => k + 1);
+    } catch { /* ignore */ }
+    setSavingGateway(false);
+  }, [selectedGateway, id]);
+
+  const handleResetPassword = useCallback(async () => {
+    if (!newPassword.trim() || newPassword.length < 6) {
+      setResetPwMsg('Password must be at least 6 characters');
+      return;
+    }
+    setResetPwLoading(true);
+    setResetPwMsg('');
+    try {
+      await apiPost(`/admin/sellers/${id}/reset-password`, { newPassword });
+      setResetPwMsg('Password reset successfully!');
+      setNewPassword('');
+      setTimeout(() => { setResetPwOpen(false); setResetPwMsg(''); }, 2000);
+    } catch (err: unknown) {
+      setResetPwMsg(err instanceof Error ? err.message : 'Failed to reset password');
+    }
+    setResetPwLoading(false);
+  }, [newPassword, id]);
 
   // Loading state
   if (!IS_PREVIEW && loading) {
@@ -271,19 +315,16 @@ export default function SellerDetailPage() {
             </button>
           </div>
 
+          {/* Payment Gateway */}
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
               <CreditCard size={14} className="text-amber-400" /> Payment Gateway
             </h2>
             <div className="mb-4">
               <p className="text-xs text-muted-foreground mb-1">Current</p>
-              {paymentGateway ? (
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                  paymentGateway === 'stripe' ? 'bg-indigo-500/15 text-indigo-400' : 'bg-blue-500/15 text-blue-400'
-                }`}>
-                  {paymentGateway === 'stripe' ? 'Stripe' : 'PayPal'}
-                  {stripeAccountId && ` — ${stripeAccountId}`}
-                  {paypalEmail && ` — ${paypalEmail}`}
+              {currentGatewayName ? (
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/15 text-green-400">
+                  {currentGatewayName}
                 </span>
               ) : (
                 <span className="text-xs text-muted-foreground">Not Assigned</span>
@@ -293,33 +334,77 @@ export default function SellerDetailPage() {
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Assign Gateway</label>
                 <select
-                  value={selectedGateway}
+                  value={selectedGateway || currentGatewayId || ''}
                   onChange={(e) => setSelectedGateway(e.target.value)}
                   className={inputCls}
                 >
-                  <option value="stripe">Stripe</option>
-                  <option value="paypal">PayPal</option>
+                  <option value="">— Select gateway —</option>
+                  {(apiGateways ?? []).filter((g) => g.status === 'ACTIVE').map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.type})
+                    </option>
+                  ))}
                 </select>
               </div>
-              {selectedGateway === 'stripe' && (
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Stripe Account ID</label>
-                  <input type="text" defaultValue={stripeAccountId ?? ''} className={inputCls} placeholder="acct_..." />
-                </div>
-              )}
-              {selectedGateway === 'paypal' && (
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">PayPal Email</label>
-                  <input type="email" defaultValue={paypalEmail ?? ''} className={inputCls} placeholder="paypal@email.com" />
-                </div>
-              )}
-              <button className="w-full px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium opacity-60 cursor-default">
-                Save Payment
+              <button
+                onClick={handleSaveGateway}
+                disabled={savingGateway || !selectedGateway}
+                className="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingGateway ? 'Saving...' : 'Save Payment'}
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-3 bg-muted/30 rounded p-2">
               Payment gateway is managed by admin. Seller cannot modify.
             </p>
+          </div>
+
+          {/* Reset Password */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <KeyRound size={14} className="text-amber-400" /> Account Security
+            </h2>
+            {!resetPwOpen ? (
+              <button
+                onClick={() => setResetPwOpen(true)}
+                className="w-full px-4 py-2 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg text-sm font-medium transition-colors"
+              >
+                Reset Seller Password
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className={inputCls}
+                    placeholder="Min 6 characters..."
+                  />
+                </div>
+                {resetPwMsg && (
+                  <p className={`text-xs ${resetPwMsg.includes('success') ? 'text-green-400' : 'text-red-400'}`}>
+                    {resetPwMsg}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setResetPwOpen(false); setNewPassword(''); setResetPwMsg(''); }}
+                    className="flex-1 px-4 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleResetPassword}
+                    disabled={resetPwLoading}
+                    className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    {resetPwLoading ? 'Resetting...' : 'Confirm Reset'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

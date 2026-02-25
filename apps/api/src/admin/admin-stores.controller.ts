@@ -41,4 +41,9 @@ export class AdminStoresController {
   ) {
     return this.adminService.updateStore(id, body);
   }
+
+  @Post(':id/verify')
+  verifyStore(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.verifyStore(id);
+  }
 }

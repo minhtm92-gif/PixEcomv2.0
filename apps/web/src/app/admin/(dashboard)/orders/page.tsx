@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ClipboardList, Upload, Download } from 'lucide-react';
+import { ClipboardList, Upload, Download, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -26,6 +26,8 @@ interface OrderRow {
   trackingNumber: string | null;
   transactionId: string | null;
   createdAt: string;
+  hasHighQty?: boolean;
+  maxQty?: number;
 }
 
 interface OrdersResponse {
@@ -95,7 +97,14 @@ export default function AdminOrdersPage() {
       key: 'orderNumber',
       label: 'Order #',
       render: (r) => (
-        <span className="font-mono text-sm font-medium text-foreground">{r.orderNumber}</span>
+        <span className="font-mono text-sm font-medium text-foreground inline-flex items-center gap-1.5">
+          {r.hasHighQty && (
+            <span title={`High quantity order (max ${r.maxQty} pcs)`} className="text-amber-400">
+              <AlertTriangle size={14} />
+            </span>
+          )}
+          {r.orderNumber}
+        </span>
       ),
     },
     {

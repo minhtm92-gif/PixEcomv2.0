@@ -1,32 +1,38 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { ShoppingBag, Plus } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { ShoppingBag, Plus, Package } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PageShell } from '@/components/PageShell';
-import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
-import { moneyWhole, num, fmtDate } from '@/lib/format';
+import { moneyDecimal, safeDecimal } from '@/lib/format';
 import { useAdminApi } from '@/hooks/useAdminApi';
-import { MOCK_ADMIN_PRODUCTS, type MockAdminProduct } from '@/mock/admin';
+import { cn } from '@/lib/cn';
 
-const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+// ── API response types ──────────────────────────────────────────────────────
 
-// ── API response type ───────────────────────────────────────────────────────
+interface PricingRuleSummary {
+  id: string;
+  suggestedRetail: string | number;
+  sellerTakePercent: string | number;
+  sellerTakeFixed: string | number | null;
+}
 
 interface ProductApiRow {
   id: string;
   productCode: string;
   name: string;
   slug: string;
-  basePrice: number;
-  compareAtPrice: number | null;
-  costPrice: number | null;
+  basePrice: string | number;
+  compareAtPrice: string | number | null;
+  costPrice: string | number | null;
   currency: string;
   sku: string | null;
   status: string;
   tags: string[];
+  images: string[];
+  pricingRules: PricingRuleSummary[];
   createdAt: string;
   updatedAt: string;
   _count: { variants: number; sellpages: number; orderItems: number };
@@ -39,19 +45,10 @@ interface ProductsResponse {
   limit: number;
 }
 
-// Unified row type for the table
-interface ProductRow {
+interface LabelItem {
   id: string;
   name: string;
-  sku: string;
-  makerName: string;
-  price: number;
-  status: string;
-  variants: number;
-  orders: number;
-  revenue: number;
-  roas: number;
-  createdAt: string;
+  slug: string;
 }
 
 const ALL_STATUSES = ['All', 'ACTIVE', 'DRAFT', 'ARCHIVED'];
@@ -60,10 +57,10 @@ export default function AdminProductsPage() {
   const router = useRouter();
   const [statusTab, setStatusTab] = useState('All');
   const [search, setSearch] = useState('');
+  const [labelFilter, setLabelFilter] = useState('All');
 
   // Build API path
   const apiPath = useMemo(() => {
-    if (IS_PREVIEW) return null;
     const params = new URLSearchParams();
     params.set('limit', '100');
     if (statusTab !== 'All') params.set('status', statusTab);
@@ -72,131 +69,19 @@ export default function AdminProductsPage() {
   }, [statusTab, search]);
 
   const { data: apiData, loading, error } = useAdminApi<ProductsResponse>(apiPath);
+  const { data: labelsData } = useAdminApi<LabelItem[]>('/admin/products/labels');
 
-  // Map API data to unified row type
-  const allProducts: ProductRow[] = useMemo(() => {
-    if (IS_PREVIEW) {
-      return MOCK_ADMIN_PRODUCTS as ProductRow[];
-    }
-    if (!apiData?.data) return [];
-    return apiData.data.map((p) => ({
-      id: p.id,
-      name: p.name,
-      sku: p.sku ?? p.productCode,
-      makerName: p.productCode,
-      price: Number(p.basePrice),
-      status: p.status,
-      variants: p._count.variants,
-      orders: p._count.orderItems,
-      revenue: 0,
-      roas: 0,
-      createdAt: p.createdAt,
-    }));
-  }, [apiData]);
+  const products = apiData?.data ?? [];
 
-  // Client-side filtering for preview mode
-  const filtered = useMemo(() => {
-    if (!IS_PREVIEW) return allProducts;
-    let data = statusTab === 'All' ? allProducts : allProducts.filter((p) => p.status === statusTab);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      data = data.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.sku.toLowerCase().includes(q) ||
-          p.makerName.toLowerCase().includes(q),
-      );
-    }
-    return data;
-  }, [allProducts, statusTab, search]);
-
-  // Counts for tabs
+  // Counts for status tabs
   const counts = useMemo(() => {
-    const src = IS_PREVIEW ? (MOCK_ADMIN_PRODUCTS as ProductRow[]) : allProducts;
     return {
-      All: src.length,
-      ACTIVE: src.filter((p) => p.status === 'ACTIVE').length,
-      DRAFT: src.filter((p) => p.status === 'DRAFT').length,
-      ARCHIVED: src.filter((p) => p.status === 'ARCHIVED').length,
+      All: products.length,
+      ACTIVE: products.filter((p) => p.status === 'ACTIVE').length,
+      DRAFT: products.filter((p) => p.status === 'DRAFT').length,
+      ARCHIVED: products.filter((p) => p.status === 'ARCHIVED').length,
     };
-  }, [allProducts]);
-
-  const columns: Column<ProductRow>[] = [
-    {
-      key: 'name',
-      label: 'Product',
-      render: (r) => (
-        <div>
-          <p className="text-sm font-medium text-foreground">{r.name}</p>
-          <p className="text-xs text-muted-foreground font-mono">{r.sku}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'makerName',
-      label: IS_PREVIEW ? 'Maker' : 'Code',
-      render: (r) => <span className="text-sm text-muted-foreground">{r.makerName}</span>,
-    },
-    {
-      key: 'status',
-      label: 'Status',
-      render: (r) => <StatusBadge status={r.status} />,
-    },
-    {
-      key: 'price',
-      label: 'Price',
-      className: 'text-right',
-      render: (r) => <span className="font-mono text-sm text-foreground">{moneyWhole(r.price)}</span>,
-    },
-    {
-      key: 'variants',
-      label: 'Variants',
-      className: 'text-right',
-      render: (r) => <span className="font-mono text-sm text-foreground">{num(r.variants)}</span>,
-    },
-    {
-      key: 'orders',
-      label: 'Orders',
-      className: 'text-right',
-      render: (r) => <span className="font-mono text-sm text-foreground">{num(r.orders)}</span>,
-    },
-    {
-      key: 'revenue',
-      label: 'Revenue',
-      className: 'text-right',
-      render: (r) => (
-        <span className="font-mono text-sm text-foreground">
-          {r.revenue > 0 ? moneyWhole(r.revenue) : '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'roas',
-      label: 'ROAS',
-      className: 'text-right',
-      render: (r) => (
-        <span
-          className={`font-mono text-sm ${
-            r.roas === 0
-              ? 'text-muted-foreground'
-              : r.roas >= 3
-                ? 'text-green-400'
-                : r.roas >= 2
-                  ? 'text-amber-400'
-                  : 'text-red-400'
-          }`}
-        >
-          {r.roas === 0 ? '—' : r.roas.toFixed(1)}
-        </span>
-      ),
-    },
-    {
-      key: 'createdAt',
-      label: 'Created',
-      className: 'text-right',
-      render: (r) => <span className="text-xs text-muted-foreground">{fmtDate(r.createdAt)}</span>,
-    },
-  ];
+  }, [products]);
 
   return (
     <PageShell
@@ -213,52 +98,169 @@ export default function AdminProductsPage() {
         </Link>
       }
     >
-      {/* Status tabs */}
-      <div className="flex items-center gap-1 mb-4 bg-muted/50 rounded-lg p-1 w-fit">
-        {ALL_STATUSES.map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusTab(s)}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              statusTab === s
-                ? 'bg-card text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {s === 'All' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}{' '}
-            <span className="ml-1 text-muted-foreground">
-              {counts[s as keyof typeof counts]}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Filters row */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        {/* Status tabs */}
+        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+          {ALL_STATUSES.map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusTab(s)}
+              className={cn(
+                'px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                statusTab === s
+                  ? 'bg-card text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {s === 'All' ? 'All' : s.charAt(0) + s.slice(1).toLowerCase()}{' '}
+              <span className="ml-1 text-muted-foreground">{counts[s as keyof typeof counts]}</span>
+            </button>
+          ))}
+        </div>
 
-      {/* Search */}
-      <div className="mb-4">
+        {/* Label filter */}
+        {labelsData && labelsData.length > 0 && (
+          <select
+            value={labelFilter}
+            onChange={(e) => setLabelFilter(e.target.value)}
+            className="px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+          >
+            <option value="All">All Labels</option>
+            {labelsData.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+        )}
+
+        {/* Search */}
         <input
           type="text"
-          placeholder="Search products, SKUs, makers…"
+          placeholder="Search products..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-sm px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors"
+          className="px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors w-64"
         />
       </div>
 
       {/* Error */}
-      {!IS_PREVIEW && error && (
+      {error && (
         <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
           {error}
         </div>
       )}
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        loading={!IS_PREVIEW && loading}
-        emptyMessage="No products found."
-        onRowClick={(r) => router.push(`/admin/products/${r.id}`)}
-        rowKey={(r) => r.id}
-      />
+      {/* Loading */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-card border border-border rounded-xl overflow-hidden animate-pulse">
+              <div className="aspect-[4/3] bg-muted" />
+              <div className="p-4 space-y-2">
+                <div className="h-4 bg-muted rounded w-3/4" />
+                <div className="h-3 bg-muted rounded w-1/2" />
+                <div className="h-3 bg-muted rounded w-2/3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Card Grid */}
+      {!loading && products.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground text-sm">
+          No products found.
+        </div>
+      )}
+
+      {!loading && products.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {products.map((product) => {
+            const images = (product.images as string[]) ?? [];
+            const firstImage = images[0];
+            const rule = product.pricingRules?.[0];
+            const suggestedRetail = rule ? safeDecimal(rule.suggestedRetail) : 0;
+            const sellerTakePercent = rule ? safeDecimal(rule.sellerTakePercent) : 0;
+            const youTake = suggestedRetail > 0 ? suggestedRetail * sellerTakePercent / 100 : 0;
+
+            return (
+              <div
+                key={product.id}
+                onClick={() => router.push(`/admin/products/${product.id}`)}
+                className="bg-card border border-border rounded-xl overflow-hidden cursor-pointer hover:border-amber-500/50 hover:shadow-lg transition-all group"
+              >
+                {/* Image */}
+                <div className="aspect-[4/3] bg-muted relative overflow-hidden">
+                  {firstImage ? (
+                    <img
+                      src={firstImage}
+                      alt={product.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package size={48} className="text-muted-foreground/30" />
+                    </div>
+                  )}
+                  <div className="absolute top-2 right-2">
+                    <StatusBadge status={product.status} />
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div className="p-4 space-y-2">
+                  <h3 className="text-sm font-semibold text-foreground line-clamp-1">
+                    {product.name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    {product.productCode}
+                  </p>
+
+                  <div className="space-y-1 pt-1">
+                    {suggestedRetail > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Suggested retail</span>
+                        <span className="font-mono text-foreground font-medium">
+                          {moneyDecimal(suggestedRetail)}
+                        </span>
+                      </div>
+                    )}
+                    {youTake > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">You take</span>
+                        <span className="font-mono text-green-400 font-medium">
+                          {moneyDecimal(youTake)} / order
+                        </span>
+                      </div>
+                    )}
+                    {suggestedRetail === 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Base price</span>
+                        <span className="font-mono text-foreground font-medium">
+                          {moneyDecimal(product.basePrice)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CTA */}
+                  <div className="pt-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/admin/products/${product.id}`);
+                      }}
+                      className="w-full text-center py-2 text-xs font-medium text-amber-400 hover:text-amber-300 border border-amber-500/20 rounded-lg hover:bg-amber-500/10 transition-colors"
+                    >
+                      + Create a sellpage
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </PageShell>
   );
 }

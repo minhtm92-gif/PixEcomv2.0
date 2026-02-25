@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MediaModule } from '../media/media.module';
 import { AdminDashboardController } from './admin-dashboard.controller';
 import { AdminSellersController } from './admin-sellers.controller';
 import { AdminOrdersController } from './admin-orders.controller';
@@ -9,6 +10,7 @@ import { AdminSettingsController } from './admin-settings.controller';
 import { AdminService } from './admin.service';
 
 @Module({
+  imports: [MediaModule],
   controllers: [
     AdminDashboardController,
     AdminSellersController,

@@ -5,11 +5,15 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2Service } from '../media/r2.service';
 import { AdminQueryDto } from './dto/admin-query.dto';
 import { CreateSellerDto } from './dto/create-seller.dto';
 import { UpdateSellerDto } from './dto/update-seller.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { CreateVariantDto } from './dto/create-variant.dto';
+import { UpdateVariantDto } from './dto/update-variant.dto';
+import { BulkUpdateVariantsDto } from './dto/bulk-update-variants.dto';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { CreateDiscountDto } from './dto/create-discount.dto';
 import { CreatePaymentGatewayDto } from './dto/create-payment-gateway.dto';
@@ -20,7 +24,10 @@ const BCRYPT_COST = 12;
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly r2: R2Service,
+  ) {}
 
   // ─── DASHBOARD ──────────────────────────────────────────────────────────────
 
@@ -338,6 +345,28 @@ export class AdminService {
     });
   }
 
+  async resetSellerPassword(sellerId: string, newPassword: string): Promise<any> {
+    const seller = await this.prisma.seller.findUnique({
+      where: { id: sellerId },
+      include: { sellerUsers: { include: { user: true } } },
+    });
+    if (!seller) {
+      throw new NotFoundException(`Seller ${sellerId} not found`);
+    }
+    if (!seller.sellerUsers.length) {
+      throw new NotFoundException(`No user account linked to seller ${sellerId}`);
+    }
+
+    const userId = seller.sellerUsers[0].userId;
+    const hash = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: hash },
+    });
+
+    return { success: true, message: 'Password reset successfully' };
+  }
+
   // ─── ORDERS ─────────────────────────────────────────────────────────────────
 
   async listOrders(query: AdminQueryDto): Promise<any> {
@@ -390,19 +419,24 @@ export class AdminService {
       this.prisma.order.count({ where }),
     ]);
 
-    const data = orders.map((o) => ({
-      id: o.id,
-      orderNumber: o.orderNumber,
-      sellerName: o.seller?.name ?? '',
-      sellerId: o.seller?.id ?? '',
-      customer: o.customerName ?? o.customerEmail ?? '',
-      product: o.items.map((i) => i.productName).join(', ') || 'N/A',
-      total: Number(o.total),
-      status: o.status,
-      trackingNumber: o.trackingNumber,
-      transactionId: o.transactionId,
-      createdAt: o.createdAt,
-    }));
+    const data = orders.map((o) => {
+      const maxQty = o.items.reduce((max, i) => Math.max(max, i.quantity), 0);
+      return {
+        id: o.id,
+        orderNumber: o.orderNumber,
+        sellerName: o.seller?.name ?? '',
+        sellerId: o.seller?.id ?? '',
+        customer: o.customerName ?? o.customerEmail ?? '',
+        product: o.items.map((i) => i.productName).join(', ') || 'N/A',
+        total: Number(o.total),
+        status: o.status,
+        trackingNumber: o.trackingNumber,
+        transactionId: o.transactionId,
+        createdAt: o.createdAt,
+        hasHighQty: maxQty > 5,
+        maxQty,
+      };
+    });
 
     return { data, total, page, limit };
   }
@@ -469,8 +503,20 @@ export class AdminService {
           sku: true,
           status: true,
           tags: true,
+          images: true,
           createdAt: true,
           updatedAt: true,
+          pricingRules: {
+            where: { isActive: true },
+            orderBy: { effectiveFrom: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              suggestedRetail: true,
+              sellerTakePercent: true,
+              sellerTakeFixed: true,
+            },
+          },
           _count: { select: { variants: true, sellpages: true, orderItems: true } },
         },
       }),
@@ -527,14 +573,255 @@ export class AdminService {
     const data: Record<string, unknown> = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.price !== undefined) data.basePrice = dto.price;
+    if (dto.compareAtPrice !== undefined) data.compareAtPrice = dto.compareAtPrice;
+    if (dto.costPrice !== undefined) data.costPrice = dto.costPrice;
     if (dto.status !== undefined) data.status = dto.status;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.tags !== undefined) data.tags = dto.tags;
+    if (dto.images !== undefined) data.images = dto.images;
+    if (dto.optionDefinitions !== undefined) data.optionDefinitions = dto.optionDefinitions;
+    if (dto.quantityCosts !== undefined) data.quantityCosts = dto.quantityCosts;
 
     return this.prisma.product.update({
       where: { id },
       data,
     });
+  }
+
+  // ─── PRODUCT UPLOAD ────────────────────────────────────────────────────────
+
+  async getProductUploadUrl(filename: string, contentType: string) {
+    const key = this.r2.buildPlatformKey(filename);
+    return this.r2.getSignedUploadUrl(key, contentType);
+  }
+
+  // ─── VARIANTS ─────────────────────────────────────────────────────────────
+
+  async createVariant(productId: string, dto: CreateVariantDto): Promise<any> {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException(`Product ${productId} not found`);
+
+    const maxPos = await this.prisma.productVariant.aggregate({
+      where: { productId },
+      _max: { position: true },
+    });
+
+    return this.prisma.productVariant.create({
+      data: {
+        productId,
+        name: dto.name,
+        sku: dto.sku,
+        priceOverride: dto.priceOverride,
+        compareAtPrice: dto.compareAtPrice,
+        costPrice: dto.costPrice,
+        fulfillmentCost: dto.fulfillmentCost,
+        image: dto.image,
+        options: (dto.options ?? {}) as any,
+        stockQuantity: dto.stockQuantity ?? 0,
+        isActive: dto.isActive ?? true,
+        position: dto.position ?? (maxPos._max.position ?? 0) + 1,
+      },
+    });
+  }
+
+  async updateVariant(productId: string, variantId: string, dto: UpdateVariantDto): Promise<any> {
+    const variant = await this.prisma.productVariant.findFirst({
+      where: { id: variantId, productId },
+    });
+    if (!variant) throw new NotFoundException(`Variant ${variantId} not found`);
+
+    const data: Record<string, unknown> = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.sku !== undefined) data.sku = dto.sku;
+    if (dto.priceOverride !== undefined) data.priceOverride = dto.priceOverride;
+    if (dto.compareAtPrice !== undefined) data.compareAtPrice = dto.compareAtPrice;
+    if (dto.costPrice !== undefined) data.costPrice = dto.costPrice;
+    if (dto.fulfillmentCost !== undefined) data.fulfillmentCost = dto.fulfillmentCost;
+    if (dto.image !== undefined) data.image = dto.image;
+    if (dto.options !== undefined) data.options = dto.options as any;
+    if (dto.stockQuantity !== undefined) data.stockQuantity = dto.stockQuantity;
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.position !== undefined) data.position = dto.position;
+
+    return this.prisma.productVariant.update({
+      where: { id: variantId },
+      data,
+    });
+  }
+
+  async deleteVariant(productId: string, variantId: string): Promise<any> {
+    const variant = await this.prisma.productVariant.findFirst({
+      where: { id: variantId, productId },
+    });
+    if (!variant) throw new NotFoundException(`Variant ${variantId} not found`);
+
+    return this.prisma.productVariant.delete({ where: { id: variantId } });
+  }
+
+  async generateVariants(productId: string): Promise<any> {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException(`Product ${productId} not found`);
+
+    const optionDefs = (product.optionDefinitions as any[]) ?? [];
+    if (optionDefs.length === 0) {
+      return { created: 0, variants: [] };
+    }
+
+    // Build all combinations using cartesian product
+    const allValues: Array<{ name: string; values: string[] }> = optionDefs.map((o: any) => ({
+      name: o.name,
+      values: o.values ?? [],
+    }));
+
+    const combinations = this.cartesianProduct(allValues);
+
+    // Get existing variant option combos to avoid duplicates
+    const existing = await this.prisma.productVariant.findMany({
+      where: { productId },
+      select: { options: true },
+    });
+    const existingKeys = new Set(
+      existing.map((v) => JSON.stringify(v.options)),
+    );
+
+    const maxPos = await this.prisma.productVariant.aggregate({
+      where: { productId },
+      _max: { position: true },
+    });
+    let pos = (maxPos._max.position ?? 0) + 1;
+
+    const toCreate = combinations.filter(
+      (combo) => !existingKeys.has(JSON.stringify(combo)),
+    );
+
+    const created = await Promise.all(
+      toCreate.map((combo) => {
+        const name = Object.values(combo).join(' / ');
+        return this.prisma.productVariant.create({
+          data: {
+            productId,
+            name,
+            options: combo as any,
+            position: pos++,
+            isActive: true,
+            stockQuantity: 0,
+          },
+        });
+      }),
+    );
+
+    return { created: created.length, variants: created };
+  }
+
+  async bulkUpdateVariants(productId: string, dto: BulkUpdateVariantsDto): Promise<any> {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException(`Product ${productId} not found`);
+
+    const results = await Promise.all(
+      dto.variants.map((v) => {
+        const data: Record<string, unknown> = {};
+        if (v.name !== undefined) data.name = v.name;
+        if (v.sku !== undefined) data.sku = v.sku;
+        if (v.priceOverride !== undefined) data.priceOverride = v.priceOverride;
+        if (v.compareAtPrice !== undefined) data.compareAtPrice = v.compareAtPrice;
+        if (v.costPrice !== undefined) data.costPrice = v.costPrice;
+        if (v.fulfillmentCost !== undefined) data.fulfillmentCost = v.fulfillmentCost;
+        if (v.image !== undefined) data.image = v.image;
+        if (v.options !== undefined) data.options = v.options as any;
+        if (v.stockQuantity !== undefined) data.stockQuantity = v.stockQuantity;
+        if (v.isActive !== undefined) data.isActive = v.isActive;
+        if (v.position !== undefined) data.position = v.position;
+
+        return this.prisma.productVariant.updateMany({
+          where: { id: v.id, productId },
+          data,
+        });
+      }),
+    );
+
+    return { updated: results.length };
+  }
+
+  // ─── LABELS ───────────────────────────────────────────────────────────────
+
+  async listLabels(): Promise<any> {
+    return this.prisma.productLabel.findMany({
+      orderBy: { name: 'asc' },
+      include: { _count: { select: { products: true } } },
+    });
+  }
+
+  async createLabel(name: string): Promise<any> {
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const existing = await this.prisma.productLabel.findUnique({ where: { slug } });
+    if (existing) throw new ConflictException(`Label "${name}" already exists`);
+
+    return this.prisma.productLabel.create({ data: { name, slug } });
+  }
+
+  async syncProductLabels(productId: string, labelIds: string[]): Promise<any> {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException(`Product ${productId} not found`);
+
+    // Delete all existing and re-create
+    await this.prisma.productProductLabel.deleteMany({ where: { productId } });
+
+    if (labelIds.length > 0) {
+      await this.prisma.productProductLabel.createMany({
+        data: labelIds.map((labelId) => ({ productId, labelId })),
+      });
+    }
+
+    return { synced: labelIds.length };
+  }
+
+  // ─── PRICING RULES ───────────────────────────────────────────────────────
+
+  async createPricingRule(productId: string, data: any): Promise<any> {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException(`Product ${productId} not found`);
+
+    return this.prisma.pricingRule.create({
+      data: {
+        productId,
+        suggestedRetail: data.suggestedRetail,
+        sellerTakePercent: data.sellerTakePercent,
+        sellerTakeFixed: data.sellerTakeFixed,
+        holdPercent: data.holdPercent,
+        holdDurationDays: data.holdDurationDays,
+        effectiveFrom: new Date(data.effectiveFrom),
+        effectiveUntil: data.effectiveUntil ? new Date(data.effectiveUntil) : null,
+        isActive: data.isActive ?? true,
+      },
+    });
+  }
+
+  async updatePricingRule(productId: string, ruleId: string, data: any): Promise<any> {
+    const rule = await this.prisma.pricingRule.findFirst({
+      where: { id: ruleId, productId },
+    });
+    if (!rule) throw new NotFoundException(`Pricing rule ${ruleId} not found`);
+
+    const update: Record<string, unknown> = {};
+    if (data.suggestedRetail !== undefined) update.suggestedRetail = data.suggestedRetail;
+    if (data.sellerTakePercent !== undefined) update.sellerTakePercent = data.sellerTakePercent;
+    if (data.sellerTakeFixed !== undefined) update.sellerTakeFixed = data.sellerTakeFixed;
+    if (data.holdPercent !== undefined) update.holdPercent = data.holdPercent;
+    if (data.holdDurationDays !== undefined) update.holdDurationDays = data.holdDurationDays;
+    if (data.effectiveFrom !== undefined) update.effectiveFrom = new Date(data.effectiveFrom);
+    if (data.effectiveUntil !== undefined) update.effectiveUntil = data.effectiveUntil ? new Date(data.effectiveUntil) : null;
+    if (data.isActive !== undefined) update.isActive = data.isActive;
+
+    return this.prisma.pricingRule.update({ where: { id: ruleId }, data: update });
+  }
+
+  async deletePricingRule(productId: string, ruleId: string): Promise<any> {
+    const rule = await this.prisma.pricingRule.findFirst({
+      where: { id: ruleId, productId },
+    });
+    if (!rule) throw new NotFoundException(`Pricing rule ${ruleId} not found`);
+
+    return this.prisma.pricingRule.delete({ where: { id: ruleId } });
   }
 
   // ─── STORES (SELLER DOMAINS) ───────────────────────────────────────────────
@@ -635,6 +922,17 @@ export class AdminService {
     return this.prisma.sellerDomain.update({
       where: { id },
       data,
+    });
+  }
+
+  async verifyStore(id: string): Promise<any> {
+    const domain = await this.prisma.sellerDomain.findUnique({ where: { id } });
+    if (!domain) {
+      throw new NotFoundException(`Store domain ${id} not found`);
+    }
+    return this.prisma.sellerDomain.update({
+      where: { id },
+      data: { status: 'VERIFIED', verifiedAt: new Date() },
     });
   }
 
@@ -791,13 +1089,29 @@ export class AdminService {
 
   // ─── SETTINGS: PAYMENT GATEWAYS ────────────────────────────────────────────
 
+  private maskCredentials(creds: Record<string, unknown>): Record<string, string> {
+    const masked: Record<string, string> = {};
+    for (const [key, val] of Object.entries(creds)) {
+      if (typeof val === 'string' && val.length > 4) {
+        masked[key] = '••••' + val.slice(-4);
+      } else if (typeof val === 'string') {
+        masked[key] = '••••';
+      }
+    }
+    return masked;
+  }
+
   async listPaymentGateways(): Promise<any> {
-    return this.prisma.paymentGateway.findMany({
+    const gateways = await this.prisma.paymentGateway.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         _count: { select: { sellers: true } },
       },
     });
+    return gateways.map((gw) => ({
+      ...gw,
+      credentials: this.maskCredentials((gw.credentials as Record<string, unknown>) ?? {}),
+    }));
   }
 
   async createPaymentGateway(dto: CreatePaymentGatewayDto): Promise<any> {
@@ -807,6 +1121,7 @@ export class AdminService {
         type: dto.type,
         status: dto.status ?? 'ACTIVE',
         environment: dto.environment ?? 'sandbox',
+        credentials: (dto.credentials ?? {}) as any,
       },
     });
   }
@@ -1068,5 +1383,22 @@ export class AdminService {
       token += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return token;
+  }
+
+  private cartesianProduct(
+    options: Array<{ name: string; values: string[] }>,
+  ): Array<Record<string, string>> {
+    if (options.length === 0) return [{}];
+
+    const [first, ...rest] = options;
+    const restCombos = this.cartesianProduct(rest);
+
+    const result: Array<Record<string, string>> = [];
+    for (const value of first.values) {
+      for (const combo of restCombos) {
+        result.push({ [first.name]: value, ...combo });
+      }
+    }
+    return result;
   }
 }
