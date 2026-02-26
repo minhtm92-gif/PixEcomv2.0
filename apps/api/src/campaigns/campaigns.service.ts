@@ -614,7 +614,7 @@ export class CampaignsService {
 function mapCampaign(c: {
   id: string;
   sellerId: string;
-  sellpageId: string;
+  sellpageId: string | null;
   adAccountId: string;
   adStrategyId: string | null;
   externalCampaignId: string | null;
@@ -631,7 +631,7 @@ function mapCampaign(c: {
   return {
     id: c.id,
     sellerId: c.sellerId,
-    sellpageId: c.sellpageId,
+    sellpageId: c.sellpageId ?? null,
     adAccountId: c.adAccountId,
     adStrategyId: c.adStrategyId ?? null,
     externalCampaignId: c.externalCampaignId ?? null,

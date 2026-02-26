@@ -37,7 +37,13 @@ interface SellerDetailApi {
     isPrimary: boolean;
     createdAt: string;
   }>;
-  paymentGateway: {
+  paypalGateway: {
+    id: string;
+    name: string;
+    type: string;
+    status: string;
+  } | null;
+  creditCardGateway: {
     id: string;
     name: string;
     type: string;
@@ -87,8 +93,10 @@ export default function SellerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [tab, setTab] = useState('profile');
-  const [selectedGateway, setSelectedGateway] = useState('');
-  const [savingGateway, setSavingGateway] = useState(false);
+  const [selectedPaypal, setSelectedPaypal] = useState('');
+  const [selectedCreditCard, setSelectedCreditCard] = useState('');
+  const [savingPaypal, setSavingPaypal] = useState(false);
+  const [savingCreditCard, setSavingCreditCard] = useState(false);
   const [resetPwOpen, setResetPwOpen] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [resetPwLoading, setResetPwLoading] = useState(false);
@@ -117,13 +125,16 @@ export default function SellerDetailPage() {
     : apiSeller?.sellerUsers?.[0]?.user?.email ?? '';
   const sellerPhone = IS_PREVIEW ? mockSeller?.phone : '';
   const sellerCreatedAt = IS_PREVIEW ? mockSeller?.createdAt : apiSeller?.createdAt;
-  const currentGateway = IS_PREVIEW
-    ? mockSeller?.paymentGateway
-    : apiSeller?.paymentGateway ?? null;
-  const currentGatewayName = IS_PREVIEW
-    ? (currentGateway as any)
-    : (currentGateway as any)?.name ?? null;
-  const currentGatewayId = IS_PREVIEW ? null : (currentGateway as any)?.id ?? null;
+  const currentPaypal = IS_PREVIEW ? null : apiSeller?.paypalGateway ?? null;
+  const currentCreditCard = IS_PREVIEW ? null : apiSeller?.creditCardGateway ?? null;
+
+  // Filter gateways by category
+  const paypalGateways = (apiGateways ?? []).filter(
+    (g) => g.status === 'ACTIVE' && ['paypal', 'paypal_pro'].includes(g.type),
+  );
+  const creditCardGateways = (apiGateways ?? []).filter(
+    (g) => g.status === 'ACTIVE' && !['paypal', 'paypal_pro'].includes(g.type),
+  );
 
   // Sub-data (useMemo must be called unconditionally — Rules of Hooks)
   const sellerStores: DomainRow[] = useMemo(() => {
@@ -156,15 +167,25 @@ export default function SellerDetailPage() {
     : [];
 
   // Handlers
-  const handleSaveGateway = useCallback(async () => {
-    if (!selectedGateway || !id) return;
-    setSavingGateway(true);
+  const handleSavePaypal = useCallback(async () => {
+    if (!selectedPaypal || !id) return;
+    setSavingPaypal(true);
     try {
-      await apiPatch(`/admin/sellers/${id}`, { paymentGatewayId: selectedGateway });
+      await apiPatch(`/admin/sellers/${id}`, { paypalGatewayId: selectedPaypal });
       setRefreshKey((k) => k + 1);
     } catch { /* ignore */ }
-    setSavingGateway(false);
-  }, [selectedGateway, id]);
+    setSavingPaypal(false);
+  }, [selectedPaypal, id]);
+
+  const handleSaveCreditCard = useCallback(async () => {
+    if (!selectedCreditCard || !id) return;
+    setSavingCreditCard(true);
+    try {
+      await apiPatch(`/admin/sellers/${id}`, { creditCardGatewayId: selectedCreditCard });
+      setRefreshKey((k) => k + 1);
+    } catch { /* ignore */ }
+    setSavingCreditCard(false);
+  }, [selectedCreditCard, id]);
 
   const handleResetPassword = useCallback(async () => {
     if (!newPassword.trim() || newPassword.length < 6) {
@@ -315,16 +336,16 @@ export default function SellerDetailPage() {
             </button>
           </div>
 
-          {/* Payment Gateway */}
+          {/* PayPal Gateway */}
           <div className="bg-card border border-border rounded-xl p-5">
             <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-              <CreditCard size={14} className="text-amber-400" /> Payment Gateway
+              <CreditCard size={14} className="text-blue-400" /> PayPal
             </h2>
             <div className="mb-4">
               <p className="text-xs text-muted-foreground mb-1">Current</p>
-              {currentGatewayName ? (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/15 text-green-400">
-                  {currentGatewayName}
+              {currentPaypal?.name ? (
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400">
+                  {currentPaypal.name}
                 </span>
               ) : (
                 <span className="text-xs text-muted-foreground">Not Assigned</span>
@@ -332,14 +353,14 @@ export default function SellerDetailPage() {
             </div>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Assign Gateway</label>
+                <label className="text-xs text-muted-foreground block mb-1">Assign PayPal Gateway</label>
                 <select
-                  value={selectedGateway || currentGatewayId || ''}
-                  onChange={(e) => setSelectedGateway(e.target.value)}
+                  value={selectedPaypal || currentPaypal?.id || ''}
+                  onChange={(e) => setSelectedPaypal(e.target.value)}
                   className={inputCls}
                 >
-                  <option value="">— Select gateway —</option>
-                  {(apiGateways ?? []).filter((g) => g.status === 'ACTIVE').map((g) => (
+                  <option value="">— Select PayPal gateway —</option>
+                  {paypalGateways.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name} ({g.type})
                     </option>
@@ -347,15 +368,59 @@ export default function SellerDetailPage() {
                 </select>
               </div>
               <button
-                onClick={handleSaveGateway}
-                disabled={savingGateway || !selectedGateway}
-                className="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={handleSavePaypal}
+                disabled={savingPaypal || !selectedPaypal}
+                className="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {savingGateway ? 'Saving...' : 'Save Payment'}
+                {savingPaypal ? 'Saving...' : 'Save PayPal'}
               </button>
             </div>
             <p className="text-xs text-muted-foreground mt-3 bg-muted/30 rounded p-2">
-              Payment gateway is managed by admin. Seller cannot modify.
+              PayPal gateway is managed by admin. Seller cannot modify.
+            </p>
+          </div>
+
+          {/* Credit Card Gateway */}
+          <div className="bg-card border border-border rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+              <CreditCard size={14} className="text-amber-400" /> Credit Card
+            </h2>
+            <div className="mb-4">
+              <p className="text-xs text-muted-foreground mb-1">Current</p>
+              {currentCreditCard?.name ? (
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-500/15 text-indigo-400">
+                  {currentCreditCard.name}
+                </span>
+              ) : (
+                <span className="text-xs text-muted-foreground">Not Assigned</span>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Assign Credit Card Provider</label>
+                <select
+                  value={selectedCreditCard || currentCreditCard?.id || ''}
+                  onChange={(e) => setSelectedCreditCard(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">— Select provider —</option>
+                  {creditCardGateways.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={handleSaveCreditCard}
+                disabled={savingCreditCard || !selectedCreditCard}
+                className="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingCreditCard ? 'Saving...' : 'Save Credit Card'}
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3 bg-muted/30 rounded p-2">
+              Credit card provider is managed by admin. Seller cannot modify.
             </p>
           </div>
 

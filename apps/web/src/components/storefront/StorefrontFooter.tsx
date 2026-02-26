@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Instagram, Facebook } from 'lucide-react';
 import { STORE_CONFIG } from '@/mock/storefront';
+import { storeHref } from '@/lib/storefrontLinks';
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
@@ -32,22 +33,22 @@ export function StorefrontFooter({ storeSlug }: StorefrontFooterProps) {
             <h4 className="text-white font-semibold mb-3 text-sm uppercase tracking-wide">Shop</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href={`/${storeSlug}`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug)} className="hover:text-white transition-colors">
                   All Products
                 </Link>
               </li>
               <li>
-                <Link href={`/${storeSlug}?cat=NEW_ARRIVALS`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug, '?cat=NEW_ARRIVALS')} className="hover:text-white transition-colors">
                   New Arrivals
                 </Link>
               </li>
               <li>
-                <Link href={`/${storeSlug}?cat=BESTSELLERS`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug, '?cat=BESTSELLERS')} className="hover:text-white transition-colors">
                   Best Sellers
                 </Link>
               </li>
               <li>
-                <Link href={`/${storeSlug}?cat=CLEARANCE`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug, '?cat=CLEARANCE')} className="hover:text-white transition-colors">
                   Sale / Clearance
                 </Link>
               </li>
@@ -59,17 +60,17 @@ export function StorefrontFooter({ storeSlug }: StorefrontFooterProps) {
             <h4 className="text-white font-semibold mb-3 text-sm uppercase tracking-wide">Support</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href={`/${storeSlug}/trackings/search`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug, '/trackings/search')} className="hover:text-white transition-colors">
                   Track My Order
                 </Link>
               </li>
               <li>
-                <Link href={`/${storeSlug}/pages/shipping`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug, '/pages/shipping')} className="hover:text-white transition-colors">
                   Shipping Info
                 </Link>
               </li>
               <li>
-                <Link href={`/${storeSlug}/pages/returns`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug, '/pages/returns')} className="hover:text-white transition-colors">
                   Returns & Exchanges
                 </Link>
               </li>
@@ -81,12 +82,12 @@ export function StorefrontFooter({ storeSlug }: StorefrontFooterProps) {
             <h4 className="text-white font-semibold mb-3 text-sm uppercase tracking-wide">Legal</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href={`/${storeSlug}/pages/privacy`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug, '/pages/privacy')} className="hover:text-white transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href={`/${storeSlug}/pages/terms`} className="hover:text-white transition-colors">
+                <Link href={storeHref(storeSlug, '/pages/terms')} className="hover:text-white transition-colors">
                   Terms of Service
                 </Link>
               </li>
@@ -96,7 +97,7 @@ export function StorefrontFooter({ storeSlug }: StorefrontFooterProps) {
 
         <div className="border-t border-gray-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500">
           <span>© {new Date().getFullYear()} {STORE_CONFIG.name}. All rights reserved.</span>
-          <span>Powered by <span className="text-purple-400">PixEcom</span></span>
+          <span>Powered by <span className="text-[var(--sp-primary)]">PixEcom</span></span>
         </div>
 
         {IS_PREVIEW && (

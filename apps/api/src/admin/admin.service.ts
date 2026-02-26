@@ -198,7 +198,8 @@ export class AdminService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          paymentGateway: { select: { type: true } },
+          paypalGateway: { select: { type: true } },
+          creditCardGateway: { select: { type: true } },
           sellerUsers: {
             where: { role: 'OWNER' },
             take: 1,
@@ -242,7 +243,8 @@ export class AdminService {
         email: s.sellerUsers[0]?.user?.email ?? '',
         phone: null,
         status: s.status,
-        paymentGateway: s.paymentGateway?.type ?? null,
+        paypalGateway: s.paypalGateway?.type ?? null,
+        creditCardGateway: s.creditCardGateway?.type ?? null,
         stores: s._count.domains,
         products: s._count.sellpages,
         orders: s._count.orders,
@@ -261,7 +263,8 @@ export class AdminService {
       include: {
         settings: true,
         domains: true,
-        paymentGateway: true,
+        paypalGateway: true,
+        creditCardGateway: true,
         sellerUsers: {
           include: { user: { select: { id: true, email: true, displayName: true, role: true } } },
         },
@@ -337,7 +340,10 @@ export class AdminService {
     const data: Record<string, unknown> = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.status !== undefined) data.status = dto.status;
-    if (dto.paymentGatewayId !== undefined) data.paymentGatewayId = dto.paymentGatewayId;
+    if (dto.paypalGatewayId !== undefined) data.paypalGatewayId = dto.paypalGatewayId || null;
+    if (dto.creditCardGatewayId !== undefined) data.creditCardGatewayId = dto.creditCardGatewayId || null;
+    if (dto.logoUrl !== undefined) data.logoUrl = dto.logoUrl || null;
+    if (dto.faviconUrl !== undefined) data.faviconUrl = dto.faviconUrl || null;
 
     return this.prisma.seller.update({
       where: { id },
@@ -581,6 +587,7 @@ export class AdminService {
     if (dto.images !== undefined) data.images = dto.images;
     if (dto.optionDefinitions !== undefined) data.optionDefinitions = dto.optionDefinitions;
     if (dto.quantityCosts !== undefined) data.quantityCosts = dto.quantityCosts;
+    if (dto.allowOutOfStockPurchase !== undefined) data.allowOutOfStockPurchase = dto.allowOutOfStockPurchase;
 
     return this.prisma.product.update({
       where: { id },
@@ -869,7 +876,7 @@ export class AdminService {
     const store = await this.prisma.sellerDomain.findUnique({
       where: { id },
       include: {
-        seller: { select: { id: true, name: true, slug: true } },
+        seller: { select: { id: true, name: true, slug: true, logoUrl: true, faviconUrl: true } },
         sellpages: {
           select: { id: true, slug: true, status: true, titleOverride: true },
         },
@@ -1105,12 +1112,15 @@ export class AdminService {
     const gateways = await this.prisma.paymentGateway.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        _count: { select: { sellers: true } },
+        _count: { select: { sellersPaypal: true, sellersCreditCard: true } },
       },
     });
     return gateways.map((gw) => ({
       ...gw,
       credentials: this.maskCredentials((gw.credentials as Record<string, unknown>) ?? {}),
+      _count: {
+        sellers: (gw._count.sellersPaypal ?? 0) + (gw._count.sellersCreditCard ?? 0),
+      },
     }));
   }
 

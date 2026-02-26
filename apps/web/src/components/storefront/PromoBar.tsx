@@ -21,11 +21,11 @@ export function PromoBar() {
   const pad = (n: number) => String(n).padStart(2, '0');
 
   return (
-    <div className="bg-purple-700 text-white text-xs sm:text-sm py-2 px-10 flex items-center justify-center relative">
+    <div className="bg-black text-white text-xs sm:text-sm py-2 px-10 flex items-center justify-center relative">
       <span className="text-center leading-snug">
         {STORE_CONFIG.promoMessage}
         {secs > 0 && (
-          <span className="ml-2 font-mono font-bold bg-purple-900/40 px-2 py-0.5 rounded">
+          <span className="ml-2 font-mono font-bold bg-black/20 px-2 py-0.5 rounded">
             {pad(h)}:{pad(m)}:{pad(s)}
           </span>
         )}

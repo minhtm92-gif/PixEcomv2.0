@@ -108,6 +108,7 @@ export async function generateMetadata({
   const ogImage = data.sellpage?.seoOgImage ?? data.product?.images?.[0] ?? null;
   const price = data.product?.basePrice;
   const currency = data.product?.currency ?? 'USD';
+  const faviconUrl = data.store?.faviconUrl;
 
   return {
     title,
@@ -123,6 +124,7 @@ export async function generateMetadata({
       ...(price ? { 'product:price:amount': String(price) } : {}),
       ...(currency ? { 'product:price:currency': currency } : {}),
     },
+    ...(faviconUrl ? { icons: { icon: faviconUrl } } : {}),
   };
 }
 
@@ -144,7 +146,7 @@ export default async function Page({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       )}
-      <SellpagePage />
+      <SellpagePage initialData={data} />
     </>
   );
 }

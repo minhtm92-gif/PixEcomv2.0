@@ -67,7 +67,7 @@ export function ReviewSection({
         {storeSlug && productId && (
           <button
             onClick={() => setShowForm(f => !f)}
-            className="px-4 py-2 text-sm font-semibold text-purple-600 border border-purple-200 rounded-xl hover:bg-purple-50 transition-colors"
+            className="px-4 py-2 text-sm font-semibold text-[var(--sp-primary)] border border-[var(--sp-primary-light)] rounded-xl hover:bg-[var(--sp-primary-light)] transition-colors"
           >
             {showForm ? 'Cancel' : 'Write a Review'}
           </button>
@@ -120,7 +120,7 @@ export function ReviewSection({
           {reviews.map(r => (
             <div key={r.id} className="border-b border-gray-100 pb-8 last:border-0 last:pb-0">
               <div className="flex items-start gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-sm flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-[var(--sp-primary-light)] flex items-center justify-center text-[var(--sp-primary-hover)] font-bold text-sm flex-shrink-0">
                   {r.author.charAt(0)}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -255,7 +255,7 @@ function ReviewForm({
             value={name}
             onChange={e => setName(e.target.value)}
             required
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[var(--sp-primary)] focus:border-[var(--sp-primary)] outline-none"
             placeholder="Jane Doe"
           />
         </div>
@@ -266,7 +266,7 @@ function ReviewForm({
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[var(--sp-primary)] focus:border-[var(--sp-primary)] outline-none"
             placeholder="jane@example.com"
           />
         </div>
@@ -303,7 +303,7 @@ function ReviewForm({
           onChange={e => setTitle(e.target.value)}
           required
           maxLength={255}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[var(--sp-primary)] focus:border-[var(--sp-primary)] outline-none"
           placeholder="Summarize your experience"
         />
       </div>
@@ -316,7 +316,7 @@ function ReviewForm({
           required
           maxLength={5000}
           rows={4}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none resize-none"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[var(--sp-primary)] focus:border-[var(--sp-primary)] outline-none resize-none"
           placeholder="Share your thoughts about this product..."
         />
       </div>
@@ -328,7 +328,7 @@ function ReviewForm({
       <button
         type="submit"
         disabled={submitting || !name || !email || !title || !body}
-        className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-6 py-2.5 bg-[var(--sp-primary)] hover:bg-[var(--sp-primary-hover)] text-white font-semibold text-sm rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {submitting ? 'Submitting...' : 'Submit Review'}
       </button>

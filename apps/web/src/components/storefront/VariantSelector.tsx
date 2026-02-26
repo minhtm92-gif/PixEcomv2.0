@@ -37,7 +37,7 @@ export function VariantSelector({ variants, selected, onChange }: VariantSelecto
                       aria-label={opt.label}
                       className={`w-8 h-8 rounded-full border-2 transition-all ${
                         isSelected
-                          ? 'border-purple-500 scale-110 shadow-md ring-2 ring-purple-200'
+                          ? 'border-[var(--sp-primary)] scale-110 shadow-md ring-2 ring-[var(--sp-primary-light)]'
                           : 'border-gray-300 hover:border-gray-500'
                       } ${!opt.available ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}
                       style={{ backgroundColor: opt.color }}
@@ -52,7 +52,7 @@ export function VariantSelector({ variants, selected, onChange }: VariantSelecto
                     disabled={!opt.available}
                     className={`px-4 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
                       isSelected
-                        ? 'border-purple-500 bg-purple-50 text-purple-700'
+                        ? 'border-[var(--sp-primary)] bg-[var(--sp-primary-light)] text-[var(--sp-primary-hover)]'
                         : 'border-gray-200 text-gray-700 hover:border-gray-400 bg-white'
                     } ${
                       !opt.available

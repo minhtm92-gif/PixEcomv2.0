@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { STORE_CONFIG } from '@/mock/storefront';
+import { storeHref } from '@/lib/storefrontLinks';
 
 const PAGE_CONFIG: Record<
   string,
@@ -28,12 +29,12 @@ export default function PolicyPage() {
       <header className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link
-            href={`/${storeSlug}`}
+            href={storeHref(storeSlug)}
             className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft size={16} /> Back to Shop
           </Link>
-          <Link href={`/${storeSlug}`} className="font-bold text-lg text-gray-900">
+          <Link href={storeHref(storeSlug)} className="font-bold text-lg text-gray-900">
             {STORE_CONFIG.name}
           </Link>
           <div className="w-24" />
@@ -98,7 +99,7 @@ export default function PolicyPage() {
                   .map(([slug, cfg]) => (
                     <Link
                       key={slug}
-                      href={`/${storeSlug}/pages/${slug}`}
+                      href={storeHref(storeSlug, `/pages/${slug}`)}
                       className="text-sm text-purple-600 hover:text-purple-800 hover:underline"
                     >
                       {cfg.emoji} {cfg.title}
@@ -118,7 +119,7 @@ export default function PolicyPage() {
               does not exist.
             </p>
             <Link
-              href={`/${storeSlug}`}
+              href={storeHref(storeSlug)}
               className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white font-medium rounded-xl hover:bg-purple-700 transition-colors"
             >
               <ArrowLeft size={15} /> Back to Shop
@@ -131,7 +132,7 @@ export default function PolicyPage() {
       <footer className="bg-gray-50 border-t border-gray-100 mt-16 py-6 px-4">
         <div className="max-w-3xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-400">
           <span>© {new Date().getFullYear()} {STORE_CONFIG.name}. All rights reserved.</span>
-          <Link href={`/${storeSlug}`} className="text-purple-500 hover:underline">
+          <Link href={storeHref(storeSlug)} className="text-purple-500 hover:underline">
             Return to Shop →
           </Link>
         </div>

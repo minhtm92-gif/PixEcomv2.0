@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Globe, Copy } from 'lucide-react';
+import { ArrowLeft, Globe, Copy, Upload, X, Image as ImageIcon } from 'lucide-react';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { fmtDate } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { useAdminApi, useAdminMutation } from '@/hooks/useAdminApi';
+import { apiPost, apiPatch } from '@/lib/apiClient';
 import { useToastStore } from '@/stores/toastStore';
 
 // ── API response types ────────────────────────────────────────────────────────
@@ -35,12 +36,15 @@ interface StoreDetailApi {
     id: string;
     name: string;
     slug: string;
+    logoUrl: string | null;
+    faviconUrl: string | null;
   };
   sellpages: StoreSellpage[];
 }
 
 const TABS = [
   { label: 'Domain Info', value: 'domain' },
+  { label: 'Branding', value: 'branding' },
   { label: 'Seller', value: 'seller' },
   { label: 'Sellpages', value: 'sellpages' },
 ];
@@ -55,6 +59,21 @@ export default function StoreDetailClient() {
   const { data: store, loading, error, refetch } = useAdminApi<StoreDetailApi>(
     `/admin/stores/${id}`,
   );
+
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [faviconUploading, setFaviconUploading] = useState(false);
+  const [brandingInitialized, setBrandingInitialized] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync branding state from store data
+  if (store && !brandingInitialized) {
+    setLogoUrl(store.seller.logoUrl);
+    setFaviconUrl(store.seller.faviconUrl);
+    setBrandingInitialized(true);
+  }
 
   const { mutate: verifyDomain, loading: verifying } = useAdminMutation<{
     verified: boolean;
@@ -72,6 +91,72 @@ export default function StoreDetailClient() {
       refetch();
     } catch (err: any) {
       toast(err?.message || 'Verification failed', 'error');
+    }
+  }
+
+  // ── Upload image to R2 via signed URL ──
+  async function uploadImage(file: File): Promise<string> {
+    const { uploadUrl, publicUrl } = await apiPost<{ uploadUrl: string; publicUrl: string }>(
+      '/assets/signed-upload',
+      { filename: file.name, contentType: file.type, mediaType: 'IMAGE' },
+    );
+    await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+    return publicUrl;
+  }
+
+  async function handleLogoUpload(files: FileList) {
+    if (!store) return;
+    setLogoUploading(true);
+    try {
+      const url = await uploadImage(files[0]);
+      setLogoUrl(url);
+      await apiPatch(`/admin/sellers/${store.seller.id}`, { logoUrl: url });
+      toast('Logo uploaded', 'success');
+      refetch();
+    } catch {
+      toast('Failed to upload logo', 'error');
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
+  async function handleFaviconUpload(files: FileList) {
+    if (!store) return;
+    setFaviconUploading(true);
+    try {
+      const url = await uploadImage(files[0]);
+      setFaviconUrl(url);
+      await apiPatch(`/admin/sellers/${store.seller.id}`, { faviconUrl: url });
+      toast('Favicon uploaded', 'success');
+      refetch();
+    } catch {
+      toast('Failed to upload favicon', 'error');
+    } finally {
+      setFaviconUploading(false);
+    }
+  }
+
+  async function handleRemoveLogo() {
+    if (!store) return;
+    try {
+      setLogoUrl(null);
+      await apiPatch(`/admin/sellers/${store.seller.id}`, { logoUrl: '' });
+      toast('Logo removed', 'success');
+      refetch();
+    } catch {
+      toast('Failed to remove logo', 'error');
+    }
+  }
+
+  async function handleRemoveFavicon() {
+    if (!store) return;
+    try {
+      setFaviconUrl(null);
+      await apiPatch(`/admin/sellers/${store.seller.id}`, { faviconUrl: '' });
+      toast('Favicon removed', 'success');
+      refetch();
+    } catch {
+      toast('Failed to remove favicon', 'error');
     }
   }
 
@@ -283,6 +368,117 @@ export default function StoreDetailClient() {
                   : 'Verify Domain'}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Tab: Branding */}
+      {tab === 'branding' && (
+        <div className="bg-card border border-border rounded-xl p-5 max-w-xl">
+          <h2 className="text-sm font-semibold text-foreground mb-4">Store Branding</h2>
+          <div className="space-y-6">
+            {/* Logo Upload */}
+            <div>
+              <label className="text-xs text-muted-foreground block mb-2">Store Logo</label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Displayed in the storefront header. Recommended: 200x60px, PNG or SVG with transparent background.
+              </p>
+              {logoUrl ? (
+                <div className="flex items-center gap-4">
+                  <div className="relative w-40 h-16 bg-muted rounded-lg border border-border flex items-center justify-center overflow-hidden">
+                    <img src={logoUrl} alt="Store logo" className="max-w-full max-h-full object-contain" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => logoInputRef.current?.click()}
+                      disabled={logoUploading}
+                      className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-md transition-colors disabled:opacity-50"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      onClick={handleRemoveLogo}
+                      className="px-3 py-1.5 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md transition-colors"
+                    >
+                      <X size={12} className="inline mr-1" />
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={logoUploading}
+                  className="w-40 h-16 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-1 text-muted-foreground hover:border-amber-400 hover:text-amber-400 transition-colors disabled:opacity-50"
+                >
+                  {logoUploading ? (
+                    <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      <span className="text-xs">Upload Logo</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => e.target.files?.length && handleLogoUpload(e.target.files)}
+              />
+            </div>
+
+            {/* Favicon Upload */}
+            <div>
+              <label className="text-xs text-muted-foreground block mb-2">Favicon</label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Shown in the browser tab. Recommended: 32x32px or 64x64px, PNG or ICO.
+              </p>
+              {faviconUrl ? (
+                <div className="flex items-center gap-4">
+                  <div className="relative w-12 h-12 bg-muted rounded-lg border border-border flex items-center justify-center overflow-hidden">
+                    <img src={faviconUrl} alt="Favicon" className="max-w-full max-h-full object-contain" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => faviconInputRef.current?.click()}
+                      disabled={faviconUploading}
+                      className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-md transition-colors disabled:opacity-50"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      onClick={handleRemoveFavicon}
+                      className="px-3 py-1.5 text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md transition-colors"
+                    >
+                      <X size={12} className="inline mr-1" />
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => faviconInputRef.current?.click()}
+                  disabled={faviconUploading}
+                  className="w-12 h-12 border-2 border-dashed border-border rounded-lg flex flex-col items-center justify-center gap-0.5 text-muted-foreground hover:border-amber-400 hover:text-amber-400 transition-colors disabled:opacity-50"
+                >
+                  {faviconUploading ? (
+                    <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <ImageIcon size={16} />
+                  )}
+                </button>
+              )}
+              <input
+                ref={faviconInputRef}
+                type="file"
+                accept="image/*,.ico"
+                className="hidden"
+                onChange={(e) => e.target.files?.length && handleFaviconUpload(e.target.files)}
+              />
+            </div>
+          </div>
         </div>
       )}
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, FormEvent } from 'react';
-import { apiGet, apiPatch, apiDelete, type ApiError } from '@/lib/apiClient';
+import { useState, useEffect, useCallback, useRef, FormEvent } from 'react';
+import { apiGet, apiPost, apiPatch, apiDelete, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import {
   Settings,
@@ -17,6 +17,8 @@ import {
   ToggleLeft,
   ToggleRight,
   ExternalLink,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import type {
   SellerProfile,
@@ -70,6 +72,11 @@ export default function SettingsPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profileLogo, setProfileLogo] = useState('');
+  const [profileFavicon, setProfileFavicon] = useState('');
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [faviconUploading, setFaviconUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
 
   // ── Store Settings state ──
   const [settings, setSettings] = useState<SellerSettings | null>(null);
@@ -100,6 +107,7 @@ export default function SettingsPage() {
       setProfile(data);
       setProfileName(data.name);
       setProfileLogo(data.logoUrl ?? '');
+      setProfileFavicon(data.faviconUrl ?? '');
     } catch (err) {
       toastApiError(err as ApiError);
     } finally {
@@ -145,6 +153,46 @@ export default function SettingsPage() {
     fetchConnections();
   }, [fetchProfile, fetchSettings, fetchConnections]);
 
+  // ── Upload image to R2 via signed URL ──
+  async function uploadImage(file: File): Promise<string> {
+    const { uploadUrl, publicUrl } = await apiPost<{ uploadUrl: string; publicUrl: string }>(
+      '/assets/signed-upload',
+      { filename: file.name, contentType: file.type, mediaType: 'IMAGE' },
+    );
+    await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+    return publicUrl;
+  }
+
+  async function handleLogoUpload(files: FileList) {
+    setLogoUploading(true);
+    try {
+      const url = await uploadImage(files[0]);
+      setProfileLogo(url);
+      const updated = await apiPatch<SellerProfile>('/sellers/me', { logoUrl: url });
+      setProfile(updated);
+      addToast('Logo uploaded', 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
+  async function handleFaviconUpload(files: FileList) {
+    setFaviconUploading(true);
+    try {
+      const url = await uploadImage(files[0]);
+      setProfileFavicon(url);
+      const updated = await apiPatch<SellerProfile>('/sellers/me', { faviconUrl: url });
+      setProfile(updated);
+      addToast('Favicon uploaded', 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setFaviconUploading(false);
+    }
+  }
+
   // ── Save profile ──
   async function handleSaveProfile(e: FormEvent) {
     e.preventDefault();
@@ -153,6 +201,7 @@ export default function SettingsPage() {
       const body: UpdateSellerDto = {};
       if (profileName !== profile?.name) body.name = profileName;
       if (profileLogo !== (profile?.logoUrl ?? '')) body.logoUrl = profileLogo;
+      if (profileFavicon !== (profile?.faviconUrl ?? '')) body.faviconUrl = profileFavicon;
 
       const updated = await apiPatch<SellerProfile>('/sellers/me', body);
       setProfile(updated);
@@ -307,17 +356,73 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="logo-url" className="block text-sm text-muted-foreground mb-1.5">
-                    Logo URL
-                  </label>
-                  <input
-                    id="logo-url"
-                    type="text"
-                    value={profileLogo}
-                    onChange={(e) => setProfileLogo(e.target.value)}
-                    className={inputCls}
-                    placeholder="https://cdn.example.com/logo.png"
-                  />
+                  <label className="block text-sm text-muted-foreground mb-1.5">Logo</label>
+                  <div className="flex items-center gap-4">
+                    {profileLogo ? (
+                      <div className="relative w-20 h-20 rounded-lg border border-border overflow-hidden bg-muted group">
+                        <img src={profileLogo} alt="Logo" className="w-full h-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => { setProfileLogo(''); apiPatch('/sellers/me', { logoUrl: '' }); }}
+                          className="absolute top-0.5 right-0.5 p-0.5 bg-red-500/80 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-20 h-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30">
+                        <ImageIcon size={24} className="text-muted-foreground/40" />
+                      </div>
+                    )}
+                    <div>
+                      <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.length && handleLogoUpload(e.target.files)} />
+                      <button
+                        type="button"
+                        onClick={() => logoInputRef.current?.click()}
+                        disabled={logoUploading}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-muted border border-border rounded-lg hover:bg-muted/80 transition-colors disabled:opacity-50"
+                      >
+                        {logoUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                        {logoUploading ? 'Uploading...' : 'Upload Logo'}
+                      </button>
+                      <p className="text-[10px] text-muted-foreground mt-1">Recommended: 200x50px, PNG/SVG</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-1.5">Favicon</label>
+                  <div className="flex items-center gap-4">
+                    {profileFavicon ? (
+                      <div className="relative w-12 h-12 rounded-lg border border-border overflow-hidden bg-muted group">
+                        <img src={profileFavicon} alt="Favicon" className="w-full h-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => { setProfileFavicon(''); apiPatch('/sellers/me', { faviconUrl: '' }); }}
+                          className="absolute top-0 right-0 p-0.5 bg-red-500/80 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30">
+                        <ImageIcon size={16} className="text-muted-foreground/40" />
+                      </div>
+                    )}
+                    <div>
+                      <input ref={faviconInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.length && handleFaviconUpload(e.target.files)} />
+                      <button
+                        type="button"
+                        onClick={() => faviconInputRef.current?.click()}
+                        disabled={faviconUploading}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-muted border border-border rounded-lg hover:bg-muted/80 transition-colors disabled:opacity-50"
+                      >
+                        {faviconUploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                        {faviconUploading ? 'Uploading...' : 'Upload Favicon'}
+                      </button>
+                      <p className="text-[10px] text-muted-foreground mt-1">Recommended: 32x32px, ICO/PNG</p>
+                    </div>
+                  </div>
                 </div>
 
                 {profile && (

@@ -14,10 +14,15 @@ export interface MockVariant {
 
 export interface MockBoostModule {
   type: 'BUNDLE_DISCOUNT' | 'EXTRA_OFF' | 'UPSELL_NEXT_ITEM';
+  enabled?: boolean;
   title: string;
   tiers?: { qty: number; discount: string }[];
   description?: string;
   upsellPercent?: number;
+  hookTemplate?: string;
+  subText?: string;
+  accentColor?: string;
+  discountTiers?: { quantity: number; discount: number }[];
 }
 
 export interface MockStorefrontProduct {
@@ -83,8 +88,11 @@ export interface MockCartItem {
   name: string;
   image: string;
   price: number;
+  comparePrice?: number;
   qty: number;
   variant?: string;
+  variantId?: string;
+  upsellPct?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

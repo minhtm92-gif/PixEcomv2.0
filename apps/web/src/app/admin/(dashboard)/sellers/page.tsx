@@ -21,7 +21,8 @@ interface SellerRow {
   email: string;
   phone: string | null;
   status: 'ACTIVE' | 'PENDING' | 'DEACTIVATED' | 'REJECTED';
-  paymentGateway: string | null;
+  paypalGateway: string | null;
+  creditCardGateway: string | null;
   stores: number;
   products: number;
   orders: number;
@@ -51,11 +52,22 @@ function roasColor(roas: number) {
   return 'text-red-400';
 }
 
-function PaymentBadge({ gateway }: { gateway: string | null }) {
-  if (!gateway) return <span className="text-muted-foreground text-xs">—</span>;
-  if (gateway === 'stripe')
-    return <span className="px-2 py-0.5 bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 rounded-full text-[11px] font-medium">Stripe</span>;
-  return <span className="px-2 py-0.5 bg-blue-500/15 text-blue-400 border border-blue-500/30 rounded-full text-[11px] font-medium">PayPal</span>;
+function PaymentBadges({ paypal, creditCard }: { paypal: string | null; creditCard: string | null }) {
+  if (!paypal && !creditCard) return <span className="text-muted-foreground text-xs">—</span>;
+  return (
+    <div className="flex gap-1 flex-wrap">
+      {paypal && (
+        <span className="px-2 py-0.5 bg-blue-500/15 text-blue-400 border border-blue-500/30 rounded-full text-[11px] font-medium">
+          PayPal
+        </span>
+      )}
+      {creditCard && (
+        <span className="px-2 py-0.5 bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 rounded-full text-[11px] font-medium">
+          {creditCard.charAt(0).toUpperCase() + creditCard.slice(1)}
+        </span>
+      )}
+    </div>
+  );
 }
 
 export default function AdminSellersPage() {
@@ -115,7 +127,7 @@ export default function AdminSellersPage() {
       ),
     },
     { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} /> },
-    { key: 'payment', label: 'Payment', render: (r) => <PaymentBadge gateway={r.paymentGateway} /> },
+    { key: 'payment', label: 'Payment', render: (r) => <PaymentBadges paypal={r.paypalGateway} creditCard={r.creditCardGateway} /> },
     { key: 'stores', label: 'Stores', className: 'text-right', render: (r) => <span className="font-mono text-sm">{r.stores}</span> },
     { key: 'products', label: 'Products', className: 'text-right', render: (r) => <span className="font-mono text-sm">{r.products}</span> },
     { key: 'orders', label: 'Orders', className: 'text-right', render: (r) => <span className="font-mono text-sm">{num(r.orders)}</span> },

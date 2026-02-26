@@ -1,6 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsNumber,
   IsOptional,
   IsString,
@@ -51,4 +52,8 @@ export class UpdateProductDto {
   @IsOptional()
   @IsArray()
   quantityCosts?: unknown[];
+
+  @IsOptional()
+  @IsBoolean()
+  allowOutOfStockPurchase?: boolean;
 }

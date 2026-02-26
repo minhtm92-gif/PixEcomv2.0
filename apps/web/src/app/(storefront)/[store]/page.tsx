@@ -20,6 +20,7 @@ export async function generateMetadata({
     const data = await res.json();
 
     const storeName = data.store?.name ?? 'Store';
+    const faviconUrl = data.store?.faviconUrl;
     return {
       title: `${storeName} — Shop Our Products`,
       description: `Browse premium products from ${storeName}. Free shipping on orders over $50.`,
@@ -28,6 +29,7 @@ export async function generateMetadata({
         description: `Browse premium products from ${storeName}. Free shipping on orders over $50.`,
         type: 'website',
       },
+      ...(faviconUrl ? { icons: { icon: faviconUrl } } : {}),
     };
   } catch {
     return { title: 'Store' };

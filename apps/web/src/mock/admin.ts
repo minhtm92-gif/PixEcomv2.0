@@ -6,7 +6,8 @@ export interface MockSeller {
   email: string;
   phone: string;
   status: 'ACTIVE' | 'PENDING' | 'DEACTIVATED' | 'REJECTED';
-  paymentGateway: 'stripe' | 'paypal' | null;
+  paypalGateway: string | null;
+  creditCardGateway: string | null;
   stripeAccountId?: string;
   paypalEmail?: string;
   stores: number;
@@ -156,7 +157,8 @@ export const MOCK_SELLERS: MockSeller[] = [
     email: 'alpha@example.com',
     phone: '+1 555-0101',
     status: 'ACTIVE',
-    paymentGateway: 'stripe',
+    paypalGateway: null,
+    creditCardGateway: 'stripe',
     stripeAccountId: 'acct_1Abc123XYZ',
     stores: 3,
     products: 12,
@@ -171,7 +173,8 @@ export const MOCK_SELLERS: MockSeller[] = [
     email: 'beta@example.com',
     phone: '+1 555-0202',
     status: 'ACTIVE',
-    paymentGateway: 'paypal',
+    paypalGateway: 'paypal',
+    creditCardGateway: null,
     paypalEmail: 'beta-pay@example.com',
     stores: 2,
     products: 8,
@@ -186,7 +189,8 @@ export const MOCK_SELLERS: MockSeller[] = [
     email: 'gamma@example.com',
     phone: '+1 555-0303',
     status: 'PENDING',
-    paymentGateway: null,
+    paypalGateway: null,
+    creditCardGateway: null,
     stores: 1,
     products: 4,
     orders: 0,
@@ -200,7 +204,8 @@ export const MOCK_SELLERS: MockSeller[] = [
     email: 'delta@example.com',
     phone: '+1 555-0404',
     status: 'ACTIVE',
-    paymentGateway: 'stripe',
+    paypalGateway: null,
+    creditCardGateway: 'stripe',
     stripeAccountId: 'acct_2Def456UVW',
     stores: 4,
     products: 20,
@@ -215,7 +220,8 @@ export const MOCK_SELLERS: MockSeller[] = [
     email: 'epsilon@example.com',
     phone: '+1 555-0505',
     status: 'DEACTIVATED',
-    paymentGateway: 'stripe',
+    paypalGateway: null,
+    creditCardGateway: 'stripe',
     stripeAccountId: 'acct_3Ghi789RST',
     stores: 1,
     products: 3,
@@ -230,7 +236,8 @@ export const MOCK_SELLERS: MockSeller[] = [
     email: 'zeta@example.com',
     phone: '+1 555-0606',
     status: 'REJECTED',
-    paymentGateway: null,
+    paypalGateway: null,
+    creditCardGateway: null,
     stores: 0,
     products: 0,
     orders: 0,

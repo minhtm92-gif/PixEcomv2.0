@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { ArrowLeft, Package, Truck, CheckCircle, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { trackOrder, type OrderTrackingData } from '@/lib/storefrontApi';
 import { STORE_CONFIG } from '@/mock/storefront';
+import { storeHref } from '@/lib/storefrontLinks';
+import { resolveColor, themeVars } from '@/lib/storeTheme';
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
@@ -103,15 +105,15 @@ export default function TrackingSearchPage() {
   }
 
   const inputCls =
-    'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white transition-shadow';
+    'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[var(--sp-primary)] focus:border-transparent bg-white transition-shadow';
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="min-h-screen bg-gray-50 text-gray-900" style={themeVars(resolveColor(null))}>
       {/* Header */}
       <header className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link
-            href={`/${storeSlug}`}
+            href={storeHref(storeSlug)}
             className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
           >
             <ArrowLeft size={16} /> Back to Shop
@@ -123,8 +125,8 @@ export default function TrackingSearchPage() {
 
       <main className="max-w-xl mx-auto px-4 py-12">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Package size={28} className="text-purple-600" />
+          <div className="w-16 h-16 bg-[var(--sp-primary-light)] rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Package size={28} className="text-[var(--sp-primary)]" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Track Your Order</h1>
           <p className="text-sm text-gray-500 mt-2">
@@ -164,7 +166,7 @@ export default function TrackingSearchPage() {
             <button
               type="submit"
               disabled={searching}
-              className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 bg-[var(--sp-primary)] hover:bg-[var(--sp-primary-hover)] disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               {searching ? <Loader2 size={16} className="animate-spin" /> : null}
               {searching ? 'Searching...' : 'Track Order'}
@@ -217,8 +219,8 @@ export default function TrackingSearchPage() {
 
             {/* Tracking info */}
             {result.trackingNumber && (
-              <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 mb-5 flex items-center gap-3">
-                <Truck size={18} className="text-purple-600 flex-shrink-0" />
+              <div className="bg-[var(--sp-primary-light)] border border-[var(--sp-primary-light)] rounded-xl p-3 mb-5 flex items-center gap-3">
+                <Truck size={18} className="text-[var(--sp-primary)] flex-shrink-0" />
                 <div className="text-sm">
                   <p className="font-medium text-gray-900">
                     Tracking: {result.trackingNumber}
@@ -228,7 +230,7 @@ export default function TrackingSearchPage() {
                       href={result.trackingUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-purple-600 hover:underline font-medium"
+                      className="text-[var(--sp-primary)] hover:underline font-medium"
                     >
                       Track with carrier →
                     </a>
@@ -265,7 +267,7 @@ export default function TrackingSearchPage() {
                   const { Icon, label } = getTimelineIcon(step.type);
                   return (
                     <div key={i} className="flex items-start gap-4 relative">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 bg-purple-600 text-white">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 z-10 bg-[var(--sp-primary)] text-white">
                         <Icon size={14} />
                       </div>
                       <div className="flex-1 pb-1">
@@ -285,7 +287,7 @@ export default function TrackingSearchPage() {
             <div className="mt-6 pt-5 border-t border-gray-100 text-center">
               <p className="text-xs text-gray-400">
                 Need help?{' '}
-                <a href="mailto:support@pixecom.store" className="text-purple-600 hover:underline">
+                <a href="mailto:support@pixecom.store" className="text-[var(--sp-primary)] hover:underline">
                   Contact support
                 </a>
               </p>

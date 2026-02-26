@@ -16,15 +16,18 @@ import {
   Plus,
   Link2,
   Tv2,
-  Check,
   AlertTriangle,
   Zap,
+  Trash2,
+  Shield,
+  Truck,
 } from 'lucide-react';
-import { apiGet, apiPatch, apiPost, type ApiError } from '@/lib/apiClient';
+import { apiGet, apiPatch, apiPost, apiDelete, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { StatusBadge } from '@/components/StatusBadge';
 import { KpiCard } from '@/components/KpiCard';
 import { fmtDate, moneyWhole, num, pct } from '@/lib/format';
+import { COLOR_PRESETS } from '@/lib/colorPresets';
 import type {
   SellpageDetail,
   UpdateSellpageDto,
@@ -33,11 +36,12 @@ import type {
   LinkedAd,
   FbConnection,
   FbConnectionsResponse,
-  SellpageDomainCheckResponse,
-  SellpageDomainVerifyResponse,
-  SellpagePixelResponse,
   CreativeListItem,
   CreativesListResponse,
+  SellerDomainItem,
+  GuaranteeConfig,
+  GuaranteeBadgeConfig,
+  BoostModuleConfig,
 } from '@/types/api';
 
 // ── Flat ad row for the table ──
@@ -71,24 +75,54 @@ export default function SellpageDetailPage() {
   // ── Publish ──
   const [publishing, setPublishing] = useState(false);
 
+  // ── Delete ──
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
   // ── Linked Ads ──
   const [linkedCampaigns, setLinkedCampaigns] = useState<LinkedCampaign[]>([]);
   const [linkedAdsLoading, setLinkedAdsLoading] = useState(false);
 
-  // ── B.1 Custom Domain ──
-  const [domainInput, setDomainInput] = useState('');
-  const [domainChecking, setDomainChecking] = useState(false);
-  const [domainAvailable, setDomainAvailable] = useState<boolean | null>(null);
+  // ── B.1 Domain Selection ──
+  const [sellerDomains, setSellerDomains] = useState<SellerDomainItem[]>([]);
+  const [selectedDomainId, setSelectedDomainId] = useState<string>('');
   const [domainSaving, setDomainSaving] = useState(false);
-  const [domainVerifying, setDomainVerifying] = useState(false);
-  const [domainVerifyResult, setDomainVerifyResult] = useState<SellpageDomainVerifyResponse | null>(null);
+  const [domainsLoading, setDomainsLoading] = useState(false);
 
   // ── B.2 Tracking Pixel ──
-  const [pixelData, setPixelData] = useState<SellpagePixelResponse | null>(null);
-  const [pixelConnections, setPixelConnections] = useState<FbConnection[]>([]);
-  const [selectedPixelConnId, setSelectedPixelConnId] = useState('');
+  const [pixelInput, setPixelInput] = useState('');
   const [pixelSaving, setPixelSaving] = useState(false);
   const [pixelLoading, setPixelLoading] = useState(false);
+
+  // ── B.3 Theme Color ──
+  const [primaryColor, setPrimaryColor] = useState('');
+  const [colorSaving, setColorSaving] = useState(false);
+
+  // ── B.4 Guarantee Badges ──
+  const DEFAULT_BADGES: GuaranteeBadgeConfig[] = [
+    { key: 'shipping', icon: 'Truck', label: 'Free Shipping', sub: 'On orders over $50', enabled: true },
+    { key: 'returns', icon: 'RotateCcw', label: '30-Day Returns', sub: 'Hassle-free', enabled: true },
+    { key: 'secure', icon: 'Shield', label: 'Secure Payment', sub: 'SSL encrypted', enabled: true },
+    { key: 'quality', icon: 'Award', label: 'Authentic Products', sub: 'Guaranteed quality', enabled: true },
+  ];
+  const [guaranteeConfig, setGuaranteeConfig] = useState<GuaranteeConfig>({ enabled: true, badges: DEFAULT_BADGES });
+  const [guaranteeSaving, setGuaranteeSaving] = useState(false);
+
+  // ── B.5 Boost & Upsell ──
+  const DEFAULT_BOOST: BoostModuleConfig[] = [
+    { type: 'BUNDLE_DISCOUNT', enabled: false, title: 'Buy More, Save More', tiers: [{ qty: 2, discount: '10% off' }, { qty: 3, discount: '15% off' }] },
+    { type: 'EXTRA_OFF', enabled: false, title: 'Gift-Ready Packaging Included', description: 'Every set comes in a premium box — perfect for gifting.' },
+    { type: 'UPSELL_NEXT_ITEM', enabled: false, title: 'EXTRA 35% OFF FOR NEXT ITEM', hookTemplate: 'EXTRA {discount}% OFF FOR NEXT ITEM IN CART', subText: 'Add any item and get the discount!', accentColor: '#22c55e', discountTiers: [{ quantity: 2, discount: 35 }] },
+  ];
+  const [boostModules, setBoostModules] = useState<BoostModuleConfig[]>(DEFAULT_BOOST);
+  const [boostSaving, setBoostSaving] = useState(false);
+
+  // ── B.6 Shipping Settings ──
+  const [shippingLabel, setShippingLabel] = useState('Secured Express Shipping');
+  const [shippingPrice, setShippingPrice] = useState('4.99');
+  const [shippingFreeThreshold, setShippingFreeThreshold] = useState('');
+  const [shippingEnabled, setShippingEnabled] = useState(false);
+  const [shippingSaving, setShippingSaving] = useState(false);
 
   // ── B.3 Link by Post ID modal ──
   const [linkModalOpen, setLinkModalOpen] = useState(false);
@@ -123,7 +157,26 @@ export default function SellpageDetailPage() {
     try {
       const data = await apiGet<SellpageDetail>(`/sellpages/${id}`);
       setSp(data);
-      setDomainInput(data.customDomain ?? '');
+      setSelectedDomainId(data.domainId ?? '');
+      const hc = (data as any).headerConfig as Record<string, unknown> | undefined;
+      setPrimaryColor((hc?.primaryColor as string) ?? '');
+      // Init guarantee config from headerConfig.guarantees
+      if (hc?.guarantees) {
+        setGuaranteeConfig(hc.guarantees as GuaranteeConfig);
+      }
+      // Init boost modules
+      const bm = (data as any).boostModules as BoostModuleConfig[] | undefined;
+      if (bm && bm.length > 0) {
+        setBoostModules(bm);
+      }
+      // Init shipping config
+      const shippingCfg = hc?.shipping as { label: string; price: number; freeThreshold?: number } | undefined;
+      if (shippingCfg) {
+        setShippingEnabled(true);
+        setShippingLabel(shippingCfg.label || 'Secured Express Shipping');
+        setShippingPrice(String(shippingCfg.price ?? '4.99'));
+        if (shippingCfg.freeThreshold) setShippingFreeThreshold(String(shippingCfg.freeThreshold));
+      }
     } catch (err) {
       const e = err as ApiError;
       setError(e.message ?? 'Failed to load sellpage');
@@ -152,13 +205,8 @@ export default function SellpageDetailPage() {
     if (!id) return;
     setPixelLoading(true);
     try {
-      const [pixelRes, connectionsRes] = await Promise.all([
-        apiGet<SellpagePixelResponse>(`/sellpages/${id}/pixel`),
-        apiGet<FbConnectionsResponse>('/fb/connections?connectionType=PIXEL'),
-      ]);
-      setPixelData(pixelRes);
-      setPixelConnections(connectionsRes.data ?? []);
-      setSelectedPixelConnId(pixelRes.pixelId ?? '');
+      const res = await apiGet<{ pixelId: string | null }>(`/sellpages/${id}/pixel`);
+      setPixelInput(res.pixelId ?? '');
     } catch {
       // Pixel data is non-critical; silently fail
     } finally {
@@ -166,11 +214,25 @@ export default function SellpageDetailPage() {
     }
   }, [id]);
 
+  // ── Fetch seller's domains ──
+  const fetchDomains = useCallback(async () => {
+    setDomainsLoading(true);
+    try {
+      const data = await apiGet<SellerDomainItem[]>('/domains');
+      setSellerDomains(data);
+    } catch {
+      // Domain data is non-critical; silently fail
+    } finally {
+      setDomainsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchSellpage();
     fetchLinkedAds();
     fetchPixelData();
-  }, [fetchSellpage, fetchLinkedAds, fetchPixelData]);
+    fetchDomains();
+  }, [fetchSellpage, fetchLinkedAds, fetchPixelData, fetchDomains]);
 
   // ── Flatten linked ads into table rows ──
   const flatAdRows: FlatAdRow[] = linkedCampaigns.flatMap((c) =>
@@ -244,59 +306,36 @@ export default function SellpageDetailPage() {
     }
   }
 
-  // ── B.1 Domain ──
-  async function handleDomainCheck() {
-    if (!domainInput.trim()) return;
-    setDomainChecking(true);
-    setDomainAvailable(null);
-    setDomainVerifyResult(null);
+  // ── Delete ──
+  async function handleDelete() {
+    if (!sp) return;
+    setDeleting(true);
     try {
-      const res = await apiGet<SellpageDomainCheckResponse>(
-        `/sellpages/check-domain?domain=${encodeURIComponent(domainInput.trim())}`,
-      );
-      setDomainAvailable(res.available);
+      await apiDelete(`/sellpages/${sp.id}`);
+      addToast('Sellpage deleted', 'success');
+      router.push('/sellpages');
     } catch (err) {
       toastApiError(err as ApiError);
-    } finally {
-      setDomainChecking(false);
+      setDeleting(false);
+      setDeleteConfirmOpen(false);
     }
   }
 
+  // ── B.1 Domain ──
   async function handleDomainSave() {
-    if (!sp || !domainInput.trim()) return;
+    if (!sp) return;
     setDomainSaving(true);
     try {
       const updated = await apiPatch<SellpageDetail>(`/sellpages/${sp.id}`, {
-        customDomain: domainInput.trim(),
-      } as UpdateSellpageDto & { customDomain: string });
+        domainId: selectedDomainId || null,
+      } as UpdateSellpageDto);
       setSp(updated);
-      addToast('Custom domain saved', 'success');
-      setDomainAvailable(null);
+      setSelectedDomainId(updated.domainId ?? '');
+      addToast('Domain saved', 'success');
     } catch (err) {
       toastApiError(err as ApiError);
     } finally {
       setDomainSaving(false);
-    }
-  }
-
-  async function handleDomainVerify() {
-    if (!sp) return;
-    setDomainVerifying(true);
-    try {
-      const res = await apiPost<SellpageDomainVerifyResponse>(
-        `/sellpages/${sp.id}/verify-domain`,
-      );
-      setDomainVerifyResult(res);
-      if (res.verified) {
-        addToast('Domain verified!', 'success');
-        await fetchSellpage();
-      } else {
-        addToast(`DNS not propagated yet. Expected CNAME: ${res.expectedCname}`, 'error');
-      }
-    } catch (err) {
-      toastApiError(err as ApiError);
-    } finally {
-      setDomainVerifying(false);
     }
   }
 
@@ -305,16 +344,79 @@ export default function SellpageDetailPage() {
     if (!sp) return;
     setPixelSaving(true);
     try {
-      await apiPatch(`/sellpages/${sp.id}`, { pixelId: selectedPixelConnId || null } as UpdateSellpageDto & { pixelId: string | null });
+      await apiPatch(`/sellpages/${sp.id}`, {
+        pixelId: pixelInput.trim() || null,
+      } as UpdateSellpageDto & { pixelId: string | null });
       addToast(
-        selectedPixelConnId ? 'Tracking pixel saved' : 'Tracking pixel removed',
+        pixelInput.trim() ? 'Facebook Pixel ID saved' : 'Facebook Pixel ID removed',
         'success',
       );
-      await fetchPixelData();
     } catch (err) {
       toastApiError(err as ApiError);
     } finally {
       setPixelSaving(false);
+    }
+  }
+
+  // ── B.3 Theme Color ──
+  async function handleColorSave(color: string) {
+    if (!sp) return;
+    setPrimaryColor(color);
+    setColorSaving(true);
+    try {
+      await apiPatch(`/sellpages/${sp.id}`, {
+        primaryColor: color || null,
+      } as any);
+      addToast(color ? `Theme color set to ${color}` : 'Theme color reset to default', 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setColorSaving(false);
+    }
+  }
+
+  // ── B.4 Save Guarantee Config ──
+  async function handleGuaranteeSave() {
+    if (!sp) return;
+    setGuaranteeSaving(true);
+    try {
+      await apiPatch(`/sellpages/${sp.id}`, { guaranteeConfig } as any);
+      addToast('Guarantee badges saved', 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setGuaranteeSaving(false);
+    }
+  }
+
+  // ── B.5 Save Boost Modules ──
+  async function handleBoostSave() {
+    if (!sp) return;
+    setBoostSaving(true);
+    try {
+      await apiPatch(`/sellpages/${sp.id}`, { boostModules } as any);
+      addToast('Boost & upsell settings saved', 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setBoostSaving(false);
+    }
+  }
+
+  // ── B.6 Save Shipping Config ──
+  async function handleShippingSave() {
+    if (!sp) return;
+    setShippingSaving(true);
+    try {
+      const shippingData = shippingEnabled
+        ? { label: shippingLabel, price: parseFloat(shippingPrice) || 4.99, freeThreshold: shippingFreeThreshold ? parseFloat(shippingFreeThreshold) : undefined }
+        : null;
+      await apiPatch(`/sellpages/${sp.id}`, { shippingConfig: shippingData } as any);
+      addToast('Shipping settings saved', 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setShippingSaving(false);
     }
   }
 
@@ -449,7 +551,7 @@ export default function SellpageDetailPage() {
   const isStub = sp.stats.revenue === 0 && sp.stats.cost === 0 && sp.stats.youTake === 0;
   const isDraft = sp.status.toUpperCase() === 'DRAFT';
   const isPublished = sp.status.toUpperCase() === 'PUBLISHED';
-  const domainStatus = sp.customDomainStatus ?? 'NOT_SET';
+  const linkedDomain = sellerDomains.find((d) => d.id === (sp.domainId ?? selectedDomainId));
 
   // Adsets for the selected link campaign
   const linkAdsets = linkedCampaigns.find((c) => c.id === linkCampaignId)?.adsets ?? [];
@@ -513,6 +615,14 @@ export default function SellpageDetailPage() {
               Cancel
             </button>
           )}
+          <button
+            onClick={() => setDeleteConfirmOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-red-600/10 text-red-500 rounded-lg text-sm font-medium
+                       hover:bg-red-600/20 transition-colors"
+            title="Delete sellpage"
+          >
+            <Trash2 size={14} />
+          </button>
         </div>
       </div>
 
@@ -642,94 +752,79 @@ export default function SellpageDetailPage() {
         </div>
       </div>
 
-      {/* ── B.1 Custom Domain ── */}
+      {/* ── B.1 Domain ── */}
       <div className="bg-card border border-border rounded-xl p-4 mb-6">
         <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
           <Globe size={15} className="text-muted-foreground" />
-          Custom Domain
-          {domainStatus !== 'NOT_SET' && (
+          Domain
+          {linkedDomain && (
             <span
               className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                domainStatus === 'VERIFIED'
+                linkedDomain.status === 'VERIFIED'
                   ? 'bg-green-500/15 text-green-400'
                   : 'bg-amber-500/15 text-amber-400'
               }`}
             >
-              {domainStatus}
+              {linkedDomain.status}
             </span>
           )}
         </h2>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            value={domainInput}
-            onChange={(e) => {
-              setDomainInput(e.target.value);
-              setDomainAvailable(null);
-            }}
-            placeholder="mystore"
-            className="px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground
-                       placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50
-                       w-40"
-          />
-          <span className="text-sm text-muted-foreground">.pixelxlab.com</span>
-
-          <button
-            onClick={handleDomainCheck}
-            disabled={domainChecking || !domainInput.trim()}
-            className="px-3 py-2 bg-muted text-muted-foreground rounded-lg text-xs font-medium
-                       hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {domainChecking ? <Loader2 size={12} className="animate-spin" /> : 'Check Availability'}
-          </button>
-
-          {domainAvailable !== null && (
-            <span
-              className={`text-xs font-medium ${
-                domainAvailable ? 'text-green-400' : 'text-red-400'
-              }`}
+        {domainsLoading ? (
+          <div className="h-9 bg-muted rounded animate-pulse w-48" />
+        ) : sellerDomains.length === 0 ? (
+          <div className="text-sm text-muted-foreground">
+            <p>No domains registered yet.</p>
+            <p className="text-xs mt-1">
+              Go to{' '}
+              <button
+                onClick={() => router.push('/settings')}
+                className="text-primary hover:underline"
+              >
+                Settings
+              </button>{' '}
+              to add a custom domain first.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={selectedDomainId}
+              onChange={(e) => setSelectedDomainId(e.target.value)}
+              className="px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground
+                         focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[200px]"
             >
-              {domainAvailable ? '✓ Available' : '✗ Taken'}
-            </span>
-          )}
+              <option value="">— No domain —</option>
+              {sellerDomains.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.hostname} ({d.status === 'VERIFIED' ? '✓ Verified' : d.status})
+                </option>
+              ))}
+            </select>
 
-          <button
-            onClick={handleDomainSave}
-            disabled={domainSaving || !domainInput.trim()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-medium
-                       hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-          >
-            {domainSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-            Save
-          </button>
-
-          {sp.customDomain && (
             <button
-              onClick={handleDomainVerify}
-              disabled={domainVerifying}
-              className="flex items-center gap-1.5 px-3 py-2 bg-muted text-muted-foreground rounded-lg text-xs font-medium
-                         hover:text-foreground disabled:opacity-50 transition-colors"
+              onClick={handleDomainSave}
+              disabled={domainSaving}
+              className="flex items-center gap-1.5 px-3 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-medium
+                         hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
             >
-              {domainVerifying ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-              Verify DNS
+              {domainSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+              Save
             </button>
-          )}
-        </div>
-
-        {domainVerifyResult && !domainVerifyResult.verified && (
-          <p className="text-xs text-amber-400 mt-2">
-            Add CNAME:{' '}
-            <span className="font-mono bg-muted/40 px-1 rounded">
-              {domainVerifyResult.domain}
-            </span>{' '}
-            → <span className="font-mono bg-muted/40 px-1 rounded">{domainVerifyResult.expectedCname}</span>
-          </p>
+          </div>
         )}
-        {sp.customDomain && (
-          <p className="text-xs text-muted-foreground mt-2">
-            Current:{' '}
-            <span className="font-mono text-foreground">{sp.customDomain}.pixelxlab.com</span>
+
+        {linkedDomain && (
+          <p className="text-xs text-muted-foreground mt-3">
+            Live URL:{' '}
+            <a
+              href={`https://${linkedDomain.hostname}/${sp.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-primary hover:underline"
+            >
+              https://{linkedDomain.hostname}/{sp.slug}
+            </a>
           </p>
         )}
       </div>
@@ -738,36 +833,22 @@ export default function SellpageDetailPage() {
       <div className="bg-card border border-border rounded-xl p-4 mb-6">
         <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
           <Zap size={15} className="text-muted-foreground" />
-          Tracking Pixel
+          Facebook Pixel
         </h2>
 
         {pixelLoading ? (
           <div className="h-9 bg-muted rounded animate-pulse w-48" />
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            {pixelData?.pixelName && (
-              <span className="text-xs text-muted-foreground">
-                Current:{' '}
-                <span className="text-foreground font-medium">{pixelData.pixelName}</span>{' '}
-                <span className="font-mono text-muted-foreground/60">
-                  ({pixelData.pixelExternalId})
-                </span>
-              </span>
-            )}
-
-            <select
-              value={selectedPixelConnId}
-              onChange={(e) => setSelectedPixelConnId(e.target.value)}
-              className="px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground
-                         focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              <option value="">— No pixel —</option>
-              {pixelConnections.map((conn) => (
-                <option key={conn.id} value={conn.id}>
-                  {conn.name} ({conn.externalId})
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              value={pixelInput}
+              onChange={(e) => setPixelInput(e.target.value)}
+              placeholder="Enter Facebook Pixel ID (e.g. 123456789012345)"
+              className="px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground font-mono
+                         placeholder:text-muted-foreground placeholder:font-sans focus:outline-none focus:ring-2
+                         focus:ring-primary/50 min-w-[320px]"
+            />
 
             <button
               onClick={handlePixelSave}
@@ -780,21 +861,482 @@ export default function SellpageDetailPage() {
             </button>
           </div>
         )}
-        {pixelConnections.length === 0 && !pixelLoading && (
-          <p className="text-xs text-muted-foreground mt-2">
-            No FB Pixel connections found. Add one in{' '}
-            <button
-              onClick={() => router.push('/settings')}
-              className="text-primary hover:underline"
-            >
-              Settings
-            </button>
-            .
-          </p>
-        )}
       </div>
 
-      {/* ── B.3 Linked Ads Table ── */}
+      {/* ── B.3 Theme Color ── */}
+      <div className="bg-card border border-border rounded-xl p-4 mb-6">
+        <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+          <span className="w-3.5 h-3.5 rounded-full border border-border" style={{ backgroundColor: primaryColor ? COLOR_PRESETS[primaryColor]?.primary ?? primaryColor : '#7c3aed' }} />
+          Theme Color
+          {colorSaving && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
+        </h2>
+        <div className="flex flex-wrap gap-2.5">
+          {Object.entries(COLOR_PRESETS).map(([name, preset]) => (
+            <button
+              key={name}
+              onClick={() => handleColorSave(name)}
+              className={`w-9 h-9 rounded-full border-2 transition-all hover:scale-110 ${
+                primaryColor === name ? 'border-foreground scale-110 ring-2 ring-foreground/20' : 'border-transparent'
+              }`}
+              style={{ backgroundColor: preset.primary }}
+              title={name.charAt(0).toUpperCase() + name.slice(1)}
+            />
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Selected: <span className="font-medium text-foreground">{primaryColor || 'purple (default)'}</span>
+        </p>
+      </div>
+
+      {/* ── B.4 Guarantee Badges ── */}
+      <div className="bg-card border border-border rounded-xl p-4 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-foreground flex items-center gap-2">
+            <Shield size={15} className="text-muted-foreground" />
+            Guarantee Badges
+            {guaranteeSaving && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
+          </h2>
+          <button
+            onClick={() => setGuaranteeConfig(prev => ({ ...prev, enabled: !prev.enabled }))}
+            className={`w-9 h-5 rounded-full transition-colors relative ${guaranteeConfig.enabled ? 'bg-primary' : 'bg-muted'}`}
+          >
+            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${guaranteeConfig.enabled ? 'left-[18px]' : 'left-0.5'}`} />
+          </button>
+        </div>
+
+        {guaranteeConfig.enabled && (
+          <div className="space-y-2">
+            {guaranteeConfig.badges.map((badge, idx) => (
+              <div key={badge.key} className="flex items-center gap-3 py-1.5 border-b border-border last:border-0">
+                <button
+                  onClick={() => {
+                    const updated = [...guaranteeConfig.badges];
+                    updated[idx] = { ...updated[idx], enabled: !updated[idx].enabled };
+                    setGuaranteeConfig(prev => ({ ...prev, badges: updated }));
+                  }}
+                  className={`w-8 h-4.5 rounded-full transition-colors relative flex-shrink-0 ${badge.enabled ? 'bg-primary' : 'bg-muted'}`}
+                  style={{ width: 32, height: 18 }}
+                >
+                  <span className={`absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white shadow transition-transform ${badge.enabled ? 'left-[14px]' : 'left-[2px]'}`} />
+                </button>
+                <span className="text-xs text-muted-foreground w-16 flex-shrink-0">{badge.icon}</span>
+                <input
+                  type="text"
+                  value={badge.label}
+                  onChange={(e) => {
+                    const updated = [...guaranteeConfig.badges];
+                    updated[idx] = { ...updated[idx], label: e.target.value };
+                    setGuaranteeConfig(prev => ({ ...prev, badges: updated }));
+                  }}
+                  className={`${inputCls} flex-1`}
+                  placeholder="Badge label"
+                />
+                <input
+                  type="text"
+                  value={badge.sub}
+                  onChange={(e) => {
+                    const updated = [...guaranteeConfig.badges];
+                    updated[idx] = { ...updated[idx], sub: e.target.value };
+                    setGuaranteeConfig(prev => ({ ...prev, badges: updated }));
+                  }}
+                  className={`${inputCls} flex-1`}
+                  placeholder="Sub text"
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={handleGuaranteeSave}
+          disabled={guaranteeSaving}
+          className="mt-2 px-4 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+        >
+          <Save size={12} />
+          {guaranteeSaving ? 'Saving...' : 'Save Guarantee'}
+        </button>
+      </div>
+
+      {/* ── B.5 Boost & Upsell ── */}
+      <div className="bg-card border border-border rounded-xl p-4 mb-6">
+        <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+          <Zap size={15} className="text-amber-500" />
+          Boost & Upsell
+          {boostSaving && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
+        </h2>
+
+        <div className="space-y-4">
+          {/* Bundle Discount */}
+          {(() => {
+            const idx = boostModules.findIndex(m => m.type === 'BUNDLE_DISCOUNT');
+            const mod = idx >= 0 ? boostModules[idx] : null;
+            if (!mod) return null;
+            return (
+              <div className="border border-border rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-foreground">Bundle Discount</span>
+                  <button
+                    onClick={() => {
+                      const updated = [...boostModules];
+                      updated[idx] = { ...updated[idx], enabled: !updated[idx].enabled };
+                      setBoostModules(updated);
+                    }}
+                    className={`w-9 h-5 rounded-full transition-colors relative ${mod.enabled ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${mod.enabled ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+                {mod.enabled && (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={mod.title}
+                      onChange={(e) => {
+                        const updated = [...boostModules];
+                        updated[idx] = { ...updated[idx], title: e.target.value };
+                        setBoostModules(updated);
+                      }}
+                      className={inputCls}
+                      placeholder="Title"
+                    />
+                    <div className="space-y-1">
+                      {(mod.tiers ?? []).map((t, ti) => (
+                        <div key={ti} className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={t.qty}
+                            onChange={(e) => {
+                              const tiers = [...(mod.tiers ?? [])];
+                              tiers[ti] = { ...tiers[ti], qty: Number(e.target.value) };
+                              const updated = [...boostModules];
+                              updated[idx] = { ...updated[idx], tiers };
+                              setBoostModules(updated);
+                            }}
+                            className={`${inputCls} w-20`}
+                            placeholder="Qty"
+                            min={1}
+                          />
+                          <input
+                            type="text"
+                            value={t.discount ?? ''}
+                            onChange={(e) => {
+                              const tiers = [...(mod.tiers ?? [])];
+                              tiers[ti] = { ...tiers[ti], discount: e.target.value };
+                              const updated = [...boostModules];
+                              updated[idx] = { ...updated[idx], tiers };
+                              setBoostModules(updated);
+                            }}
+                            className={`${inputCls} flex-1 min-w-0`}
+                            placeholder="e.g. 10% off"
+                          />
+                          <button
+                            onClick={() => {
+                              const tiers = (mod.tiers ?? []).filter((_, j) => j !== ti);
+                              const updated = [...boostModules];
+                              updated[idx] = { ...updated[idx], tiers };
+                              setBoostModules(updated);
+                            }}
+                            className="text-destructive hover:text-destructive/80 p-1"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          const tiers = [...(mod.tiers ?? []), { qty: (mod.tiers?.length ?? 0) + 2, discount: '' }];
+                          const updated = [...boostModules];
+                          updated[idx] = { ...updated[idx], tiers };
+                          setBoostModules(updated);
+                        }}
+                        className="text-xs text-primary hover:text-primary/80 flex items-center gap-1"
+                      >
+                        <Plus size={12} /> Add Tier
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Free Gift */}
+          {(() => {
+            const idx = boostModules.findIndex(m => m.type === 'EXTRA_OFF');
+            const mod = idx >= 0 ? boostModules[idx] : null;
+            if (!mod) return null;
+            return (
+              <div className="border border-border rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-foreground">Free Gift Message</span>
+                  <button
+                    onClick={() => {
+                      const updated = [...boostModules];
+                      updated[idx] = { ...updated[idx], enabled: !updated[idx].enabled };
+                      setBoostModules(updated);
+                    }}
+                    className={`w-9 h-5 rounded-full transition-colors relative ${mod.enabled ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${mod.enabled ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+                {mod.enabled && (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={mod.title}
+                      onChange={(e) => {
+                        const updated = [...boostModules];
+                        updated[idx] = { ...updated[idx], title: e.target.value };
+                        setBoostModules(updated);
+                      }}
+                      className={inputCls}
+                      placeholder="Title"
+                    />
+                    <textarea
+                      value={mod.description ?? ''}
+                      onChange={(e) => {
+                        const updated = [...boostModules];
+                        updated[idx] = { ...updated[idx], description: e.target.value };
+                        setBoostModules(updated);
+                      }}
+                      className={`${inputCls} min-h-[60px]`}
+                      placeholder="Description"
+                      rows={2}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Upsell Next Item */}
+          {(() => {
+            const idx = boostModules.findIndex(m => m.type === 'UPSELL_NEXT_ITEM');
+            const mod = idx >= 0 ? boostModules[idx] : null;
+            if (!mod) return null;
+            return (
+              <div className="border border-border rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-foreground">Upsell Next Item Banner</span>
+                  <button
+                    onClick={() => {
+                      const updated = [...boostModules];
+                      updated[idx] = { ...updated[idx], enabled: !updated[idx].enabled };
+                      setBoostModules(updated);
+                    }}
+                    className={`w-9 h-5 rounded-full transition-colors relative ${mod.enabled ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${mod.enabled ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+                {mod.enabled && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Hook Text (use {'{discount}'} as placeholder)</label>
+                      <input
+                        type="text"
+                        value={mod.hookTemplate ?? ''}
+                        onChange={(e) => {
+                          const updated = [...boostModules];
+                          updated[idx] = { ...updated[idx], hookTemplate: e.target.value };
+                          setBoostModules(updated);
+                        }}
+                        className={inputCls}
+                        placeholder="EXTRA {discount}% OFF FOR NEXT ITEM IN CART"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Sub Text</label>
+                      <input
+                        type="text"
+                        value={mod.subText ?? ''}
+                        onChange={(e) => {
+                          const updated = [...boostModules];
+                          updated[idx] = { ...updated[idx], subText: e.target.value };
+                          setBoostModules(updated);
+                        }}
+                        className={inputCls}
+                        placeholder="Add any item and get the discount!"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Accent Color</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={mod.accentColor ?? '#22c55e'}
+                          onChange={(e) => {
+                            const updated = [...boostModules];
+                            updated[idx] = { ...updated[idx], accentColor: e.target.value };
+                            setBoostModules(updated);
+                          }}
+                          className={`${inputCls} w-32`}
+                          placeholder="#22c55e"
+                        />
+                        <span
+                          className="w-7 h-7 rounded-full border border-border flex-shrink-0"
+                          style={{ backgroundColor: mod.accentColor || '#22c55e' }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">Discount Tiers</label>
+                      <div className="space-y-1">
+                        {(mod.discountTiers ?? []).map((dt, ti) => (
+                          <div key={ti} className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              value={dt.quantity}
+                              onChange={(e) => {
+                                const tiers = [...(mod.discountTiers ?? [])];
+                                tiers[ti] = { ...tiers[ti], quantity: Number(e.target.value) };
+                                const updated = [...boostModules];
+                                updated[idx] = { ...updated[idx], discountTiers: tiers };
+                                setBoostModules(updated);
+                              }}
+                              className={`${inputCls} w-20`}
+                              placeholder="Qty"
+                              min={1}
+                            />
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={dt.discount}
+                                onChange={(e) => {
+                                  const tiers = [...(mod.discountTiers ?? [])];
+                                  tiers[ti] = { ...tiers[ti], discount: Number(e.target.value) };
+                                  const updated = [...boostModules];
+                                  updated[idx] = { ...updated[idx], discountTiers: tiers };
+                                  setBoostModules(updated);
+                                }}
+                                className={`${inputCls} w-20`}
+                                placeholder="%"
+                                min={1}
+                                max={99}
+                              />
+                              <span className="text-xs text-muted-foreground">%</span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                const tiers = (mod.discountTiers ?? []).filter((_, j) => j !== ti);
+                                const updated = [...boostModules];
+                                updated[idx] = { ...updated[idx], discountTiers: tiers };
+                                setBoostModules(updated);
+                              }}
+                              className="text-destructive hover:text-destructive/80 p-1"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => {
+                            const tiers = [...(mod.discountTiers ?? []), { quantity: (mod.discountTiers?.length ?? 0) + 2, discount: 10 }];
+                            const updated = [...boostModules];
+                            updated[idx] = { ...updated[idx], discountTiers: tiers };
+                            setBoostModules(updated);
+                          }}
+                          className="text-xs text-primary hover:text-primary/80 flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Add Tier
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+
+        <button
+          onClick={handleBoostSave}
+          disabled={boostSaving}
+          className="mt-3 px-4 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+        >
+          <Save size={12} />
+          {boostSaving ? 'Saving...' : 'Save Boost Settings'}
+        </button>
+      </div>
+
+      {/* ── B.5 Shipping Settings ── */}
+      <div className="bg-card border border-border rounded-xl p-4 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-foreground flex items-center gap-2">
+            <Truck size={15} className="text-muted-foreground" />
+            Shipping Settings
+          </h2>
+          <button
+            onClick={() => setShippingEnabled(!shippingEnabled)}
+            className={`relative w-9 h-5 rounded-full transition-colors ${shippingEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${shippingEnabled ? 'translate-x-4' : ''}`}
+            />
+          </button>
+        </div>
+
+        {shippingEnabled && (
+          <div className="space-y-3 mt-3 pt-3 border-t border-border">
+            <p className="text-xs text-muted-foreground">
+              Configure fixed shipping for this sellpage. When enabled, checkout will show this instead of the default shipping options.
+            </p>
+
+            {/* Shipping Label */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Shipping Label</label>
+              <input
+                type="text"
+                value={shippingLabel}
+                onChange={(e) => setShippingLabel(e.target.value)}
+                placeholder="e.g. Secured Express Shipping"
+                className="w-full rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            {/* Shipping Price */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Shipping Price ($)</label>
+              <input
+                type="number"
+                value={shippingPrice}
+                onChange={(e) => setShippingPrice(e.target.value)}
+                placeholder="4.99"
+                min="0"
+                step="0.01"
+                className="w-40 rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            {/* Free Shipping Threshold (optional) */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground block mb-1">Free Shipping Above ($) <span className="text-muted-foreground/60">— optional</span></label>
+              <input
+                type="number"
+                value={shippingFreeThreshold}
+                onChange={(e) => setShippingFreeThreshold(e.target.value)}
+                placeholder="e.g. 100 (leave empty for no free shipping)"
+                min="0"
+                step="0.01"
+                className="w-full rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">Orders above this amount get free shipping. Leave empty to always charge shipping.</p>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleShippingSave}
+          disabled={shippingSaving}
+          className="mt-3 px-4 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+        >
+          <Save size={12} />
+          {shippingSaving ? 'Saving...' : 'Save Shipping Settings'}
+        </button>
+      </div>
+
+      {/* ── B.4 Linked Ads Table ── */}
       <div className="bg-card border border-border rounded-xl mb-6 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 className="text-sm font-medium text-foreground flex items-center gap-2">
@@ -1385,6 +1927,45 @@ export default function SellpageDetailPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => !deleting && setDeleteConfirmOpen(false)}
+          />
+          <div className="relative bg-card border border-border rounded-xl w-full max-w-sm mx-4 shadow-xl">
+            <div className="p-5 text-center">
+              <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Trash2 size={20} className="text-red-500" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground mb-1">Delete Sellpage</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Are you sure you want to delete <strong>{sp?.titleOverride ?? sp?.slug}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setDeleteConfirmOpen(false)}
+                  disabled={deleting}
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded-lg text-sm font-medium hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium
+                             hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {deleting && <Loader2 size={14} className="animate-spin" />}
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

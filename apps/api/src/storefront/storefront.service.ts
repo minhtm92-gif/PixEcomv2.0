@@ -66,6 +66,46 @@ export class StorefrontService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // RESOLVE CUSTOM DOMAIN → SELLER SLUG
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Given a custom domain hostname (e.g. "jal2.com"), returns the seller slug
+   * that owns it. Used by Next.js middleware for custom domain routing.
+   */
+  async resolveDomain(hostname: string) {
+    if (!hostname) {
+      throw new BadRequestException('hostname query parameter is required');
+    }
+
+    const normalized = hostname.trim().toLowerCase();
+
+    const domain = await this.prisma.sellerDomain.findFirst({
+      where: { hostname: normalized, status: 'VERIFIED' },
+      select: {
+        id: true,
+        hostname: true,
+        seller: {
+          select: {
+            slug: true,
+            isActive: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!domain || !domain.seller.isActive || domain.seller.status !== 'ACTIVE') {
+      throw new NotFoundException(`No active store found for domain "${normalized}"`);
+    }
+
+    return {
+      hostname: domain.hostname,
+      sellerSlug: domain.seller.slug,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // STORE HOMEPAGE
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -77,6 +117,7 @@ export class StorefrontService {
         name: true,
         slug: true,
         logoUrl: true,
+        faviconUrl: true,
         isActive: true,
         status: true,
         settings: {
@@ -110,6 +151,7 @@ export class StorefrontService {
             compareAtPrice: true,
             rating: true,
             reviewCount: true,
+            images: true,
             assetThumbs: {
               orderBy: [{ isCurrent: 'desc' as const }, { position: 'asc' as const }],
               take: 1,
@@ -125,6 +167,7 @@ export class StorefrontService {
         name: seller.settings?.brandName ?? seller.name,
         slug: seller.slug,
         logoUrl: seller.logoUrl,
+        faviconUrl: seller.faviconUrl,
         currency: seller.settings?.defaultCurrency ?? 'USD',
       },
       sellpages: sellpages.map((sp) => ({
@@ -136,7 +179,10 @@ export class StorefrontService {
           compareAtPrice: sp.product.compareAtPrice
             ? Number(sp.product.compareAtPrice)
             : null,
-          heroImage: sp.product.assetThumbs[0]?.url ?? null,
+          heroImage: sp.product.assetThumbs[0]?.url
+            ?? (Array.isArray(sp.product.images) && (sp.product.images as string[]).length > 0
+              ? (sp.product.images as string[])[0]
+              : null),
           rating: Number(sp.product.rating),
           reviewCount: sp.product.reviewCount,
         },
@@ -181,8 +227,10 @@ export class StorefrontService {
             description: true,
             descriptionBlocks: true,
             shippingInfo: true,
+            images: true,
             rating: true,
             reviewCount: true,
+            allowOutOfStockPurchase: true,
             assetMedia: {
               where: { isCurrent: true },
               orderBy: { position: 'asc' },
@@ -205,6 +253,7 @@ export class StorefrontService {
                 options: true,
                 stockQuantity: true,
                 isActive: true,
+                image: true,
               },
             },
           },
@@ -264,8 +313,13 @@ export class StorefrontService {
         shippingInfo: (sellpage.product.shippingInfo ?? {}) as Record<string, unknown>,
         rating: Number(sellpage.product.rating),
         reviewCount: sellpage.product.reviewCount,
-        images: sellpage.product.assetMedia.map((m) => m.url),
-        thumbnails: sellpage.product.assetThumbs.map((t) => t.url),
+        allowOutOfStockPurchase: sellpage.product.allowOutOfStockPurchase,
+        images: sellpage.product.assetMedia.length > 0
+          ? sellpage.product.assetMedia.map((m) => m.url)
+          : (Array.isArray(sellpage.product.images) ? sellpage.product.images as string[] : []),
+        thumbnails: sellpage.product.assetThumbs.length > 0
+          ? sellpage.product.assetThumbs.map((t) => t.url)
+          : (Array.isArray(sellpage.product.images) ? sellpage.product.images as string[] : []),
         variants: sellpage.product.variants.map((v) => ({
           id: v.id,
           name: v.name,
@@ -275,12 +329,14 @@ export class StorefrontService {
           options: (v.options ?? {}) as Record<string, unknown>,
           stockQuantity: v.stockQuantity,
           isActive: v.isActive,
+          image: v.image ?? null,
         })),
       },
       store: {
         name: seller.name,
         slug: seller.slug,
         logoUrl: seller.logoUrl,
+        faviconUrl: seller.faviconUrl,
         currency: seller.settings?.defaultCurrency ?? 'USD',
       },
       discounts: (sellpage.discounts ?? []).map((d) => ({
@@ -382,12 +438,12 @@ export class StorefrontService {
   async checkout(sellerSlug: string, dto: CheckoutDto) {
     const seller = await this.resolveActiveSeller(sellerSlug);
 
-    // Resolve sellpage
+    // Resolve sellpage (include boostModules + headerConfig for upsell discount & shipping)
     const sellpage = await this.prisma.sellpage.findUnique({
       where: {
         uq_sellpage_slug: { sellerId: seller.id, slug: dto.sellpageSlug },
       },
-      select: { id: true, status: true },
+      select: { id: true, status: true, boostModules: true, headerConfig: true },
     });
     if (!sellpage || sellpage.status !== 'PUBLISHED') {
       throw new BadRequestException('Sellpage not found or not published');
@@ -409,7 +465,7 @@ export class StorefrontService {
     for (const item of dto.items) {
       const product = await this.prisma.product.findUnique({
         where: { id: item.productId },
-        select: { id: true, name: true, basePrice: true, status: true },
+        select: { id: true, name: true, basePrice: true, compareAtPrice: true, status: true, allowOutOfStockPurchase: true },
       });
       if (!product || product.status !== 'ACTIVE') {
         throw new BadRequestException(
@@ -439,7 +495,7 @@ export class StorefrontService {
             `Variant ${item.variantId} not found or inactive`,
           );
         }
-        if (variant.stockQuantity < item.quantity) {
+        if (!product.allowOutOfStockPurchase && variant.stockQuantity < item.quantity) {
           throw new BadRequestException(
             `Insufficient stock for variant ${variant.name}`,
           );
@@ -449,6 +505,26 @@ export class StorefrontService {
         }
         variantName = variant.name;
         variantSku = variant.sku;
+      }
+
+      // Apply upsell discount from sellpage boostModules
+      const boostModules = (sellpage.boostModules ?? []) as any[];
+      const upsellModule = boostModules.find(
+        (m: any) => m.type === 'UPSELL_NEXT_ITEM' && m.enabled !== false,
+      );
+      if (upsellModule?.discountTiers?.length > 0 && product.compareAtPrice) {
+        const comparePrice = Number(product.compareAtPrice);
+        const sortedTiers = [...upsellModule.discountTiers].sort(
+          (a: any, b: any) => b.quantity - a.quantity,
+        );
+        const matched = sortedTiers.find(
+          (t: any) => item.quantity >= t.quantity,
+        );
+        if (matched) {
+          const upsellPrice =
+            Math.round(comparePrice * (1 - matched.discount / 100) * 100) / 100;
+          unitPrice = upsellPrice;
+        }
       }
 
       const lineTotal = Math.round(unitPrice * item.quantity * 100) / 100;
@@ -466,11 +542,22 @@ export class StorefrontService {
       });
     }
 
-    // Shipping cost
-    const shippingCost =
-      dto.shippingMethod === 'standard' && subtotal >= FREE_SHIPPING_THRESHOLD
-        ? 0
-        : SHIPPING_COSTS[dto.shippingMethod] ?? 4.99;
+    // Shipping cost — use sellpage config if available, fallback to hardcoded
+    const headerConfig = (sellpage.headerConfig ?? {}) as Record<string, any>;
+    const spShipping = headerConfig.shipping as
+      | { label: string; price: number; freeThreshold?: number }
+      | undefined;
+
+    let shippingCost: number;
+    if (spShipping?.price != null) {
+      const freeAt = spShipping.freeThreshold ?? Infinity;
+      shippingCost = subtotal >= freeAt ? 0 : spShipping.price;
+    } else {
+      shippingCost =
+        dto.shippingMethod === 'standard' && subtotal >= FREE_SHIPPING_THRESHOLD
+          ? 0
+          : SHIPPING_COSTS[dto.shippingMethod] ?? 4.99;
+    }
 
     // Discount
     let discountAmount = 0;
@@ -750,6 +837,7 @@ export class StorefrontService {
         name: true,
         slug: true,
         logoUrl: true,
+        faviconUrl: true,
         isActive: true,
         status: true,
         settings: {

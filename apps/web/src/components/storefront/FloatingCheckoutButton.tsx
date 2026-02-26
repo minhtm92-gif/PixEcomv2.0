@@ -20,7 +20,7 @@ export function FloatingCheckoutButton({
       <button
         onClick={onClick}
         disabled={disabled}
-        className="flex items-center gap-2 px-6 py-3.5 bg-purple-600 hover:bg-purple-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl shadow-2xl shadow-purple-500/40 transition-all"
+        className="flex items-center gap-2 px-6 py-3.5 bg-[var(--sp-primary)] hover:bg-[var(--sp-primary-hover)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl shadow-2xl shadow-black/20 transition-all"
       >
         <ShoppingCart size={18} />
         {label}

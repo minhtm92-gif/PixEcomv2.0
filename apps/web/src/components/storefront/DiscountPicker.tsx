@@ -23,15 +23,15 @@ export function DiscountPicker({ discounts, selected, onSelect }: DiscountPicker
               onClick={() => onSelect(isSelected ? null : d.id)}
               className={`w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all ${
                 isSelected
-                  ? 'border-purple-500 bg-purple-50 shadow-sm'
-                  : 'border-gray-200 hover:border-purple-300 bg-white'
+                  ? 'border-[var(--sp-primary)] bg-[var(--sp-primary-light)] shadow-sm'
+                  : 'border-gray-200 hover:border-[var(--sp-primary-light)] bg-white'
               }`}
             >
               {/* Checkbox */}
               <div
                 className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
                   isSelected
-                    ? 'bg-purple-600 border border-purple-600'
+                    ? 'bg-[var(--sp-primary)] border border-[var(--sp-primary)]'
                     : 'border-2 border-gray-300'
                 }`}
               >
@@ -44,7 +44,7 @@ export function DiscountPicker({ discounts, selected, onSelect }: DiscountPicker
                   <span className="text-sm font-semibold text-gray-900">{d.label}</span>
                   <span
                     className={`text-sm font-bold flex-shrink-0 ${
-                      isSelected ? 'text-purple-700' : 'text-purple-600'
+                      isSelected ? 'text-[var(--sp-primary-hover)]' : 'text-[var(--sp-primary)]'
                     }`}
                   >
                     {d.value}

@@ -105,6 +105,7 @@ interface ProductDetail {
   images: string[];
   optionDefinitions: OptionDef[];
   quantityCosts: QuantityCostEntry[];
+  allowOutOfStockPurchase: boolean;
   rating: string | number;
   reviewCount: number;
   createdAt: string;
@@ -430,6 +431,24 @@ function OverviewTab({
               ))}
               {(product.tags?.length ?? 0) === 0 && <span className="text-xs text-muted-foreground">No tags</span>}
             </div>
+          </div>
+          <div className="flex items-center gap-2 py-1">
+            <input
+              type="checkbox"
+              id="allowOos"
+              checked={product.allowOutOfStockPurchase}
+              onChange={async (e) => {
+                try {
+                  await apiPatch(`/admin/products/${product.id}`, { allowOutOfStockPurchase: e.target.checked });
+                  toast(e.target.checked ? 'Out-of-stock purchase enabled' : 'Out-of-stock purchase disabled', 'success');
+                  refetch();
+                } catch { toast('Failed to update', 'error'); }
+              }}
+              className="h-4 w-4 rounded border-border text-amber-500 focus:ring-amber-500"
+            />
+            <label htmlFor="allowOos" className="text-xs text-foreground cursor-pointer">
+              Allow purchase when out of stock
+            </label>
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1">Created</label>

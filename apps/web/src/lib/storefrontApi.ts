@@ -31,6 +31,7 @@ export interface StoreData {
     name: string;
     slug: string;
     logoUrl: string | null;
+    faviconUrl: string | null;
     currency: string;
   };
   sellpages: Array<{
@@ -58,6 +59,7 @@ export interface SellpageVariant {
   options: Record<string, unknown>;
   stockQuantity: number;
   isActive: boolean;
+  image: string | null;
 }
 
 export interface SellpageDiscount {
@@ -93,6 +95,7 @@ export interface SellpageData {
     shippingInfo: Record<string, unknown>;
     rating: number;
     reviewCount: number;
+    allowOutOfStockPurchase: boolean;
     images: string[];
     thumbnails: string[];
     variants: SellpageVariant[];
@@ -101,6 +104,7 @@ export interface SellpageData {
     name: string;
     slug: string;
     logoUrl: string | null;
+    faviconUrl: string | null;
     currency: string;
   };
   discounts: SellpageDiscount[];

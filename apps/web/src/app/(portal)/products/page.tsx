@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiGet, type ApiError } from '@/lib/apiClient';
-import { toastApiError, useToastStore } from '@/stores/toastStore';
-import { moneyDecimal, moneyWhole } from '@/lib/format';
-import { ShoppingBag, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { toastApiError } from '@/stores/toastStore';
+import { moneyDecimal } from '@/lib/format';
+import { ShoppingBag, Search, ChevronLeft, ChevronRight, Package } from 'lucide-react';
 import type { ProductCardItem, ProductsListResponse } from '@/types/api';
 
 /**
@@ -17,12 +17,10 @@ import type { ProductCardItem, ProductsListResponse } from '@/types/api';
  *  - youTakeEstimate: string | null (Prisma Decimal)
  *  - labels: { id, name, slug }[]
  *  - heroImageUrl: string | null
- *  - NO createdAt in list (only in detail)
  */
 
 export default function ProductsPage() {
   const router = useRouter();
-  const addToast = useToastStore((s) => s.add);
 
   const [products, setProducts] = useState<ProductCardItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -30,7 +28,7 @@ export default function ProductsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
-  const [limit] = useState(10);
+  const [limit] = useState(12);
   const [label, setLabel] = useState<string>('');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
@@ -75,16 +73,16 @@ export default function ProductsPage() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <ShoppingBag size={22} />
+          <ShoppingBag size={22} className="text-amber-400" />
           Products
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Platform product catalog ({total} total)
+          Browse available products and create sellpages ({total} total)
         </p>
       </div>
 
       {/* Filters bar */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-6">
         <button
           onClick={() => { setLabel(''); setPage(1); }}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -102,14 +100,14 @@ export default function ProductsPage() {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search products..."
-              className="pl-8 pr-3 py-1.5 bg-input border border-border rounded-lg text-sm text-foreground
-                         placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50
-                         focus:border-primary transition-colors w-48"
+              className="pl-8 pr-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground
+                         placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50
+                         focus:border-amber-500 transition-colors w-64"
             />
           </div>
           <button
             type="submit"
-            className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-medium
                        hover:opacity-90 transition-opacity"
           >
             Search
@@ -127,124 +125,143 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Product</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Code</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Suggested Price</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">You Take</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Orders</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Revenue</th>
-              <th className="text-right px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">ROAS</th>
-              <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Labels</th>
-              <th className="w-8 px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-40 animate-pulse" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-20 animate-pulse" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-16 animate-pulse ml-auto" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-16 animate-pulse ml-auto" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-10 animate-pulse ml-auto" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-16 animate-pulse ml-auto" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-12 animate-pulse ml-auto" /></td>
-                  <td className="px-4 py-3"><div className="h-4 bg-muted rounded w-16 animate-pulse" /></td>
-                  <td className="px-4 py-3" />
-                </tr>
-              ))
-            ) : products.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
-                  <p>No products found.</p>
-                  <p className="mt-2 text-xs text-muted-foreground/60">
-                    Hint: <code className="bg-muted/40 px-1.5 py-0.5 rounded text-[11px]">If staging DB is empty, run: pnpm seed:staging</code>
+      {/* Loading skeleton — card grid */}
+      {loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-card border border-border rounded-xl overflow-hidden animate-pulse">
+              <div className="aspect-[4/3] bg-muted" />
+              <div className="p-4 space-y-2">
+                <div className="h-4 bg-muted rounded w-3/4" />
+                <div className="h-3 bg-muted rounded w-1/2" />
+                <div className="h-3 bg-muted rounded w-2/3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && products.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground">
+          <Package size={48} className="mx-auto mb-4 text-muted-foreground/30" />
+          <p className="text-sm">No products found.</p>
+          <p className="mt-2 text-xs text-muted-foreground/60">
+            Products will appear here once they are published by the platform.
+          </p>
+        </div>
+      )}
+
+      {/* Card Grid */}
+      {!loading && products.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {products.map((p) => {
+            const suggestedRetail = Number(p.suggestedRetailPrice) || 0;
+            const youTake = p.youTakeEstimate ? Number(p.youTakeEstimate) : 0;
+
+            return (
+              <div
+                key={p.id}
+                onClick={() => router.push(`/products/${p.id}`)}
+                className="bg-card border border-border rounded-xl overflow-hidden cursor-pointer hover:border-amber-500/50 hover:shadow-lg transition-all group"
+              >
+                {/* Image */}
+                <div className="aspect-[4/3] bg-muted relative overflow-hidden">
+                  {p.heroImageUrl ? (
+                    <img
+                      src={p.heroImageUrl}
+                      alt={p.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package size={48} className="text-muted-foreground/30" />
+                    </div>
+                  )}
+                  {/* Labels */}
+                  {p.labels.length > 0 && (
+                    <div className="absolute top-2 left-2 flex flex-wrap gap-1">
+                      {p.labels.slice(0, 2).map((l) => (
+                        <span
+                          key={l.id}
+                          className="px-2 py-0.5 rounded text-[10px] font-medium capitalize bg-black/60 text-white backdrop-blur-sm"
+                        >
+                          {l.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="p-4 space-y-2">
+                  <h3 className="text-sm font-semibold text-foreground line-clamp-1">
+                    {p.name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    {p.code}
                   </p>
-                </td>
-              </tr>
-            ) : (
-              products.map((p) => (
-                <tr
-                  key={p.id}
-                  onClick={() => router.push(`/products/${p.id}`)}
-                  className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      {p.heroImageUrl ? (
-                        <img
-                          src={p.heroImageUrl}
-                          alt={p.name}
-                          className="w-8 h-8 rounded object-cover bg-muted"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded bg-muted flex items-center justify-center">
-                          <ShoppingBag size={14} className="text-muted-foreground" />
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-foreground font-medium">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">/{p.slug}</p>
+
+                  <div className="space-y-1 pt-1">
+                    {suggestedRetail > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">Suggested retail</span>
+                        <span className="font-mono text-foreground font-medium">
+                          {moneyDecimal(suggestedRetail)}
+                        </span>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs font-mono text-muted-foreground">{p.code}</span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-foreground">
-                    {moneyDecimal(p.suggestedRetailPrice)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-foreground">
-                    {p.youTakeEstimate ? moneyDecimal(p.youTakeEstimate) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right text-muted-foreground">
-                    {p.stats?.ordersCount ?? 0}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-foreground">
-                    {moneyWhole(p.stats?.revenue ?? 0)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono">
-                    {(() => {
-                      const roas = p.stats?.roas ?? 0;
-                      if (roas === 0) return <span className="text-muted-foreground">—</span>;
-                      const cls = roas >= 3 ? 'text-green-400' : roas >= 2 ? 'text-amber-400' : 'text-red-400';
-                      return <span className={cls}>{roas.toFixed(1)}x</span>;
-                    })()}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      {p.labels.length > 0 ? (
-                        p.labels.map((l) => (
-                          <span
-                            key={l.id}
-                            className="inline-block px-2 py-0.5 rounded text-xs capitalize bg-muted text-muted-foreground"
-                          >
-                            {l.name}
+                    )}
+                    {youTake > 0 && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">You take</span>
+                        <span className="font-mono text-green-400 font-medium">
+                          {moneyDecimal(youTake)} / order
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stats row */}
+                  {p.stats && (p.stats.ordersCount > 0 || p.stats.revenue > 0) && (
+                    <div className="flex items-center gap-3 pt-1 text-[11px] text-muted-foreground">
+                      <span>{p.stats.ordersCount} orders</span>
+                      <span className="text-muted-foreground/30">|</span>
+                      <span className="font-mono">{moneyDecimal(p.stats.revenue)} rev</span>
+                      {p.stats.roas > 0 && (
+                        <>
+                          <span className="text-muted-foreground/30">|</span>
+                          <span className={
+                            p.stats.roas >= 3 ? 'text-green-400' : p.stats.roas >= 2 ? 'text-amber-400' : 'text-red-400'
+                          }>
+                            {p.stats.roas.toFixed(1)}x
                           </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-muted-foreground/50">—</span>
+                        </>
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <ChevronRight size={14} className="text-muted-foreground" />
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                  )}
+
+                  {/* CTA */}
+                  <div className="pt-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/products/${p.id}`);
+                      }}
+                      className="w-full text-center py-2 text-xs font-medium text-amber-400 hover:text-amber-300 border border-amber-500/20 rounded-lg hover:bg-amber-500/10 transition-colors"
+                    >
+                      + Create a sellpage
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Pagination */}
       {pageCount > 1 && (
-        <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center justify-between mt-6">
           <p className="text-xs text-muted-foreground">
             Page {page} of {pageCount}
           </p>

@@ -50,11 +50,42 @@ export class UpdateSellpageDto {
   customDomain?: string;
 
   /**
-   * B.2 — Pixel assignment.
-   * UUID of an active FbConnection (connectionType=PIXEL) owned by this seller.
+   * B.2 — Facebook Pixel ID (raw numeric string like "123456789012345").
    * Stored in headerConfig.pixelId.
    */
   @IsOptional()
-  @Matches(UUID_SHAPE, { message: 'pixelId must be a valid UUID' })
+  @IsString()
   pixelId?: string | null;
+
+  /**
+   * B.3 — Primary theme color for the sellpage storefront.
+   * Accepts a preset name (e.g. "blue") or hex string (e.g. "#2563eb").
+   * Stored in headerConfig.primaryColor.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  primaryColor?: string | null;
+
+  /**
+   * Guarantee badges configuration.
+   * Stored in headerConfig.guarantees.
+   */
+  @IsOptional()
+  guaranteeConfig?: Record<string, unknown>;
+
+  /**
+   * Boost & upsell modules array.
+   * Stored directly in sellpages.boost_modules.
+   */
+  @IsOptional()
+  boostModules?: Record<string, unknown>[];
+
+  /**
+   * Shipping configuration.
+   * Stored in headerConfig.shipping.
+   * Pass null to remove custom shipping and revert to default.
+   */
+  @IsOptional()
+  shippingConfig?: Record<string, unknown> | null;
 }

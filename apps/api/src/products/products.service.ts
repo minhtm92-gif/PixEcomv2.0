@@ -67,6 +67,7 @@ export class ProductsService {
               sellerTakeFixed: true,
             },
           },
+          images: true, // JSON field fallback for heroImageUrl
           // Hero image: first isCurrent thumbnail, or first thumbnail
           assetThumbs: {
             orderBy: [{ isCurrent: 'desc' }, { position: 'asc' }],
@@ -161,6 +162,7 @@ export class ProductsService {
         descriptionBlocks: true,
         shippingInfo: true,
         tags: true,
+        images: true,
         status: true,
         createdAt: true,
         updatedAt: true,
@@ -328,6 +330,7 @@ export class ProductsService {
       sellerTakeFixed: ({ toNumber(): number } | number) | null;
     }>;
     assetThumbs: Array<{ url: string }>;
+    images?: unknown;
     labels: Array<{ label: { id: string; name: string; slug: string } }>;
   }): ProductCardDto {
     const rule = product.pricingRules[0] ?? null;
@@ -353,8 +356,13 @@ export class ProductsService {
       }
     }
 
-    const heroImageUrl =
-      product.assetThumbs.length > 0 ? product.assetThumbs[0].url : null;
+    // Hero image: prefer assetThumbs, fallback to product.images JSON field
+    let heroImageUrl: string | null = null;
+    if (product.assetThumbs.length > 0) {
+      heroImageUrl = product.assetThumbs[0].url;
+    } else if (Array.isArray(product.images) && (product.images as string[]).length > 0) {
+      heroImageUrl = (product.images as string[])[0];
+    }
 
     const labels: ProductLabelDto[] = product.labels.map((pl) => ({
       id: pl.label.id,

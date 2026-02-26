@@ -16,14 +16,21 @@ import { StorefrontHeader } from '@/components/storefront/StorefrontHeader';
 import { StorefrontFooter } from '@/components/storefront/StorefrontFooter';
 import { ImageGallery } from '@/components/storefront/ImageGallery';
 import { VariantSelector } from '@/components/storefront/VariantSelector';
-import { BoostModule } from '@/components/storefront/BoostModule';
+import { BoostModule, computeUpsellPrice } from '@/components/storefront/BoostModule';
 import { QuantitySelector } from '@/components/storefront/QuantitySelector';
 import { TrustBadges } from '@/components/storefront/TrustBadges';
 import { ReviewSection, type ReviewItem } from '@/components/storefront/ReviewSection';
 import { FloatingCheckoutButton } from '@/components/storefront/FloatingCheckoutButton';
 import { fetchSellpage, type SellpageData, type SellpageVariant } from '@/lib/storefrontApi';
+import { storeHref } from '@/lib/storefrontLinks';
+import { resolveColor, themeVars } from '@/lib/storeTheme';
+import type { GuaranteeConfig } from '@/types/storefront';
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
+
+function isHtml(text: string): boolean {
+  return /<[a-z][\s\S]*>/i.test(text);
+}
 
 // ─── Local shape the JSX expects ──────────────────────────────────────────
 
@@ -48,7 +55,7 @@ interface PageProduct {
 
 // Convert DB variants (rows with options: { color: 'gold', size: 'M' })
 // into the MockVariant[] format: [{ name: 'Color', options: [...] }]
-function reshapeVariants(dbVariants: SellpageVariant[]): MockVariant[] {
+function reshapeVariants(dbVariants: SellpageVariant[], allowOutOfStockPurchase = false): MockVariant[] {
   const groupMap = new Map<string, Map<string, { label: string; value: string; available: boolean }>>();
 
   for (const v of dbVariants) {
@@ -60,7 +67,7 @@ function reshapeVariants(dbVariants: SellpageVariant[]): MockVariant[] {
         optMap.set(val, {
           label: val.charAt(0).toUpperCase() + val.slice(1),
           value: val,
-          available: v.stockQuantity > 0 && v.isActive,
+          available: v.isActive && (v.stockQuantity > 0 || allowOutOfStockPurchase),
         });
       }
     }
@@ -87,7 +94,7 @@ function mapApiToProduct(data: SellpageData): PageProduct {
     thumbnails: data.product.thumbnails.length > 0
       ? data.product.thumbnails
       : data.product.images,
-    variants: reshapeVariants(data.product.variants),
+    variants: reshapeVariants(data.product.variants, data.product.allowOutOfStockPurchase),
     boostModules: (data.sellpage.boostModules ?? []) as MockBoostModule[],
     description: data.product.description || data.sellpage.description,
     shippingInfo:
@@ -139,47 +146,95 @@ function AccordionItem({ title, children }: { title: string; children: React.Rea
 
 // ─── Page ─────────────────────────────────────────────────────────────────
 
-export default function SellpagePage() {
+// Helper: apply SellpageData to all state setters at once
+function applyData(
+  data: SellpageData,
+  setProduct: (p: PageProduct) => void,
+  setRawVariants: (v: SellpageVariant[]) => void,
+  setReviews: (r: ReviewItem[]) => void,
+  setStoreName: (n: string | undefined) => void,
+  setLogoUrl: (u: string | null) => void,
+  setThemeColor: (c: string | null) => void,
+  setGuaranteeConfig: (g: GuaranteeConfig | undefined) => void,
+) {
+  setProduct(mapApiToProduct(data));
+  setRawVariants(data.product.variants);
+  setReviews(data.reviews ?? []);
+  setStoreName(data.store?.name);
+  setLogoUrl(data.store?.logoUrl ?? null);
+  setThemeColor((data.sellpage.headerConfig?.primaryColor as string) ?? null);
+  if (data.sellpage.headerConfig?.guarantees) {
+    setGuaranteeConfig(data.sellpage.headerConfig.guarantees as GuaranteeConfig);
+  }
+}
+
+interface SellpagePageProps {
+  initialData?: SellpageData | null;
+}
+
+export default function SellpagePage({ initialData }: SellpagePageProps) {
   const params = useParams<{ store: string; slug: string }>();
   const storeSlug = params?.store ?? 'demo-store';
   const slug = params?.slug ?? '';
 
-  const [product, setProduct] = useState<PageProduct | null>(IS_PREVIEW ? mockProduct(slug) : null);
-  const [reviews, setReviews] = useState<ReviewItem[]>(IS_PREVIEW ? MOCK_REVIEWS : []);
-  const [loading, setLoading] = useState(!IS_PREVIEW);
+  // Determine if we can hydrate from server-fetched data immediately
+  const hasServerData = !IS_PREVIEW && !!initialData;
+
+  const [product, setProduct] = useState<PageProduct | null>(
+    IS_PREVIEW ? mockProduct(slug) : hasServerData ? mapApiToProduct(initialData!) : null,
+  );
+  const [reviews, setReviews] = useState<ReviewItem[]>(
+    IS_PREVIEW ? MOCK_REVIEWS : hasServerData ? (initialData!.reviews ?? []) : [],
+  );
+  const [storeName, setStoreName] = useState<string | undefined>(
+    hasServerData ? initialData!.store?.name : undefined,
+  );
+  const [logoUrl, setLogoUrl] = useState<string | null>(
+    hasServerData ? (initialData!.store?.logoUrl ?? null) : null,
+  );
+  const [themeColor, setThemeColor] = useState<string | null>(
+    hasServerData ? ((initialData!.sellpage.headerConfig?.primaryColor as string) ?? null) : null,
+  );
+  const [guaranteeConfig, setGuaranteeConfig] = useState<GuaranteeConfig | undefined>(
+    hasServerData && initialData!.sellpage.headerConfig?.guarantees
+      ? (initialData!.sellpage.headerConfig.guarantees as GuaranteeConfig)
+      : undefined,
+  );
+  const [rawVariants, setRawVariants] = useState<SellpageVariant[]>(
+    hasServerData ? initialData!.product.variants : [],
+  );
+  const [loading, setLoading] = useState(!IS_PREVIEW && !hasServerData);
   const [error, setError] = useState<string | null>(null);
 
   const [cartItems, setCartItems] = useState<MockCartItem[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
   const [qty, setQty] = useState(1);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  const [userChangedVariant, setUserChangedVariant] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [activeTab, setActiveTab] = useState<'description' | 'shipping' | 'returns'>('description');
 
   useEffect(() => {
-    if (IS_PREVIEW) return;
+    // Skip fetch if preview mode OR we already have server-provided data
+    if (IS_PREVIEW || hasServerData) return;
+
     let cancelled = false;
 
     fetchSellpage(storeSlug, slug)
       .then((data) => {
         if (cancelled) return;
-        setProduct(mapApiToProduct(data));
-        setReviews(data.reviews ?? []);
+        applyData(data, setProduct, setRawVariants, setReviews, setStoreName, setLogoUrl, setThemeColor, setGuaranteeConfig);
       })
       .catch((err) => {
         if (cancelled) return;
-        if (IS_PREVIEW) {
-          setProduct(mockProduct(slug));
-          setReviews(MOCK_REVIEWS);
-        } else {
-          setError(err.message ?? 'Product not found');
-        }
+        setError(err.message ?? 'Product not found');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [storeSlug, slug]);
+  }, [storeSlug, slug, hasServerData]);
 
   // Init variant selection when product loads
   useEffect(() => {
@@ -198,7 +253,7 @@ export default function SellpagePage() {
         <h1 className="text-xl font-bold text-gray-900 mb-1">Page not found</h1>
         <p className="text-gray-500 mb-6 text-center max-w-md">{error}</p>
         <a
-          href={`/${storeSlug}`}
+          href={storeHref(storeSlug)}
           className="px-6 py-2.5 bg-gray-900 text-white rounded-md text-sm font-semibold hover:bg-gray-800 transition"
         >
           Back to store
@@ -210,15 +265,48 @@ export default function SellpagePage() {
   if (loading || !product) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-purple-600" />
+        <Loader2 className="w-8 h-8 animate-spin text-[var(--sp-primary)]" />
       </div>
     );
   }
 
-  const off = Math.round((1 - product.price / product.comparePrice) * 100);
+  // Compute upsell discount based on qty and compare price
+  const upsellResult = computeUpsellPrice(product.boostModules, qty, product.comparePrice);
+  const effectivePrice = upsellResult ? upsellResult.effectivePrice : product.price;
+  const off = Math.round((1 - effectivePrice / product.comparePrice) * 100);
+
+  // Find the matching raw variant for the current selection → extract its image + ID
+  const matchedVariant = (() => {
+    if (rawVariants.length === 0 || Object.keys(selectedVariants).length === 0) return null;
+    return rawVariants.find(rv => {
+      const opts = rv.options as Record<string, string>;
+      return Object.entries(selectedVariants).every(
+        ([key, val]) => opts[key.toLowerCase()] === val || opts[key] === val,
+      );
+    }) ?? null;
+  })();
+  // Only show variant image after user manually changes a variant option —
+  // on initial page load we always show the hero product image.
+  const variantImage = userChangedVariant ? (matchedVariant?.image ?? null) : null;
+
+  // Build checkout URL with qty, variant, price, and compare price info
+  const checkoutParams = new URLSearchParams();
+  checkoutParams.set('qty', String(qty));
+  if (matchedVariant) checkoutParams.set('variantId', matchedVariant.id);
+  checkoutParams.set('price', String(effectivePrice));
+  checkoutParams.set('comparePrice', String(product.comparePrice));
+  if (upsellResult) checkoutParams.set('upsellPct', String(upsellResult.discountPct));
+  // Pass variant label for display in checkout
+  const varLabel = Object.entries(selectedVariants)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v.charAt(0).toUpperCase() + v.slice(1)}`)
+    .join('  ');
+  if (varLabel) checkoutParams.set('variant', varLabel);
+  const checkoutUrl = storeHref(storeSlug, `/${slug}/checkout?${checkoutParams.toString()}`);
 
   function handleVariantChange(name: string, value: string) {
     setSelectedVariants(prev => ({ ...prev, [name]: value }));
+    setUserChangedVariant(true);
   }
 
   function getVariantLabel() {
@@ -235,39 +323,52 @@ export default function SellpagePage() {
     const newItem: MockCartItem = {
       id: `cart_${Date.now()}`,
       productId: product!.id,
-      slug: product!.slug,
+      slug: slug, // sellpage slug from URL (not product.slug)
       name: product!.name,
       image: product!.thumbnails[0] ?? product!.images[0],
-      price: product!.price,
+      price: effectivePrice,
+      comparePrice: product!.comparePrice,
       qty,
       variant: getVariantLabel(),
+      variantId: matchedVariant?.id,
+      upsellPct: upsellResult?.discountPct,
     };
     setCartItems(prev => {
       const existing = prev.find(i => i.productId === product!.id && i.variant === newItem.variant);
       if (existing) {
-        return prev.map(i => (i.id === existing.id ? { ...i, qty: i.qty + qty } : i));
+        return prev.map(i => (i.id === existing.id ? { ...i, qty: i.qty + qty, price: effectivePrice, comparePrice: product!.comparePrice, upsellPct: upsellResult?.discountPct } : i));
       }
       return [...prev, newItem];
     });
     setAddedToCart(true);
+    setCartOpen(true);
     setTimeout(() => setAddedToCart(false), 2000);
   }
 
   return (
-    <div className="min-h-screen bg-white text-gray-900">
+    <div className="min-h-screen bg-white text-gray-900" style={themeVars(resolveColor(themeColor))}>
       <PromoBar />
-      <StorefrontHeader storeSlug={storeSlug} cartItems={cartItems} onCartUpdate={setCartItems} />
+      <StorefrontHeader
+        storeSlug={storeSlug}
+        storeName={storeName}
+        logoUrl={logoUrl}
+        cartItems={cartItems}
+        onCartUpdate={setCartItems}
+        cartOpen={cartOpen}
+        onCartOpenChange={setCartOpen}
+        boostModules={product.boostModules}
+      />
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         <nav className="text-xs text-gray-400 mb-6 flex items-center gap-1.5">
-          <Link href={`/${storeSlug}`} className="hover:text-purple-600 transition-colors">Home</Link>
+          <Link href={storeHref(storeSlug)} className="hover:text-[var(--sp-primary)] transition-colors">Home</Link>
           <span>/</span>
           <span className="text-gray-700 truncate max-w-[200px]">{product.name}</span>
         </nav>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-14">
           <div className="lg:sticky lg:top-20 lg:self-start">
-            <ImageGallery images={product.images} thumbnails={product.thumbnails} name={product.name} />
+            <ImageGallery images={product.images} thumbnails={product.thumbnails} name={product.name} variantImage={variantImage} />
           </div>
 
           <div className="space-y-5">
@@ -287,7 +388,7 @@ export default function SellpagePage() {
                   ))}
                 </div>
                 <span className="text-sm font-medium text-gray-700">{product.rating}</span>
-                <a href="#reviews" className="text-sm text-purple-600 hover:underline">
+                <a href="#reviews" className="text-sm text-[var(--sp-primary)] hover:underline">
                   ({product.reviewCount} reviews)
                 </a>
               </div>
@@ -298,13 +399,21 @@ export default function SellpagePage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-3xl font-bold text-gray-900">${product.price.toFixed(2)}</span>
-              {product.comparePrice > product.price && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-3xl font-bold text-gray-900">${effectivePrice.toFixed(2)}</span>
+              {effectivePrice < product.price && (
+                <span className="text-lg text-gray-400 line-through">${product.price.toFixed(2)}</span>
+              )}
+              {product.comparePrice > effectivePrice && (
                 <span className="text-lg text-gray-400 line-through">${product.comparePrice.toFixed(2)}</span>
               )}
               {off > 0 && (
                 <span className="bg-red-100 text-red-600 text-sm font-bold px-2.5 py-1 rounded-full">{off}% OFF</span>
+              )}
+              {upsellResult && (
+                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
+                  Upsell {upsellResult.discountPct}% applied!
+                </span>
               )}
             </div>
 
@@ -312,7 +421,7 @@ export default function SellpagePage() {
               <VariantSelector variants={product.variants} selected={selectedVariants} onChange={handleVariantChange} />
             )}
 
-            {product.boostModules.length > 0 && <BoostModule modules={product.boostModules} />}
+            {product.boostModules.length > 0 && <BoostModule modules={product.boostModules} qty={qty} />}
 
             <div className="flex items-center gap-4">
               <span className="text-sm font-semibold text-gray-700">Quantity</span>
@@ -330,8 +439,8 @@ export default function SellpagePage() {
                 {addedToCart ? '✓ Added to Cart!' : 'Add to Cart'}
               </button>
               <Link
-                href={`/${storeSlug}/${slug}/checkout`}
-                className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl font-semibold text-sm transition-colors"
+                href={checkoutUrl}
+                className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-[var(--sp-primary)] hover:bg-[var(--sp-primary-hover)] text-white rounded-2xl font-semibold text-sm transition-colors"
               >
                 <Zap size={16} />
                 Buy Now
@@ -346,7 +455,7 @@ export default function SellpagePage() {
           </div>
         </div>
 
-        <div className="mt-12"><TrustBadges /></div>
+        <div className="mt-12"><TrustBadges config={guaranteeConfig} /></div>
 
         <div className="mt-10 max-w-2xl">
           <div className="flex gap-0 border-b border-gray-200 mb-1">
@@ -359,17 +468,25 @@ export default function SellpagePage() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                  activeTab === tab.id ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === tab.id ? 'border-[var(--sp-primary)] text-[var(--sp-primary-hover)]' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
               >
                 {tab.label}
               </button>
             ))}
           </div>
-          <div className="py-5 text-sm text-gray-600 leading-relaxed whitespace-pre-line">
-            {activeTab === 'description' && product.description}
-            {activeTab === 'shipping' && product.shippingInfo}
-            {activeTab === 'returns' && product.returnPolicy}
+          <div className="py-5 text-sm text-gray-600 leading-relaxed">
+            {activeTab === 'description' && (
+              isHtml(product.description)
+                ? <div className="rich-description [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:my-3 [&_p]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_a]:text-[var(--sp-primary)] [&_a]:underline [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 [&_th]:border [&_th]:border-gray-200 [&_th]:p-2 [&_th]:bg-gray-50" dangerouslySetInnerHTML={{ __html: product.description }} />
+                : <div className="whitespace-pre-line">{product.description}</div>
+            )}
+            {activeTab === 'shipping' && (
+              typeof product.shippingInfo === 'string' && isHtml(product.shippingInfo)
+                ? <div className="rich-description [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:my-3 [&_p]:mb-3 [&_a]:text-[var(--sp-primary)] [&_a]:underline" dangerouslySetInnerHTML={{ __html: product.shippingInfo }} />
+                : <div className="whitespace-pre-line">{product.shippingInfo}</div>
+            )}
+            {activeTab === 'returns' && <div className="whitespace-pre-line">{product.returnPolicy}</div>}
           </div>
         </div>
 

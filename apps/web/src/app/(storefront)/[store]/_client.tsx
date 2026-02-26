@@ -9,6 +9,7 @@ import { PromoBar } from '@/components/storefront/PromoBar';
 import { StorefrontHeader } from '@/components/storefront/StorefrontHeader';
 import { StorefrontFooter } from '@/components/storefront/StorefrontFooter';
 import { fetchStore, type StoreData } from '@/lib/storefrontApi';
+import { storeHref } from '@/lib/storefrontLinks';
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
@@ -73,6 +74,7 @@ export default function StoreHomePage() {
   const [activeCat, setActiveCat] = useState('');
   const [products, setProducts] = useState<ProductCard[]>(IS_PREVIEW ? mockCards() : []);
   const [storeName, setStoreName] = useState(IS_PREVIEW ? STORE_CONFIG.name : '');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [tagline, setTagline] = useState(IS_PREVIEW ? STORE_CONFIG.tagline : '');
   const [loading, setLoading] = useState(!IS_PREVIEW);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +87,7 @@ export default function StoreHomePage() {
       .then((data) => {
         if (cancelled) return;
         setStoreName(data.store.name);
+        setLogoUrl(data.store.logoUrl ?? null);
         setTagline('');
         setProducts(mapApiToCards(data));
       })
@@ -140,6 +143,8 @@ export default function StoreHomePage() {
       <PromoBar />
       <StorefrontHeader
         storeSlug={storeSlug}
+        storeName={storeName}
+        logoUrl={logoUrl}
         cartItems={cartItems}
         onCartUpdate={setCartItems}
       />
@@ -223,7 +228,7 @@ export default function StoreHomePage() {
             {filtered.map(p => {
               const off = Math.round((1 - p.price / p.comparePrice) * 100);
               return (
-                <Link key={p.id} href={`/${storeSlug}/${p.slug}`} className="group block">
+                <Link key={p.id} href={storeHref(storeSlug, `/${p.slug}`)} className="group block">
                   <div className="rounded-2xl overflow-hidden border border-gray-100 hover:border-purple-200 hover:shadow-lg transition-all duration-200 bg-white">
                     <div className="relative aspect-square bg-gray-100 overflow-hidden">
                       <img

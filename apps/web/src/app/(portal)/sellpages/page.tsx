@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Search, ChevronRight, ChevronLeft, Plus, X, Loader2 } from 'lucide-react';
-import { apiGet, apiPost, type ApiError } from '@/lib/apiClient';
+import { FileText, Search, ChevronRight, ChevronLeft, Plus, X, Loader2, Trash2 } from 'lucide-react';
+import { apiGet, apiPost, apiDelete, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
@@ -47,6 +47,25 @@ export default function SellpagesPage() {
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [modalError, setModalError] = useState<string | null>(null);
+
+  // ── Delete state ──
+  const [deleteTarget, setDeleteTarget] = useState<SellpageListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await apiDelete(`/sellpages/${deleteTarget.id}`);
+      addToast('Sellpage deleted', 'success');
+      setDeleteTarget(null);
+      fetchSellpages();
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const fetchSellpages = useCallback(async () => {
     setLoading(true);
@@ -168,8 +187,19 @@ export default function SellpagesPage() {
     {
       key: 'action',
       label: '',
-      className: 'w-8',
-      render: () => <ChevronRight size={14} className="text-muted-foreground" />,
+      className: 'w-20',
+      render: (r) => (
+        <div className="flex items-center gap-1 justify-end">
+          <button
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(r); }}
+            className="p-1.5 text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+            title="Delete sellpage"
+          >
+            <Trash2 size={14} />
+          </button>
+          <ChevronRight size={14} className="text-muted-foreground" />
+        </div>
+      ),
     },
   ];
 
@@ -383,6 +413,45 @@ export default function SellpagesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Confirmation Modal ── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => !deleting && setDeleteTarget(null)}
+          />
+          <div className="relative bg-card border border-border rounded-xl w-full max-w-sm mx-4 shadow-xl">
+            <div className="p-5 text-center">
+              <div className="w-12 h-12 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Trash2 size={20} className="text-red-500" />
+              </div>
+              <h3 className="text-base font-semibold text-foreground mb-1">Delete Sellpage</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Are you sure you want to delete <strong>{deleteTarget.titleOverride ?? deleteTarget.slug}</strong>? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleting}
+                  className="px-4 py-2 bg-muted text-muted-foreground rounded-lg text-sm font-medium hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteConfirm}
+                  disabled={deleting}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium
+                             hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {deleting && <Loader2 size={14} className="animate-spin" />}
+                  {deleting ? 'Deleting...' : 'Delete'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

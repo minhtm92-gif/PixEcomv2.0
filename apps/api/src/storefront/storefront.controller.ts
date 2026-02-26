@@ -19,6 +19,17 @@ export class StorefrontController {
   ) {}
 
   /**
+   * GET /api/storefront/resolve-domain?hostname=jal2.com
+   * Public — resolves a custom domain hostname to its seller slug.
+   * Used by Next.js middleware for custom domain routing.
+   * NOTE: must be registered BEFORE :sellerSlug to avoid route collision.
+   */
+  @Get('resolve-domain')
+  resolveDomain(@Query('hostname') hostname: string) {
+    return this.storefront.resolveDomain(hostname);
+  }
+
+  /**
    * GET /api/storefront/sitemap-data
    * Public — lightweight list of all active sellers + published sellpages for sitemap.xml.
    * NOTE: must be registered BEFORE :sellerSlug to avoid route collision.

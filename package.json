@@ -18,6 +18,9 @@
     "seed:alpha:ads": "pnpm --filter @pixecom/database seed:alpha:ads",
     "seed:alpha:ads:reset": "pnpm --filter @pixecom/database seed:alpha:ads:reset",
     "seed:alpha:ads:verify": "pnpm --filter @pixecom/database seed:alpha:ads:verify",
+    "seed:alpha:stats": "pnpm --filter @pixecom/database seed:alpha:stats",
+    "seed:alpha:stats:reset": "pnpm --filter @pixecom/database seed:alpha:stats:reset",
+    "seed:alpha:stats:verify": "pnpm --filter @pixecom/database seed:alpha:stats:verify",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\""
   },
   "devDependencies": {

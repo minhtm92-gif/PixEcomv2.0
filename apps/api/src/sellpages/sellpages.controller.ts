@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -173,6 +174,22 @@ export class SellpagesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.sellpagesService.unpublishSellpage(user.sellerId, id);
+  }
+
+  /**
+   * DELETE /api/sellpages/:id
+   *
+   * Permanently deletes a sellpage. Cannot be undone.
+   * Related orders/campaigns/discounts will have sellpageId set to null.
+   * Stats cascade-delete automatically.
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  async deleteSellpage(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.sellpagesService.deleteSellpage(user.sellerId, id);
   }
 
   /**

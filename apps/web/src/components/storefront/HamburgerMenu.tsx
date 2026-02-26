@@ -3,6 +3,7 @@
 import { X } from 'lucide-react';
 import Link from 'next/link';
 import { STORE_CONFIG } from '@/mock/storefront';
+import { storeHref } from '@/lib/storefrontLinks';
 
 const NAV_LINKS = [
   { label: 'Home', href: '' },
@@ -49,9 +50,9 @@ export function HamburgerMenu({ open, onClose, storeSlug }: HamburgerMenuProps) 
           {NAV_LINKS.map(l => (
             <Link
               key={l.label}
-              href={`/${storeSlug}${l.href}`}
+              href={storeHref(storeSlug, l.href || '')}
               onClick={onClose}
-              className="block px-3 py-2.5 text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-lg font-medium text-sm transition-colors"
+              className="block px-3 py-2.5 text-gray-700 hover:bg-[var(--sp-primary-light)] hover:text-[var(--sp-primary-hover)] rounded-lg font-medium text-sm transition-colors"
             >
               {l.label}
             </Link>
@@ -60,21 +61,21 @@ export function HamburgerMenu({ open, onClose, storeSlug }: HamburgerMenuProps) 
           <hr className="my-3 border-gray-100" />
 
           <Link
-            href={`/${storeSlug}/trackings/search`}
+            href={storeHref(storeSlug, '/trackings/search')}
             onClick={onClose}
             className="block px-3 py-2.5 text-gray-500 hover:bg-gray-50 rounded-lg text-sm transition-colors"
           >
             Track My Order
           </Link>
           <Link
-            href={`/${storeSlug}/pages/shipping`}
+            href={storeHref(storeSlug, '/pages/shipping')}
             onClick={onClose}
             className="block px-3 py-2.5 text-gray-500 hover:bg-gray-50 rounded-lg text-sm transition-colors"
           >
             Shipping Info
           </Link>
           <Link
-            href={`/${storeSlug}/pages/returns`}
+            href={storeHref(storeSlug, '/pages/returns')}
             onClick={onClose}
             className="block px-3 py-2.5 text-gray-500 hover:bg-gray-50 rounded-lg text-sm transition-colors"
           >
@@ -84,7 +85,7 @@ export function HamburgerMenu({ open, onClose, storeSlug }: HamburgerMenuProps) 
 
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-100">
           <p className="text-xs text-gray-400 text-center">
-            Powered by <span className="text-purple-500">PixEcom</span>
+            Powered by <span className="text-[var(--sp-primary)]">PixEcom</span>
           </p>
         </div>
       </div>

@@ -11,5 +11,17 @@ export class UpdateSellerDto {
 
   @IsOptional()
   @IsUUID()
-  paymentGatewayId?: string;
+  paypalGatewayId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  creditCardGatewayId?: string;
+
+  @IsOptional()
+  @IsString()
+  logoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  faviconUrl?: string;
 }

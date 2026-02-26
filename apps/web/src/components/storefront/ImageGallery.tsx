@@ -1,23 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ImageGalleryProps {
   images: string[];
   thumbnails: string[];
   name: string;
+  /** When a variant is selected and has its own image, pass it here to show first */
+  variantImage?: string | null;
 }
 
-export function ImageGallery({ images, thumbnails, name }: ImageGalleryProps) {
+export function ImageGallery({ images, thumbnails, name, variantImage }: ImageGalleryProps) {
   const [active, setActive] = useState(0);
 
+  // When variantImage changes, jump to first slide (the variant image)
+  useEffect(() => {
+    if (variantImage) {
+      setActive(0);
+    }
+  }, [variantImage]);
+
+  // Build display images: if variantImage exists, prepend it (deduped)
+  const displayImages = variantImage
+    ? [variantImage, ...images.filter(img => img !== variantImage)]
+    : images;
+  const displayThumbs = variantImage
+    ? [variantImage, ...thumbnails.filter(t => t !== variantImage)]
+    : thumbnails;
+
   function prev() {
-    setActive(i => (i > 0 ? i - 1 : images.length - 1));
+    setActive(i => (i > 0 ? i - 1 : displayImages.length - 1));
   }
 
   function next() {
-    setActive(i => (i < images.length - 1 ? i + 1 : 0));
+    setActive(i => (i < displayImages.length - 1 ? i + 1 : 0));
   }
 
   return (
@@ -25,8 +42,8 @@ export function ImageGallery({ images, thumbnails, name }: ImageGalleryProps) {
       {/* Main image */}
       <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100 group">
         <img
-          key={images[active]}
-          src={images[active]}
+          key={displayImages[active]}
+          src={displayImages[active]}
           alt={`${name} — photo ${active + 1}`}
           className="w-full h-full object-cover transition-opacity duration-300"
           onError={e => {
@@ -34,7 +51,7 @@ export function ImageGallery({ images, thumbnails, name }: ImageGalleryProps) {
           }}
         />
 
-        {images.length > 1 && (
+        {displayImages.length > 1 && (
           <>
             <button
               onClick={prev}
@@ -54,15 +71,15 @@ export function ImageGallery({ images, thumbnails, name }: ImageGalleryProps) {
         )}
 
         {/* Dot indicators */}
-        {images.length > 1 && (
+        {displayImages.length > 1 && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-            {images.map((_, i) => (
+            {displayImages.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setActive(i)}
                 aria-label={`Go to photo ${i + 1}`}
                 className={`h-1.5 rounded-full transition-all ${
-                  i === active ? 'w-4 bg-purple-600' : 'w-1.5 bg-white/70'
+                  i === active ? 'w-4 bg-[var(--sp-primary)]' : 'w-1.5 bg-white/70'
                 }`}
               />
             ))}
@@ -71,16 +88,16 @@ export function ImageGallery({ images, thumbnails, name }: ImageGalleryProps) {
       </div>
 
       {/* Thumbnails */}
-      {thumbnails.length > 1 && (
+      {displayThumbs.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {thumbnails.map((thumb, i) => (
+          {displayThumbs.map((thumb, i) => (
             <button
               key={i}
               onClick={() => setActive(i)}
               aria-label={`View photo ${i + 1}`}
               className={`flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border-2 transition-all ${
                 i === active
-                  ? 'border-purple-500 shadow-sm'
+                  ? 'border-[var(--sp-primary)] shadow-sm'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >

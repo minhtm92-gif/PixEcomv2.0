@@ -38,12 +38,15 @@ type SellpageCardRow = {
   sellpageType: string;
   titleOverride: string | null;
   descriptionOverride: string | null;
+  customDomain: string | null;
   createdAt: Date;
   updatedAt: Date;
-  domain: { id: string; hostname: string } | null;
+  domain: { id: string; hostname: string; status: string } | null;
 };
 
 type SellpageDetailRow = SellpageCardRow & {
+  headerConfig: unknown;
+  boostModules: unknown;
   product: {
     id: string;
     name: string;
@@ -65,10 +68,11 @@ const SELLPAGE_CARD_SELECT = {
   sellpageType: true,
   titleOverride: true,
   descriptionOverride: true,
+  customDomain: true,
   createdAt: true,
   updatedAt: true,
   domain: {
-    select: { id: true, hostname: true },
+    select: { id: true, hostname: true, status: true },
   },
 } as const;
 
@@ -85,10 +89,13 @@ const SELLPAGE_DETAIL_SELECT = {
   sellpageType: true,
   titleOverride: true,
   descriptionOverride: true,
+  customDomain: true,
+  headerConfig: true,
+  boostModules: true,
   createdAt: true,
   updatedAt: true,
   domain: {
-    select: { id: true, hostname: true },
+    select: { id: true, hostname: true, status: true },
   },
   product: {
     select: {
@@ -265,7 +272,11 @@ export class SellpagesService {
       dto.titleOverride !== undefined ||
       dto.descriptionOverride !== undefined ||
       dto.customDomain !== undefined ||
-      dto.pixelId !== undefined;
+      dto.pixelId !== undefined ||
+      dto.primaryColor !== undefined ||
+      dto.guaranteeConfig !== undefined ||
+      dto.boostModules !== undefined ||
+      dto.shippingConfig !== undefined;
 
     if (!hasFields) {
       throw new BadRequestException(
@@ -294,37 +305,36 @@ export class SellpagesService {
       }
     }
 
-    // B.2: Validate pixelId if provided
-    let resolvedPixelId: string | null | undefined = undefined;
-    if (dto.pixelId !== undefined) {
-      if (dto.pixelId === null) {
-        resolvedPixelId = null;
-      } else {
-        const pixel = await this.prisma.fbConnection.findFirst({
-          where: { id: dto.pixelId, sellerId, connectionType: 'PIXEL', isActive: true },
-          select: { id: true },
-        });
-        if (!pixel) {
-          throw new BadRequestException(
-            `FbConnection ${dto.pixelId} is not an active PIXEL connection for this seller`,
-          );
-        }
-        resolvedPixelId = dto.pixelId;
-      }
-    }
-
-    // Build headerConfig update if pixelId changed
+    // Merge pixelId, primaryColor, guaranteeConfig into headerConfig
     let headerConfigUpdate: Record<string, unknown> | undefined;
-    if (resolvedPixelId !== undefined) {
-      // Load current headerConfig
+    if (dto.pixelId !== undefined || dto.primaryColor !== undefined || dto.guaranteeConfig !== undefined || dto.shippingConfig !== undefined) {
       const current = await this.prisma.sellpage.findUnique({
         where: { id },
         select: { headerConfig: true },
       });
       const existing = (current?.headerConfig as Record<string, unknown>) ?? {};
-      headerConfigUpdate = resolvedPixelId === null
-        ? { ...existing, pixelId: null }
-        : { ...existing, pixelId: resolvedPixelId };
+      headerConfigUpdate = { ...existing };
+
+      if (dto.pixelId !== undefined) {
+        headerConfigUpdate.pixelId = dto.pixelId === null || dto.pixelId === ''
+          ? null
+          : dto.pixelId.trim();
+      }
+      if (dto.primaryColor !== undefined) {
+        headerConfigUpdate.primaryColor = dto.primaryColor === null || dto.primaryColor === ''
+          ? null
+          : dto.primaryColor.trim();
+      }
+      if (dto.guaranteeConfig !== undefined) {
+        headerConfigUpdate.guarantees = dto.guaranteeConfig;
+      }
+      if (dto.shippingConfig !== undefined) {
+        if (dto.shippingConfig === null) {
+          delete headerConfigUpdate.shipping;
+        } else {
+          headerConfigUpdate.shipping = dto.shippingConfig;
+        }
+      }
     }
 
     const updated = await this.prisma.sellpage.update({
@@ -340,6 +350,7 @@ export class SellpagesService {
         }),
         ...(dto.customDomain !== undefined && { customDomain: dto.customDomain }),
         ...(headerConfigUpdate !== undefined && { headerConfig: headerConfigUpdate }),
+        ...(dto.boostModules !== undefined && { boostModules: dto.boostModules }),
       } as any,
       select: SELLPAGE_CARD_SELECT,
     });
@@ -416,6 +427,27 @@ export class SellpagesService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // DELETE
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * DELETE /api/sellpages/:id
+   *
+   * Permanently deletes a sellpage.
+   * - Orders linked to this sellpage will have sellpageId set to null.
+   * - Stats (SellpageStatsDaily) cascade-delete automatically.
+   * - Campaigns linked to this sellpage will have sellpageId set to null.
+   * - Discounts linked to this sellpage will have sellpageId set to null.
+   */
+  async deleteSellpage(sellerId: string, id: string) {
+    await this.assertSellpageBelongsToSeller(sellerId, id);
+
+    await this.prisma.sellpage.delete({ where: { id } });
+
+    return { deleted: true, id };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // DOMAIN CHECK / VERIFY  (B.1)
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -455,7 +487,7 @@ export class SellpagesService {
 
   /**
    * GET /api/sellpages/:id/pixel
-   * Return the pixel assigned to this sellpage via headerConfig.pixelId.
+   * Return the raw Facebook Pixel ID stored in headerConfig.pixelId.
    */
   async getPixel(sellerId: string, id: string) {
     const sellpage = await this.prisma.sellpage.findUnique({
@@ -469,24 +501,7 @@ export class SellpagesService {
     const header = (sellpage.headerConfig as Record<string, unknown>) ?? {};
     const pixelId = typeof header['pixelId'] === 'string' ? header['pixelId'] : null;
 
-    if (!pixelId) {
-      return { pixelId: null, pixelName: null, pixelExternalId: null };
-    }
-
-    const pixel = await this.prisma.fbConnection.findFirst({
-      where: { id: pixelId, sellerId, connectionType: 'PIXEL' },
-      select: { id: true, name: true, externalId: true },
-    });
-
-    if (!pixel) {
-      return { pixelId, pixelName: null, pixelExternalId: null };
-    }
-
-    return {
-      pixelId: pixel.id,
-      pixelName: pixel.name ?? null,
-      pixelExternalId: pixel.externalId,
-    };
+    return { pixelId };
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -729,6 +744,11 @@ function mapToCardDto(sellpage: SellpageCardRow) {
     sellpageType: sellpage.sellpageType,
     titleOverride: sellpage.titleOverride,
     descriptionOverride: sellpage.descriptionOverride,
+    customDomain: sellpage.customDomain,
+    customDomainStatus: sellpage.domain?.status ?? 'NOT_SET',
+    domain: sellpage.domain
+      ? { id: sellpage.domain.id, hostname: sellpage.domain.hostname, status: sellpage.domain.status }
+      : null,
     urlPreview: buildUrlPreview(sellpage.slug, sellpage.domain),
     stats: { ...STUB_STATS },
     createdAt: sellpage.createdAt.toISOString(),
@@ -741,9 +761,12 @@ function mapToCardDto(sellpage: SellpageCardRow) {
  */
 function mapToDetailDto(sellpage: SellpageDetailRow) {
   const card = mapToCardDto(sellpage);
+  const headerCfg = (sellpage.headerConfig ?? {}) as Record<string, unknown>;
 
   return {
     ...card,
+    headerConfig: headerCfg,
+    boostModules: (sellpage.boostModules ?? []) as unknown[],
     product: {
       id: sellpage.product.id,
       name: sellpage.product.name,

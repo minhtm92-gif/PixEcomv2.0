@@ -1,6 +1,9 @@
 /* ─────────────────────────────────────────────
  *  API response types — matches backend contracts exactly
+ *  Storefront-shared config types live in @/types/storefront
  * ───────────────────────────────────────────── */
+
+import type { GuaranteeConfig, BoostModuleConfig } from './storefront';
 
 // ── Orders ──
 export interface OrderListItem {
@@ -189,6 +192,25 @@ export interface SellpagesListResponse {
   limit: number;
 }
 
+export interface SellerDomainItem {
+  id: string;
+  hostname: string;
+  status: string;
+  isPrimary: boolean;
+  verification: { type: string; name: string; value: string };
+  verifiedAt: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Sellpage Config Types (canonical definitions in @/types/storefront) ──
+export type {
+  GuaranteeBadgeConfig,
+  GuaranteeConfig,
+  BoostModuleConfig,
+} from './storefront';
+
 export interface SellpageDetail extends SellpageListItem {
   product: {
     id: string;
@@ -199,7 +221,10 @@ export interface SellpageDetail extends SellpageListItem {
   };
   customDomain?: string | null;
   customDomainStatus?: 'NOT_SET' | 'PENDING' | 'VERIFIED' | null;
+  domain?: { id: string; hostname: string; status: string } | null;
   pixelId?: string | null;
+  headerConfig?: Record<string, unknown>;
+  boostModules?: BoostModuleConfig[];
 }
 
 export interface LinkedAdPost {
@@ -289,6 +314,8 @@ export interface UpdateSellpageDto {
   domainId?: string;
   titleOverride?: string;
   descriptionOverride?: string;
+  guaranteeConfig?: GuaranteeConfig;
+  boostModules?: BoostModuleConfig[];
 }
 
 // ── Products ──
@@ -357,6 +384,7 @@ export interface SellerProfile {
   name: string;
   slug: string;
   logoUrl: string | null;
+  faviconUrl: string | null;
   isActive: boolean;
 }
 
@@ -372,6 +400,7 @@ export interface SellerSettings {
 export interface UpdateSellerDto {
   name?: string;
   logoUrl?: string;
+  faviconUrl?: string;
 }
 
 export interface UpdateSellerSettingsDto {
