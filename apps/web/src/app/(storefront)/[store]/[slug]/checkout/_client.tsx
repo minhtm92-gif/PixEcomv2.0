@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, Lock, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Lock, Check, Loader2, ShoppingBag, Share2, Tag } from 'lucide-react';
 import { DiscountPicker } from '@/components/storefront/DiscountPicker';
 
 // ─── Lazy-load payment SDKs (~330KB combined) ────────────────────────────────
@@ -154,6 +154,7 @@ function CheckoutForm() {
   const [placed, setPlaced] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
   const [orderId, setOrderId] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Stripe confirm function ref
   const [stripeConfirm, setStripeConfirm] = useState<
@@ -382,8 +383,19 @@ function CheckoutForm() {
 
   // ── Success ──
   if (placed) {
+    const productUrl = typeof window !== 'undefined' ? `${window.location.origin}${storeHref(storeSlug, `/${slug}`)}` : '';
+
+    function handleCopyLink() {
+      if (!productUrl) return;
+      navigator.clipboard.writeText(productUrl).then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      });
+    }
+
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 text-gray-900" style={themeVars(resolveColor(themeColor))}>
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center px-4 py-12 text-gray-900" style={themeVars(resolveColor(themeColor))}>
+        {/* Main success card */}
         <div className="bg-white rounded-3xl shadow-xl p-10 max-w-md w-full text-center">
           <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <Check size={36} className="text-green-600" strokeWidth={2.5} />
@@ -412,6 +424,75 @@ function CheckoutForm() {
             >
               Continue Shopping
             </Link>
+          </div>
+        </div>
+
+        {/* Post-purchase upsell section */}
+        <div className="max-w-3xl w-full mt-10">
+          <h2 className="text-lg font-bold text-gray-900 text-center mb-6">Complete Your Experience</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Browse More Products */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-[var(--sp-primary-light)] rounded-full flex items-center justify-center mb-4">
+                <ShoppingBag size={22} className="text-[var(--sp-primary)]" />
+              </div>
+              <h3 className="font-semibold text-gray-900 text-sm mb-1.5">Browse More Products</h3>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                Discover more great items from {storeInfo.name || 'our store'}.
+              </p>
+              <Link
+                href={storeHref(storeSlug)}
+                className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-[var(--sp-primary)] hover:text-[var(--sp-primary-hover)] transition-colors"
+              >
+                Visit Store
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              </Link>
+            </div>
+
+            {/* Share Your Purchase */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                <Share2 size={22} className="text-blue-500" />
+              </div>
+              <h3 className="font-semibold text-gray-900 text-sm mb-1.5">Share Your Purchase</h3>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                Know someone who would love this? Share the link!
+              </p>
+              <button
+                onClick={handleCopyLink}
+                className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-[var(--sp-primary)] hover:text-[var(--sp-primary-hover)] transition-colors"
+              >
+                {linkCopied ? (
+                  <>
+                    <Check size={14} />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    Copy Link
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* 10% Off Next Order */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col items-center text-center">
+              <div className="w-12 h-12 bg-amber-50 rounded-full flex items-center justify-center mb-4">
+                <Tag size={22} className="text-amber-500" />
+              </div>
+              <h3 className="font-semibold text-gray-900 text-sm mb-1.5">10% Off Next Order</h3>
+              <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+                Come back soon and enjoy 10% off your next purchase!
+              </p>
+              <Link
+                href={storeHref(storeSlug)}
+                className="mt-auto inline-flex items-center gap-1.5 text-sm font-medium text-[var(--sp-primary)] hover:text-[var(--sp-primary-hover)] transition-colors"
+              >
+                Shop Now
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              </Link>
+            </div>
           </div>
         </div>
       </div>

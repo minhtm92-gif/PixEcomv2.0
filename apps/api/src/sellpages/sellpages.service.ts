@@ -26,6 +26,21 @@ const STUB_STATS = {
   cashToBalance: 0,
 };
 
+// ─── Health Score Types ──────────────────────────────────────────────────────
+
+export interface HealthBreakdownItem {
+  criteria: string;
+  points: number;
+  earned: number;
+  passed: boolean;
+}
+
+export interface HealthScoreResponse {
+  score: number;
+  breakdown: HealthBreakdownItem[];
+  suggestions: string[];
+}
+
 // ─── Shared row shapes ───────────────────────────────────────────────────────
 
 type SellpageCardRow = {
@@ -53,6 +68,26 @@ type SellpageDetailRow = SellpageCardRow & {
     slug: string;
     basePrice: { toString(): string };
     assetThumbs: Array<{ url: string }>;
+  };
+};
+
+/** Row shape for health score calculation — includes product + SEO fields */
+type SellpageHealthRow = {
+  id: string;
+  sellerId: string;
+  status: string;
+  domainId: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  headerConfig: unknown;
+  boostModules: unknown;
+  product: {
+    images: unknown;
+    description: string | null;
+    compareAtPrice: unknown;
+    shippingInfo: unknown;
+    reviewCount: number;
+    variants: { id: string }[];
   };
 };
 
@@ -111,6 +146,28 @@ const SELLPAGE_DETAIL_SELECT = {
         take: 1,
         select: { url: true },
       },
+    },
+  },
+};
+
+/** Prisma select for health score calculation — lightweight, only the fields we need */
+const SELLPAGE_HEALTH_SELECT = {
+  id: true,
+  sellerId: true,
+  status: true,
+  domainId: true,
+  seoTitle: true,
+  seoDescription: true,
+  headerConfig: true,
+  boostModules: true,
+  product: {
+    select: {
+      images: true,
+      description: true,
+      compareAtPrice: true,
+      shippingInfo: true,
+      reviewCount: true,
+      variants: { select: { id: true }, where: { isActive: true } },
     },
   },
 };
@@ -199,7 +256,7 @@ export class SellpagesService {
     sellerId: string,
     dto: ListSellpagesDto,
   ): Promise<{
-    data: ReturnType<typeof mapToCardDto>[];
+    data: (ReturnType<typeof mapToCardDto> & { healthScore: number })[];
     total: number;
     page: number;
     limit: number;
@@ -210,7 +267,7 @@ export class SellpagesService {
 
     const where = buildListWhere(sellerId, dto);
 
-    const [sellpages, total] = await this.prisma.$transaction([
+    const [sellpages, total, healthRows] = await this.prisma.$transaction([
       this.prisma.sellpage.findMany({
         where,
         skip,
@@ -219,10 +276,27 @@ export class SellpagesService {
         select: SELLPAGE_CARD_SELECT,
       }),
       this.prisma.sellpage.count({ where }),
+      this.prisma.sellpage.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: SELLPAGE_HEALTH_SELECT,
+      }),
     ]);
 
+    // Build a map of sellpage ID → health score
+    const healthMap = new Map<string, number>();
+    for (const row of healthRows) {
+      const { score } = calculateHealthScore(row as unknown as SellpageHealthRow);
+      healthMap.set(row.id, score);
+    }
+
     return {
-      data: sellpages.map((s) => mapToCardDto(s as SellpageCardRow)),
+      data: sellpages.map((s) => ({
+        ...mapToCardDto(s as SellpageCardRow),
+        healthScore: healthMap.get(s.id) ?? 0,
+      })),
       total,
       page,
       limit,
@@ -502,6 +576,27 @@ export class SellpagesService {
     const pixelId = typeof header['pixelId'] === 'string' ? header['pixelId'] : null;
 
     return { pixelId };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // HEALTH SCORE
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * GET /api/sellpages/:id/health
+   * Returns a detailed health score breakdown for the given sellpage.
+   */
+  async getHealthScore(sellerId: string, id: string): Promise<HealthScoreResponse> {
+    const sellpage = await this.prisma.sellpage.findUnique({
+      where: { id },
+      select: SELLPAGE_HEALTH_SELECT,
+    });
+
+    if (!sellpage || sellpage.sellerId !== sellerId) {
+      throw new NotFoundException('Sellpage not found');
+    }
+
+    return calculateHealthScore(sellpage as unknown as SellpageHealthRow);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -801,4 +896,86 @@ function buildListWhere(sellerId: string, dto: ListSellpagesDto) {
   }
 
   return { AND: conditions };
+}
+
+// ─── Health Score Calculation ──────────────────────────────────────────────────
+
+/**
+ * Calculates a health score (0-100) for a sellpage based on optimization criteria.
+ * Pure function — no side effects, no DB access.
+ */
+function calculateHealthScore(row: SellpageHealthRow): HealthScoreResponse {
+  const breakdown: HealthBreakdownItem[] = [];
+  const suggestions: string[] = [];
+
+  // 1. SEO Title (10 pts)
+  const hasSeoTitle = !!row.seoTitle && row.seoTitle.trim().length > 0;
+  breakdown.push({ criteria: 'SEO Title', points: 10, earned: hasSeoTitle ? 10 : 0, passed: hasSeoTitle });
+  if (!hasSeoTitle) suggestions.push('Add an SEO title to improve search engine visibility');
+
+  // 2. SEO Description (10 pts)
+  const hasSeoDesc = !!row.seoDescription && row.seoDescription.trim().length > 0;
+  breakdown.push({ criteria: 'SEO Description', points: 10, earned: hasSeoDesc ? 10 : 0, passed: hasSeoDesc });
+  if (!hasSeoDesc) suggestions.push('Add an SEO description to improve search visibility');
+
+  // 3. Product Images >= 3 (10 pts)
+  const images = Array.isArray(row.product.images) ? row.product.images : [];
+  const hasEnoughImages = images.length >= 3;
+  breakdown.push({ criteria: 'Product Images (3+)', points: 10, earned: hasEnoughImages ? 10 : 0, passed: hasEnoughImages });
+  if (!hasEnoughImages) suggestions.push(`Add more product images (${images.length}/3 minimum) to boost conversions`);
+
+  // 4. At least 1 variant (5 pts)
+  const hasVariant = row.product.variants.length >= 1;
+  breakdown.push({ criteria: 'Product Variant', points: 5, earned: hasVariant ? 5 : 0, passed: hasVariant });
+  if (!hasVariant) suggestions.push('Add at least one product variant (size, color, etc.)');
+
+  // 5. Boost Modules >= 1 (10 pts)
+  const boostArr = Array.isArray(row.boostModules) ? row.boostModules : [];
+  const hasBoost = boostArr.length >= 1;
+  breakdown.push({ criteria: 'Boost Modules', points: 10, earned: hasBoost ? 10 : 0, passed: hasBoost });
+  if (!hasBoost) suggestions.push('Add boost modules (countdown timer, social proof, etc.) to increase urgency');
+
+  // 6. Reviews >= 3 (10 pts)
+  const hasReviews = row.product.reviewCount >= 3;
+  breakdown.push({ criteria: 'Reviews (3+)', points: 10, earned: hasReviews ? 10 : 0, passed: hasReviews });
+  if (!hasReviews) suggestions.push(`Get more reviews (${row.product.reviewCount}/3 minimum) to build trust`);
+
+  // 7. Description >= 100 chars (10 pts)
+  const desc = row.product.description ?? '';
+  const hasLongDesc = desc.length >= 100;
+  breakdown.push({ criteria: 'Product Description (100+ chars)', points: 10, earned: hasLongDesc ? 10 : 0, passed: hasLongDesc });
+  if (!hasLongDesc) suggestions.push('Write a longer product description (at least 100 characters) for better SEO');
+
+  // 8. Custom domain (5 pts)
+  const hasDomain = row.domainId !== null;
+  breakdown.push({ criteria: 'Custom Domain', points: 5, earned: hasDomain ? 5 : 0, passed: hasDomain });
+  if (!hasDomain) suggestions.push('Connect a custom domain to build brand credibility');
+
+  // 9. Published status (10 pts)
+  const isPublished = row.status === 'PUBLISHED';
+  breakdown.push({ criteria: 'Published Status', points: 10, earned: isPublished ? 10 : 0, passed: isPublished });
+  if (!isPublished) suggestions.push('Publish your sellpage to make it live and start receiving traffic');
+
+  // 10. Shipping Info (5 pts)
+  const shippingInfo = row.product.shippingInfo;
+  const hasShipping = shippingInfo !== null
+    && typeof shippingInfo === 'object'
+    && Object.keys(shippingInfo as Record<string, unknown>).length > 0;
+  breakdown.push({ criteria: 'Shipping Info', points: 5, earned: hasShipping ? 5 : 0, passed: hasShipping });
+  if (!hasShipping) suggestions.push('Add shipping information so customers know delivery details');
+
+  // 11. Compare at Price (5 pts)
+  const hasComparePrice = row.product.compareAtPrice !== null;
+  breakdown.push({ criteria: 'Compare At Price', points: 5, earned: hasComparePrice ? 5 : 0, passed: hasComparePrice });
+  if (!hasComparePrice) suggestions.push('Set a compare-at price to show savings and increase conversions');
+
+  // 12. Header Config / Theme (10 pts)
+  const headerCfg = (row.headerConfig ?? {}) as Record<string, unknown>;
+  const hasTheme = headerCfg.primaryColor !== undefined && headerCfg.primaryColor !== null && headerCfg.primaryColor !== '';
+  breakdown.push({ criteria: 'Theme Configuration', points: 10, earned: hasTheme ? 10 : 0, passed: hasTheme });
+  if (!hasTheme) suggestions.push('Set a primary color in your sellpage theme to match your brand');
+
+  const score = breakdown.reduce((sum, b) => sum + b.earned, 0);
+
+  return { score, breakdown, suggestions };
 }

@@ -97,7 +97,16 @@ export function StorefrontFooter({ storeSlug }: StorefrontFooterProps) {
 
         <div className="border-t border-gray-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500">
           <span>© {new Date().getFullYear()} {STORE_CONFIG.name}. All rights reserved.</span>
-          <span>Powered by <span className="text-[var(--sp-primary)]">PixEcom</span></span>
+          <span>Powered by{' '}
+            <a
+              href="https://pixecom.pixelxlab.com?utm_source=storefront&utm_medium=powered_by&utm_campaign=organic"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--sp-primary)] hover:underline transition-colors"
+            >
+              PixEcom
+            </a>
+          </span>
         </div>
 
         {IS_PREVIEW && (

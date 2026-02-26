@@ -8,6 +8,7 @@ import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
+import { HealthScoreBar, HealthScoreBadge } from '@/components/HealthScoreBar';
 import { fmtDate } from '@/lib/format';
 import type {
   SellpageListItem,
@@ -164,6 +165,16 @@ export default function SellpagesPage() {
       key: 'status',
       label: 'Status',
       render: (r) => <StatusBadge status={r.status} />,
+    },
+    {
+      key: 'health',
+      label: 'Health',
+      render: (r) => (
+        <div className="flex flex-col gap-1">
+          <HealthScoreBadge score={r.healthScore ?? 0} />
+          <HealthScoreBar score={r.healthScore ?? 0} size="sm" />
+        </div>
+      ),
     },
     {
       key: 'url',

@@ -181,8 +181,22 @@ export interface SellpageListItem {
     hold: number;
     cashToBalance: number;
   };
+  healthScore: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface HealthBreakdownItem {
+  criteria: string;
+  points: number;
+  earned: number;
+  passed: boolean;
+}
+
+export interface HealthScoreResponse {
+  score: number;
+  breakdown: HealthBreakdownItem[];
+  suggestions: string[];
 }
 
 export interface SellpagesListResponse {

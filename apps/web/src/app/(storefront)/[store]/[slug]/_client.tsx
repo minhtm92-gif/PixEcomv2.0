@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ShoppingCart, Zap, Eye, ChevronDown, Loader2 } from 'lucide-react';
@@ -21,6 +21,7 @@ import { QuantitySelector } from '@/components/storefront/QuantitySelector';
 import { TrustBadges } from '@/components/storefront/TrustBadges';
 import { ReviewSection, type ReviewItem } from '@/components/storefront/ReviewSection';
 import { FloatingCheckoutButton } from '@/components/storefront/FloatingCheckoutButton';
+import { StickyDesktopCTA } from '@/components/storefront/StickyDesktopCTA';
 import { fetchSellpage, type SellpageData, type SellpageVariant } from '@/lib/storefrontApi';
 import { storeHref } from '@/lib/storefrontLinks';
 import { resolveColor, themeVars } from '@/lib/storeTheme';
@@ -51,6 +52,7 @@ interface PageProduct {
   returnPolicy: string;
   socialProof: { viewers: number; purchased: number };
   badge: string | null;
+  allowOutOfStockPurchase: boolean;
 }
 
 // Convert DB variants (rows with options: { color: 'gold', size: 'M' })
@@ -104,6 +106,7 @@ function mapApiToProduct(data: SellpageData): PageProduct {
     returnPolicy: '30-day hassle-free returns.',
     socialProof: data.socialProof,
     badge: null,
+    allowOutOfStockPurchase: data.product.allowOutOfStockPurchase ?? false,
   };
 }
 
@@ -126,6 +129,7 @@ function mockProduct(slug: string): PageProduct {
     returnPolicy: p.returnPolicy,
     socialProof: p.socialProof,
     badge: p.badge ?? null,
+    allowOutOfStockPurchase: false,
   };
 }
 
@@ -213,6 +217,7 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
   const [userChangedVariant, setUserChangedVariant] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
   const [activeTab, setActiveTab] = useState<'description' | 'shipping' | 'returns'>('description');
+  const ctaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Skip fetch if preview mode OR we already have server-provided data
@@ -421,6 +426,34 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
               <VariantSelector variants={product.variants} selected={selectedVariants} onChange={handleVariantChange} />
             )}
 
+            {/* Stock urgency indicator */}
+            {(() => {
+              const stock = matchedVariant?.stockQuantity;
+              if (stock === undefined || stock === null) return null;
+              if (stock === 0 && !product.allowOutOfStockPurchase) {
+                return (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 px-3 py-1.5 rounded-full">
+                    Out of stock
+                  </span>
+                );
+              }
+              if (stock === 0 && product.allowOutOfStockPurchase) {
+                return (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">
+                    Made to order — ships in 3-5 days
+                  </span>
+                );
+              }
+              if (stock >= 1 && stock <= 10) {
+                return (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full">
+                    Only {stock} left in stock — order soon!
+                  </span>
+                );
+              }
+              return null;
+            })()}
+
             {product.boostModules.length > 0 && <BoostModule modules={product.boostModules} qty={qty} />}
 
             <div className="flex items-center gap-4">
@@ -428,7 +461,7 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
               <QuantitySelector value={qty} onChange={setQty} />
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-1">
+            <div ref={ctaRef} className="flex flex-col sm:flex-row gap-3 pt-1">
               <button
                 onClick={addToCart}
                 className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl font-semibold text-sm transition-all ${
@@ -502,6 +535,12 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
       </main>
 
       <FloatingCheckoutButton onClick={addToCart} />
+      <StickyDesktopCTA
+        price={effectivePrice}
+        comparePrice={product.comparePrice}
+        onBuyNow={() => { window.location.href = checkoutUrl; }}
+        ctaRef={ctaRef}
+      />
       <StorefrontFooter storeSlug={storeSlug} />
     </div>
   );

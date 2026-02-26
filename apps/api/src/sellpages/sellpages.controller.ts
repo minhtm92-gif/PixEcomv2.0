@@ -128,6 +128,19 @@ export class SellpagesController {
   }
 
   /**
+   * GET /api/sellpages/:id/health
+   * Returns a detailed health score breakdown (0-100) for the sellpage.
+   */
+  @Get(':id/health')
+  @HttpCode(HttpStatus.OK)
+  async getHealthScore(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.sellpagesService.getHealthScore(user.sellerId, id);
+  }
+
+  /**
    * PATCH /api/sellpages/:id
    *
    * Partial update of a sellpage (slug, domainId, titleOverride, descriptionOverride).
