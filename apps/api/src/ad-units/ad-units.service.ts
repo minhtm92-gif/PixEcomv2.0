@@ -177,7 +177,7 @@ export class AdUnitsService {
         : null;
 
     return {
-      items: rows.map((r) => ({
+      data: rows.map((r) => ({
         ...mapAdset(r),
         adsCount: r._count.ads,
       })),
@@ -328,7 +328,7 @@ export class AdUnitsService {
         : null;
 
     return {
-      items: rows.map((r) => ({
+      data: rows.map((r) => ({
         ...mapAd(r),
         adPostsCount: r._count.adPosts,
       })),

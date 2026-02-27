@@ -376,7 +376,7 @@ export class CampaignsService {
       take: limit + 1,
       select: {
         ...CAMPAIGN_SELECT,
-        sellpage: { select: { id: true, slug: true } },
+        sellpage: { select: { id: true, slug: true, domain: { select: { hostname: true } } } },
         adAccount: { select: { id: true, name: true, externalId: true } },
         _count: { select: { adsets: true } },
       },
@@ -393,8 +393,10 @@ export class CampaignsService {
     return {
       items: rows.map((r) => ({
         ...mapCampaign(r),
-        sellpage: r.sellpage,
-        adAccount: r.adAccount,
+        sellpage: r.sellpage
+          ? { id: r.sellpage.id, slug: r.sellpage.slug, urlPreview: buildCampaignUrlPreview(r.sellpage.slug, r.sellpage.domain) }
+          : null,
+        adAccountName: r.adAccount?.name ?? null,
         adsetsCount: r._count.adsets,
       })),
       nextCursor,
@@ -408,7 +410,7 @@ export class CampaignsService {
       where: { id: campaignId, sellerId },
       select: {
         ...CAMPAIGN_SELECT,
-        sellpage: { select: { id: true, slug: true } },
+        sellpage: { select: { id: true, slug: true, domain: { select: { hostname: true } } } },
         adAccount: { select: { id: true, name: true, externalId: true } },
         adStrategy: { select: { id: true, name: true } },
         _count: { select: { adsets: true } },
@@ -421,8 +423,10 @@ export class CampaignsService {
 
     return {
       ...mapCampaign(campaign),
-      sellpage: campaign.sellpage,
-      adAccount: campaign.adAccount,
+      sellpage: campaign.sellpage
+        ? { id: campaign.sellpage.id, slug: campaign.sellpage.slug, urlPreview: buildCampaignUrlPreview(campaign.sellpage.slug, campaign.sellpage.domain) }
+        : null,
+      adAccountName: campaign.adAccount?.name ?? null,
       adStrategy: campaign.adStrategy ?? null,
       adsetsCount: campaign._count.adsets,
     };
@@ -818,6 +822,7 @@ function mapCampaign(c: {
   createdAt: Date;
   updatedAt: Date;
 }) {
+  const budgetNum = Number(c.budget);
   return {
     id: c.id,
     sellerId: c.sellerId,
@@ -826,8 +831,10 @@ function mapCampaign(c: {
     adStrategyId: c.adStrategyId ?? null,
     externalCampaignId: c.externalCampaignId ?? null,
     name: c.name,
-    budget: Number(c.budget),
+    budget: budgetNum,
+    budgetPerDay: budgetNum,
     budgetType: c.budgetType,
+    platform: 'META' as const,
     status: c.status,
     deliveryStatus: c.deliveryStatus ?? null,
     startDate: c.startDate?.toISOString() ?? null,
@@ -835,4 +842,12 @@ function mapCampaign(c: {
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };
+}
+
+function buildCampaignUrlPreview(
+  slug: string,
+  domain: { hostname: string } | null,
+): string {
+  if (domain) return `https://${domain.hostname}/${slug}`;
+  return `/${slug}`;
 }
