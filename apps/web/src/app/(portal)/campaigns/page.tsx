@@ -30,6 +30,7 @@ import type {
   SellpageListItem,
   FbConnection,
   AdCreativeConfig,
+  AdFormat,
   CreateCampaignBatchDto,
   BatchCreateResponse,
 } from '@/types/api';
@@ -84,6 +85,7 @@ interface WizardState {
   // Step 2
   adAccountId: string;
   pageId: string;
+  pixelId: string;
   strategyKey: string;
   // Step 3
   nameTemplate: string;
@@ -95,12 +97,13 @@ interface WizardState {
   adCreatives: AdCreativeConfig[];
 }
 
-const DEFAULT_CREATIVE: AdCreativeConfig = { creativeId: '' };
+const DEFAULT_CREATIVE: AdCreativeConfig = { adFormat: 'VIDEO_AD' };
 
 const INITIAL_WIZARD: WizardState = {
   sellpageId: '',
   adAccountId: '',
   pageId: '',
+  pixelId: '',
   strategyKey: 'CBO_1_5_3',
   nameTemplate: '',
   campaignCount: 1,
@@ -156,9 +159,10 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
   const [sellpages, setSellpages] = useState<SellpageListItem[]>([]);
   const [sellpagesLoading, setSellpagesLoading] = useState(false);
 
-  // Ad accounts + Pages
+  // Ad accounts + Pages + Pixels
   const [adAccounts, setAdAccounts] = useState<FbConnection[]>([]);
   const [pages, setPages] = useState<FbConnection[]>([]);
+  const [pixels, setPixels] = useState<FbConnection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
 
   // Derived: selected strategy preset
@@ -179,10 +183,12 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
     Promise.all([
       apiGet<FbConnection[]>('/fb/connections?connectionType=AD_ACCOUNT'),
       apiGet<FbConnection[]>('/fb/connections?connectionType=PAGE'),
+      apiGet<FbConnection[]>('/fb/connections?connectionType=PIXEL'),
     ])
-      .then(([accs, pgs]) => {
+      .then(([accs, pgs, pxls]) => {
         setAdAccounts(accs ?? []);
         setPages(pgs ?? []);
+        setPixels(pxls ?? []);
         // Auto-select if only one ad account
         if (accs && accs.length === 1 && !state.adAccountId) {
           update({ adAccountId: accs[0].id });
@@ -190,6 +196,10 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
         // Auto-select if only one page
         if (pgs && pgs.length === 1 && !state.pageId) {
           update({ pageId: pgs[0].id });
+        }
+        // Auto-select if only one pixel
+        if (pxls && pxls.length === 1 && !state.pixelId) {
+          update({ pixelId: pxls[0].id });
         }
       })
       .catch((err) => toastApiError(err as ApiError))
@@ -239,7 +249,12 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
         adsPerAdset: selectedPreset.adsPerAdset,
       };
       if (state.pageId) body.pageId = state.pageId;
-      const validCreatives = state.adCreatives.filter((c) => c.creativeId);
+      if (state.pixelId) (body as any).pixelId = state.pixelId;
+      const validCreatives = state.adCreatives.filter((c) =>
+        c.adFormat === 'VIDEO_AD'
+          ? c.videoId || c.thumbnailId || c.adtextId || c.headlineId || c.descriptionId
+          : c.thumbnailId || c.adtextId || c.headlineId || c.descriptionId,
+      );
       if (validCreatives.length > 0) body.adCreatives = validCreatives;
 
       const result = await apiPost<BatchCreateResponse>('/campaigns/batch', body);
@@ -262,6 +277,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
   const selectedSellpage = sellpages.find((s) => s.id === state.sellpageId);
   const selectedAdAccount = adAccounts.find((a) => a.id === state.adAccountId);
   const selectedPage = pages.find((p) => p.id === state.pageId);
+  const selectedPixel = pixels.find((p) => p.id === state.pixelId);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -364,6 +380,32 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                     {pages.map((pg) => (
                       <option key={pg.id} value={pg.id}>
                         {pg.name} ({pg.externalId})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Facebook Pixel */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-1">
+                  Facebook Pixel <span className="text-xs text-muted-foreground/60">(optional)</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mb-3">Select a pixel for conversion tracking (Purchase event)</p>
+                {connectionsLoading ? (
+                  <div className="h-10 bg-muted rounded animate-pulse" />
+                ) : pixels.length === 0 ? (
+                  <div className="text-xs text-muted-foreground py-2">No connected Pixels found.</div>
+                ) : (
+                  <select
+                    value={state.pixelId}
+                    onChange={(e) => update({ pixelId: e.target.value })}
+                    className={inputCls}
+                  >
+                    <option value="">None</option>
+                    {pixels.map((px) => (
+                      <option key={px.id} value={px.id}>
+                        {px.name} ({px.externalId})
                       </option>
                     ))}
                   </select>
@@ -550,6 +592,12 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                     <span className="text-foreground">{selectedPage.name}</span>
                   </div>
                 )}
+                {selectedPixel && (
+                  <div className="flex justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground">Pixel</span>
+                    <span className="text-foreground">{selectedPixel.name} ({selectedPixel.externalId})</span>
+                  </div>
+                )}
                 <div className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">Strategy</span>
                   <span className="text-foreground">{selectedPreset.label}</span>
@@ -573,6 +621,12 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                 <div className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">Total Ads</span>
                   <span className="text-primary font-semibold">{state.campaignCount * selectedPreset.totalAds}</span>
+                </div>
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">Ad Format</span>
+                  <span className="text-foreground">
+                    {state.adCreatives[0]?.adFormat === 'IMAGE_AD' ? 'Image Ad' : 'Video Ad'}
+                  </span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-3">

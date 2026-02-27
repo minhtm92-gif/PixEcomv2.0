@@ -13,34 +13,31 @@ import {
 import { Type } from 'class-transformer';
 import { BUDGET_TYPES, type BudgetTypeInput } from './create-campaign.dto';
 
-// ─── Per-ad creative input ──────────────────────────────────────────────────
+// ─── Per-ad creative config (per-type creative IDs) ─────────────────────────
 
 export class AdCreativeInput {
-  @IsIn(['EXISTING', 'CONTENT_SOURCE'])
-  sourceType!: 'EXISTING' | 'CONTENT_SOURCE';
-
-  @IsIn(['VIDEO', 'IMAGE'])
-  mediaType!: 'VIDEO' | 'IMAGE';
+  @IsIn(['VIDEO_AD', 'IMAGE_AD'])
+  adFormat!: 'VIDEO_AD' | 'IMAGE_AD';
 
   @IsOptional()
-  @IsString()
-  externalPostId?: string;
+  @IsUUID()
+  videoId?: string;
 
   @IsOptional()
-  @IsString()
-  adText?: string;
+  @IsUUID()
+  thumbnailId?: string;
 
   @IsOptional()
-  @IsString()
-  videoUrl?: string;
+  @IsUUID()
+  adtextId?: string;
 
   @IsOptional()
-  @IsString()
-  thumbnailUrl?: string;
+  @IsUUID()
+  headlineId?: string;
 
   @IsOptional()
-  @IsString()
-  imageUrl?: string;
+  @IsUUID()
+  descriptionId?: string;
 }
 
 // ─── Batch create DTO ────────────────────────────────────────────────────────
@@ -89,13 +86,10 @@ export class CreateCampaignBatchDto {
   @IsUUID()
   pageId?: string;
 
+  /** Facebook Pixel connection ID for conversion tracking */
   @IsOptional()
-  @IsString()
-  headline?: string;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
+  @IsUUID()
+  pixelId?: string;
 
   @IsOptional()
   @ValidateNested({ each: true })

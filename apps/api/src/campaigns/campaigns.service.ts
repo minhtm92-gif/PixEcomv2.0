@@ -158,13 +158,36 @@ export class CampaignsService {
   // ─── BATCH CREATE ────────────────────────────────────────────────────────
 
   async createCampaignBatch(sellerId: string, dto: CreateCampaignBatchDto) {
-    // Validate sellpage
+    // Validate sellpage — fetch URL details for ad destination link
     const sellpage = await this.prisma.sellpage.findFirst({
       where: { id: dto.sellpageId, sellerId },
-      select: { id: true },
+      select: {
+        id: true,
+        slug: true,
+        domain: { select: { hostname: true } },
+      },
     });
     if (!sellpage) {
       throw new NotFoundException(`Sellpage ${dto.sellpageId} not found`);
+    }
+
+    // Build sellpage URL + UTM params
+    const baseUrl = sellpage.domain
+      ? `https://${sellpage.domain.hostname}/${sellpage.slug}`
+      : `/${sellpage.slug}`;
+
+    // Resolve pixel external ID if pixelId connection was provided
+    let pixelExternalId: string | null = null;
+    if (dto.pixelId) {
+      const pixel = await this.prisma.fbConnection.findFirst({
+        where: { id: dto.pixelId, sellerId, connectionType: 'PIXEL', isActive: true },
+        select: { externalId: true },
+      });
+      if (pixel) {
+        pixelExternalId = pixel.externalId;
+      } else {
+        throw new BadRequestException('Facebook pixel not found or inactive');
+      }
     }
 
     // Validate ad account
@@ -196,6 +219,17 @@ export class CampaignsService {
           ? `${dto.nameTemplate} #${ci + 1}`
           : dto.nameTemplate;
 
+        // UTM params per campaign
+        const utmParams = new URLSearchParams({
+          utm_source: 'facebook',
+          utm_medium: 'paid',
+          utm_campaign: campaignName.replace(/\s+/g, '_').toLowerCase(),
+          utm_content: `c${ci + 1}`,
+        });
+        const destinationUrl = baseUrl.startsWith('http')
+          ? `${baseUrl}?${utmParams.toString()}`
+          : baseUrl;
+
         const campaign = await tx.campaign.create({
           data: {
             sellerId,
@@ -213,19 +247,38 @@ export class CampaignsService {
         let totalAds = 0;
 
         for (let si = 0; si < dto.adsetsPerCampaign; si++) {
+          // Adset targeting: Conversion objective, Purchase event, Advantage+ targeting
+          const targeting: Record<string, unknown> = {
+            conversionEvent: 'PURCHASE',
+            optimizationGoal: 'OFFSITE_CONVERSIONS',
+            billingEvent: 'IMPRESSIONS',
+            attributionSpec: [{ event_type: 'CLICK_THROUGH', window_days: 1 }],
+            destinationUrl,
+          };
+          if (pixelExternalId) {
+            targeting.pixelId = pixelExternalId;
+            targeting.promotedObject = {
+              pixel_id: pixelExternalId,
+              custom_event_type: 'PURCHASE',
+            };
+          }
+
           const adset = await tx.adset.create({
             data: {
               campaignId: campaign.id,
               sellerId,
               name: `Adset ${si + 1}`,
               status: 'PAUSED' as any,
-              optimizationGoal: 'CONVERSIONS',
-              targeting: {},
+              optimizationGoal: 'OFFSITE_CONVERSIONS',
+              targeting: targeting as any,
             },
             select: { id: true },
           });
 
           for (let ai = 0; ai < dto.adsPerAdset; ai++) {
+            // Get creative config for this ad
+            const creativeConfig = dto.adCreatives?.[ai] ?? null;
+
             const ad = await tx.ad.create({
               data: {
                 adsetId: adset.id,
@@ -236,18 +289,15 @@ export class CampaignsService {
               select: { id: true },
             });
 
-            // Create AdPost if page is provided and creative config exists
+            // Create AdPost if page is provided
             if (dto.pageId) {
-              const creativeIdx = ai; // Map ad index to creative config
-              const creative = dto.adCreatives?.[creativeIdx];
-
               await tx.adPost.create({
                 data: {
                   sellerId,
                   adId: ad.id,
                   pageId: dto.pageId,
-                  postSource: (creative?.sourceType === 'EXISTING' ? 'EXISTING' : 'CONTENT_SOURCE') as any,
-                  externalPostId: creative?.externalPostId ?? null,
+                  postSource: 'CONTENT_SOURCE' as any,
+                  externalPostId: null,
                 },
               });
             }
@@ -269,7 +319,8 @@ export class CampaignsService {
 
     this.logger.log(
       `Batch created ${campaigns.length} campaigns for seller ${sellerId} ` +
-      `(${dto.adsetsPerCampaign} adsets × ${dto.adsPerAdset} ads each)`,
+      `(${dto.adsetsPerCampaign} adsets × ${dto.adsPerAdset} ads each) ` +
+      `destination: ${baseUrl}, pixel: ${pixelExternalId ?? 'none'}`,
     );
 
     return { campaigns, totalCampaigns: campaigns.length };

@@ -577,8 +577,15 @@ export interface CreateCampaignDto {
   endDate?: string;
 }
 
+export type AdFormat = 'VIDEO_AD' | 'IMAGE_AD';
+
 export interface AdCreativeConfig {
-  creativeId: string;
+  adFormat: AdFormat;
+  videoId?: string;       // Creative of type VIDEO
+  thumbnailId?: string;   // Creative of type THUMBNAIL
+  adtextId?: string;      // Creative of type ADTEXT
+  headlineId?: string;    // Creative of type HEADLINE
+  descriptionId?: string; // Creative of type DESCRIPTION
 }
 
 export interface CreateCampaignBatchDto {
