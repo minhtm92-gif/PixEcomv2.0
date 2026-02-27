@@ -399,12 +399,16 @@ export default function LandingPage() {
                 Login
               </Link>
               <span className="text-zinc-700">|</span>
-              <Link href="#" className="hover:text-zinc-300 transition-colors">
+              <Link href="/privacy" className="hover:text-zinc-300 transition-colors">
                 Privacy Policy
               </Link>
               <span className="text-zinc-700">|</span>
-              <Link href="#" className="hover:text-zinc-300 transition-colors">
+              <Link href="/terms" className="hover:text-zinc-300 transition-colors">
                 Terms
+              </Link>
+              <span className="text-zinc-700">|</span>
+              <Link href="/data-deletion" className="hover:text-zinc-300 transition-colors">
+                Data Deletion
               </Link>
             </div>
 
