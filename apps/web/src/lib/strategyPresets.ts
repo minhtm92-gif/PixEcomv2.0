@@ -30,12 +30,12 @@ export const STRATEGY_PRESETS: StrategyPreset[] = [
     totalAds: 5,
   },
   {
-    key: 'CBO_1_1_1',
-    label: 'CBO 1-1-1',
-    description: '1 campaign, 1 adset, 1 ad',
+    key: 'CBO_1_1_3',
+    label: 'CBO 1-1-3',
+    description: '1 campaign, 1 adset, 3 ads per adset',
     adsets: 1,
-    adsPerAdset: 1,
-    totalAds: 1,
+    adsPerAdset: 3,
+    totalAds: 3,
   },
 ];
 
