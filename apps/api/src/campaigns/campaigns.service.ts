@@ -84,6 +84,16 @@ const CAMPAIGN_SELECT = {
   updatedAt: true,
 } as const;
 
+/** Full detail select including relations — used by launch/pause/resume to return
+ *  the same shape as getCampaign(). */
+const CAMPAIGN_DETAIL_SELECT = {
+  ...CAMPAIGN_SELECT,
+  sellpage: { select: { id: true, slug: true, domain: { select: { hostname: true } } } },
+  adAccount: { select: { id: true, name: true, externalId: true } },
+  adStrategy: { select: { id: true, name: true } },
+  _count: { select: { adsets: true } },
+} as const;
+
 // ─── CampaignsService ─────────────────────────────────────────────────────────
 
 @Injectable()
@@ -408,28 +418,14 @@ export class CampaignsService {
   async getCampaign(sellerId: string, campaignId: string) {
     const campaign = await this.prisma.campaign.findFirst({
       where: { id: campaignId, sellerId },
-      select: {
-        ...CAMPAIGN_SELECT,
-        sellpage: { select: { id: true, slug: true, domain: { select: { hostname: true } } } },
-        adAccount: { select: { id: true, name: true, externalId: true } },
-        adStrategy: { select: { id: true, name: true } },
-        _count: { select: { adsets: true } },
-      },
+      select: CAMPAIGN_DETAIL_SELECT,
     });
 
     if (!campaign) {
       throw new NotFoundException(`Campaign ${campaignId} not found`);
     }
 
-    return {
-      ...mapCampaign(campaign),
-      sellpage: campaign.sellpage
-        ? { id: campaign.sellpage.id, slug: campaign.sellpage.slug, urlPreview: buildCampaignUrlPreview(campaign.sellpage.slug, campaign.sellpage.domain) }
-        : null,
-      adAccountName: campaign.adAccount?.name ?? null,
-      adStrategy: campaign.adStrategy ?? null,
-      adsetsCount: campaign._count.adsets,
-    };
+    return toCampaignDetail(campaign);
   }
 
   // ─── UPDATE ────────────────────────────────────────────────────────────────
@@ -457,10 +453,10 @@ export class CampaignsService {
         ...(dto.startDate !== undefined && { startDate: dto.startDate ? new Date(dto.startDate) : null }),
         ...(dto.endDate !== undefined && { endDate: dto.endDate ? new Date(dto.endDate) : null }),
       },
-      select: CAMPAIGN_SELECT,
+      select: CAMPAIGN_DETAIL_SELECT,
     });
 
-    return mapCampaign(updated);
+    return toCampaignDetail(updated);
   }
 
   // ─── LAUNCH ────────────────────────────────────────────────────────────────
@@ -519,12 +515,12 @@ export class CampaignsService {
         externalCampaignId: metaResponse.id,
         status: 'ACTIVE' as any,
       },
-      select: CAMPAIGN_SELECT,
+      select: CAMPAIGN_DETAIL_SELECT,
     });
 
     this.logger.log(`Campaign ${campaignId} launched. Meta ID: ${metaResponse.id}`);
 
-    return mapCampaign(updated);
+    return toCampaignDetail(updated);
   }
 
   // ─── PAUSE ─────────────────────────────────────────────────────────────────
@@ -554,10 +550,10 @@ export class CampaignsService {
     const updated = await this.prisma.campaign.update({
       where: { id: campaignId },
       data: { status: 'PAUSED' as any },
-      select: CAMPAIGN_SELECT,
+      select: CAMPAIGN_DETAIL_SELECT,
     });
 
-    return mapCampaign(updated);
+    return toCampaignDetail(updated);
   }
 
   // ─── RESUME ────────────────────────────────────────────────────────────────
@@ -587,10 +583,10 @@ export class CampaignsService {
     const updated = await this.prisma.campaign.update({
       where: { id: campaignId },
       data: { status: 'ACTIVE' as any },
-      select: CAMPAIGN_SELECT,
+      select: CAMPAIGN_DETAIL_SELECT,
     });
 
-    return mapCampaign(updated);
+    return toCampaignDetail(updated);
   }
 
   // ─── BUDGET ────────────────────────────────────────────────────────────────
@@ -862,4 +858,22 @@ function buildCampaignUrlPreview(
 ): string {
   if (domain) return `https://${domain.hostname}/${slug}`;
   return `/${slug}`;
+}
+
+/** Convert a full-detail query result (with relations) to the CampaignDetail shape. */
+function toCampaignDetail(r: {
+  sellpage?: { id: string; slug: string; domain: { hostname: string } | null } | null;
+  adAccount?: { id: string; name: string; externalId: string } | null;
+  adStrategy?: { id: string; name: string } | null;
+  _count?: { adsets: number };
+} & Parameters<typeof mapCampaign>[0]) {
+  return {
+    ...mapCampaign(r),
+    sellpage: r.sellpage
+      ? { id: r.sellpage.id, slug: r.sellpage.slug, urlPreview: buildCampaignUrlPreview(r.sellpage.slug, r.sellpage.domain) }
+      : null,
+    adAccountName: r.adAccount?.name ?? null,
+    adStrategy: r.adStrategy ?? null,
+    adsetsCount: r._count?.adsets ?? 0,
+  };
 }
