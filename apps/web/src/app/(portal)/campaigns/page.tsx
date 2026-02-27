@@ -194,6 +194,14 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
       .then(([accs, pgs]) => {
         setAdAccounts(accs ?? []);
         setPages(pgs ?? []);
+        // Auto-select if only one ad account
+        if (accs && accs.length === 1 && !state.adAccountId) {
+          update({ adAccountId: accs[0].id });
+        }
+        // Auto-select if only one page
+        if (pgs && pgs.length === 1 && !state.pageId) {
+          update({ pageId: pgs[0].id });
+        }
       })
       .catch((err) => toastApiError(err as ApiError))
       .finally(() => setConnectionsLoading(false));
