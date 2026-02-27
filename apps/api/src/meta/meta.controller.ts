@@ -16,7 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/strategies/jwt.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaTokenService } from './meta-token.service';
-import { MetaOAuthTokenResponse } from './meta.types';
+import { MetaAdAccount, MetaOAuthTokenResponse } from './meta.types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -115,23 +115,84 @@ export class MetaController {
       // 2. Exchange code for access token
       const accessToken = await this.exchangeCodeForToken(code);
 
-      // 3. Encrypt token
+      // 3. Fetch Facebook user profile + ad accounts
+      const fbUser = await this.fetchFbUserProfile(accessToken);
+
+      // 4. Encrypt token
       const encToken = this.tokenService.encrypt(accessToken);
 
-      // 4. Upsert FbConnection: set accessTokenEnc on the primary AD_ACCOUNT
-      //    belonging to this seller. If multiple AD_ACCOUNT connections exist,
-      //    update all that are currently active (safer than guessing which one).
-      const updated = await this.prisma.fbConnection.updateMany({
-        where: {
-          sellerId,
-          connectionType: 'AD_ACCOUNT',
-          isActive: true,
-        },
-        data: { accessTokenEnc: encToken },
-      });
+      // 5. Upsert FbConnection for the FB user (AD_ACCOUNT type)
+      //    Creates a new record if none exists, updates token if it does.
+      const adAccounts = await this.fetchAdAccounts(accessToken);
+      const primaryAdAccount = adAccounts[0]; // Use first ad account
+
+      if (primaryAdAccount) {
+        await this.prisma.fbConnection.upsert({
+          where: {
+            uq_fb_connection: {
+              sellerId,
+              connectionType: 'AD_ACCOUNT',
+              externalId: primaryAdAccount.id.replace('act_', ''),
+            },
+          },
+          update: {
+            accessTokenEnc: encToken,
+            name: primaryAdAccount.name,
+            isActive: true,
+            metadata: {
+              fbUserId: fbUser.id,
+              fbUserName: fbUser.name,
+              currency: primaryAdAccount.currency,
+              timezone: primaryAdAccount.timezone_name,
+            },
+          },
+          create: {
+            sellerId,
+            connectionType: 'AD_ACCOUNT',
+            externalId: primaryAdAccount.id.replace('act_', ''),
+            name: primaryAdAccount.name,
+            accessTokenEnc: encToken,
+            isPrimary: true,
+            isActive: true,
+            metadata: {
+              fbUserId: fbUser.id,
+              fbUserName: fbUser.name,
+              currency: primaryAdAccount.currency,
+              timezone: primaryAdAccount.timezone_name,
+            },
+          },
+        });
+      } else {
+        // No ad account found — create a user-level connection so it still shows up
+        await this.prisma.fbConnection.upsert({
+          where: {
+            uq_fb_connection: {
+              sellerId,
+              connectionType: 'AD_ACCOUNT',
+              externalId: fbUser.id,
+            },
+          },
+          update: {
+            accessTokenEnc: encToken,
+            name: fbUser.name,
+            isActive: true,
+            metadata: { fbUserId: fbUser.id, fbUserName: fbUser.name },
+          },
+          create: {
+            sellerId,
+            connectionType: 'AD_ACCOUNT',
+            externalId: fbUser.id,
+            name: fbUser.name,
+            accessTokenEnc: encToken,
+            isPrimary: true,
+            isActive: true,
+            metadata: { fbUserId: fbUser.id, fbUserName: fbUser.name },
+          },
+        });
+      }
 
       this.logger.log(
-        `OAuth callback: updated ${updated.count} AD_ACCOUNT connection(s) for seller ${sellerId}`,
+        `OAuth callback: upserted FbConnection for seller ${sellerId} (FB user: ${fbUser.name}, ad accounts: ${adAccounts.length})`,
       );
 
       res.redirect(`${frontendBase}/meta/connected`);
@@ -219,5 +280,50 @@ export class MetaController {
     }
 
     return data.access_token;
+  }
+
+  /**
+   * Fetch the authenticated Facebook user's profile (id + name).
+   */
+  private async fetchFbUserProfile(
+    accessToken: string,
+  ): Promise<{ id: string; name: string }> {
+    const response = await fetch(
+      `${META_GRAPH_BASE}/me?fields=id,name&access_token=${accessToken}`,
+    );
+
+    if (!response.ok) {
+      const body = await response.text();
+      this.logger.error(`FB /me failed: ${response.status} ${body}`);
+      throw new BadRequestException('Failed to fetch Facebook user profile');
+    }
+
+    return (await response.json()) as { id: string; name: string };
+  }
+
+  /**
+   * Fetch ad accounts accessible by the token.
+   */
+  private async fetchAdAccounts(
+    accessToken: string,
+  ): Promise<MetaAdAccount[]> {
+    try {
+      const response = await fetch(
+        `${META_GRAPH_BASE}/me/adaccounts?fields=id,name,account_status,currency,timezone_name&access_token=${accessToken}`,
+      );
+
+      if (!response.ok) {
+        this.logger.warn(
+          `FB /me/adaccounts failed: ${response.status} — proceeding without ad accounts`,
+        );
+        return [];
+      }
+
+      const data = (await response.json()) as { data: MetaAdAccount[] };
+      return data.data ?? [];
+    } catch (err) {
+      this.logger.warn('Failed to fetch ad accounts, proceeding without', err);
+      return [];
+    }
   }
 }

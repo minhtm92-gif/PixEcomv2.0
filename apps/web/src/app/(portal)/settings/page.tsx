@@ -681,9 +681,11 @@ export default function SettingsPage() {
                             <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
                               {CONNECTION_TYPE_LABELS[conn.connectionType] ?? conn.connectionType}
                             </span>
+                            {conn.fbUserName && (
                             <span className="text-[10px] text-muted-foreground">
                               {conn.fbUserName}
                             </span>
+                            )}
                             <span className="text-[10px] text-muted-foreground/50">
                               ID: {conn.externalId}
                             </span>
@@ -730,11 +732,10 @@ export default function SettingsPage() {
                   </div>
 
                   {/* Last sync */}
-                  {conn.lastSyncAt && (
-                    <p className="text-[10px] text-muted-foreground/50 mt-2 ml-8">
-                      Last synced: {new Date(conn.lastSyncAt).toLocaleString()}
-                    </p>
-                  )}
+                  {/* Updated timestamp */}
+                  <p className="text-[10px] text-muted-foreground/50 mt-2 ml-8">
+                    Connected: {new Date(conn.createdAt).toLocaleString()}
+                  </p>
                 </div>
               ))}
             </div>

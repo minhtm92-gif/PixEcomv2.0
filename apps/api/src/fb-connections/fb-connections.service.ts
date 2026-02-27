@@ -21,6 +21,7 @@ const FB_CONNECTION_SELECT = {
   parentId: true,
   isPrimary: true,
   isActive: true,
+  metadata: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -34,6 +35,7 @@ type FbConnectionRow = {
   parentId: string | null;
   isPrimary: boolean;
   isActive: boolean;
+  metadata: unknown;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -241,6 +243,7 @@ export class FbConnectionsService {
 // ─── Mapping ──────────────────────────────────────────────────────────────────
 
 function mapToDto(c: FbConnectionRow) {
+  const meta = (c.metadata ?? {}) as Record<string, unknown>;
   return {
     id: c.id,
     sellerId: c.sellerId,
@@ -251,6 +254,8 @@ function mapToDto(c: FbConnectionRow) {
     isPrimary: c.isPrimary,
     isActive: c.isActive,
     provider: 'META' as const,
+    fbUserId: (meta.fbUserId as string) ?? null,
+    fbUserName: (meta.fbUserName as string) ?? null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };

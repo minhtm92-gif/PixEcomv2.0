@@ -490,13 +490,15 @@ export interface UpdateCreativeDto {
 export interface FbConnection {
   id: string;
   sellerId: string;
-  fbUserId: string;
-  fbUserName: string;
-  name: string;
   connectionType: 'AD_ACCOUNT' | 'PAGE' | 'PIXEL';
   externalId: string;
+  name: string;
+  parentId: string | null;
+  isPrimary: boolean;
   isActive: boolean;
-  lastSyncAt: string | null;
+  provider: 'META';
+  fbUserId: string | null;
+  fbUserName: string | null;
   createdAt: string;
   updatedAt: string;
 }
