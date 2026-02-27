@@ -5,6 +5,8 @@ export interface MetaApiError {
   type: string;
   code: number;
   error_subcode?: number;
+  error_user_msg?: string;
+  error_user_title?: string;
   fbtrace_id?: string;
 }
 

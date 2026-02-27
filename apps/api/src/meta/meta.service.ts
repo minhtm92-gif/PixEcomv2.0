@@ -191,9 +191,13 @@ export class MetaService {
 
         const json = (await response.json()) as T | MetaApiErrorResponse;
 
-        // Check for Meta-level error in a 200 response (Meta's pattern)
+        // Check for Meta-level error (can appear in 200 or 4xx responses)
         if (isMetaError(json)) {
-          this.mapMetaError(json.error.code, json.error.message);
+          const e = json.error;
+          const fullMsg = e.error_user_msg
+            ? `${e.message} — ${e.error_user_msg}`
+            : e.message;
+          this.mapMetaError(e.code, fullMsg, e.error_subcode);
         }
 
         return json as T;
@@ -223,8 +227,10 @@ export class MetaService {
    * Map Meta API error codes to NestJS exceptions.
    * Unmapped codes fall through to InternalServerErrorException.
    */
-  private mapMetaError(code: number, message: string): never {
-    this.logger.error(`Meta API error code ${code}: ${message}`);
+  private mapMetaError(code: number, message: string, subcode?: number): never {
+    this.logger.error(
+      `Meta API error code=${code} subcode=${subcode ?? 'none'}: ${message}`,
+    );
     const thrower = META_ERROR_CODE_MAP[code];
     if (thrower) {
       thrower(message);

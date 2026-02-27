@@ -487,14 +487,24 @@ export class CampaignsService {
 
     // POST to Meta: act_{externalId}/campaigns
     const metaPath = `act_${adAccount.externalId}/campaigns`;
+    const budgetCents = Math.round(Number(campaign.budget) * 100);
+    const budgetField =
+      campaign.budgetType === 'LIFETIME'
+        ? { lifetime_budget: String(budgetCents) }
+        : { daily_budget: String(budgetCents) };
+
     const metaPayload = {
       name: campaign.name,
       objective: 'OUTCOME_SALES',
       status: 'ACTIVE',
       special_ad_categories: [] as string[],
+      bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+      ...budgetField,
     };
 
-    this.logger.log(`Launching campaign "${campaign.name}" → Meta path: ${metaPath}`);
+    this.logger.log(
+      `Launching campaign "${campaign.name}" → Meta path: ${metaPath}, payload: ${JSON.stringify(metaPayload)}`,
+    );
 
     const metaResponse = await this.metaService.post<{ id: string }>(
       campaign.adAccountId,
@@ -794,6 +804,8 @@ export class CampaignsService {
         externalCampaignId: true,
         status: true,
         name: true,
+        budget: true,
+        budgetType: true,
       },
     });
     if (!campaign) {
