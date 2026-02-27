@@ -226,6 +226,20 @@ function CheckoutForm() {
     return () => { cancelled = true; };
   }, [storeSlug, slug]);
 
+  // Fire Meta Pixel InitiateCheckout event
+  useEffect(() => {
+    if (!product || typeof window === 'undefined') return;
+    const fbq = (window as any).fbq;
+    if (typeof fbq !== 'function') return;
+    fbq('track', 'InitiateCheckout', {
+      content_name: product.name,
+      content_ids: [product.id],
+      value: product.price,
+      currency: 'USD',
+      num_items: qty,
+    });
+  }, [product]);
+
   // ── Pricing ──
   const subtotal = (product?.price ?? 0) * qty;
 
@@ -327,6 +341,19 @@ function CheckoutForm() {
         paymentIntentId: res.payment.clientSecret.split('_secret_')[0],
       });
 
+      // Fire Meta Pixel Purchase event
+      const fbq = (window as any).fbq;
+      if (typeof fbq === 'function' && product) {
+        fbq('track', 'Purchase', {
+          content_name: product.name,
+          content_ids: [product.id],
+          content_type: 'product',
+          value: total,
+          currency: 'USD',
+          num_items: qty,
+        });
+      }
+
       setOrderNumber(res.orderNumber);
       setPlaced(true);
     } catch (err: any) {
@@ -354,13 +381,27 @@ function CheckoutForm() {
     try {
       setSubmitting(true);
       await confirmPayment(storeSlug, orderId, { paypalOrderId: data.orderID });
+
+      // Fire Meta Pixel Purchase event
+      const fbq = (window as any).fbq;
+      if (typeof fbq === 'function' && product) {
+        fbq('track', 'Purchase', {
+          content_name: product.name,
+          content_ids: [product.id],
+          content_type: 'product',
+          value: total,
+          currency: 'USD',
+          num_items: qty,
+        });
+      }
+
       setPlaced(true);
     } catch (err: any) {
       setError(err.message ?? 'PayPal payment confirmation failed.');
     } finally {
       setSubmitting(false);
     }
-  }, [storeSlug, orderId]);
+  }, [storeSlug, orderId, product, total, qty]);
 
   const handleStripeReady = useCallback(
     (fn: (clientSecret: string) => Promise<string | null>) => {

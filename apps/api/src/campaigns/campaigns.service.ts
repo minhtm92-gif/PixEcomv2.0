@@ -317,6 +317,24 @@ export class CampaignsService {
       return results;
     });
 
+    // Auto-assign dataset (pixel) to sellpage if not already assigned
+    if (pixelExternalId) {
+      const current = await this.prisma.sellpage.findUnique({
+        where: { id: dto.sellpageId },
+        select: { headerConfig: true },
+      });
+      const hc = (current?.headerConfig as Record<string, unknown>) ?? {};
+      if (!hc.pixelId || hc.pixelId !== pixelExternalId) {
+        await this.prisma.sellpage.update({
+          where: { id: dto.sellpageId },
+          data: { headerConfig: { ...hc, pixelId: pixelExternalId } as any },
+        });
+        this.logger.log(
+          `Auto-assigned dataset ${pixelExternalId} to sellpage ${dto.sellpageId}`,
+        );
+      }
+    }
+
     this.logger.log(
       `Batch created ${campaigns.length} campaigns for seller ${sellerId} ` +
       `(${dto.adsetsPerCampaign} adsets × ${dto.adsPerAdset} ads each) ` +

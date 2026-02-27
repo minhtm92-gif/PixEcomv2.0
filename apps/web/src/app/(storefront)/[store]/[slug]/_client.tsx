@@ -251,6 +251,20 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
     setSelectedVariants(init);
   }, [product]);
 
+  // Fire Meta Pixel ViewContent event when product loads
+  useEffect(() => {
+    if (!product || typeof window === 'undefined') return;
+    const fbq = (window as any).fbq;
+    if (typeof fbq !== 'function') return;
+    fbq('track', 'ViewContent', {
+      content_name: product.name,
+      content_type: 'product',
+      content_ids: [product.id],
+      value: product.price,
+      currency: 'USD',
+    });
+  }, [product]);
+
   if (error) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4">

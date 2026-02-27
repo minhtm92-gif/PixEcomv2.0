@@ -88,10 +88,11 @@ export default function SellpageDetailPage() {
   const [domainSaving, setDomainSaving] = useState(false);
   const [domainsLoading, setDomainsLoading] = useState(false);
 
-  // ── B.2 Tracking Pixel ──
+  // ── B.2 Tracking Dataset (Pixel) ──
   const [pixelInput, setPixelInput] = useState('');
   const [pixelSaving, setPixelSaving] = useState(false);
   const [pixelLoading, setPixelLoading] = useState(false);
+  const [pixelConnections, setPixelConnections] = useState<FbConnection[]>([]);
 
   // ── B.3 Theme Color ──
   const [primaryColor, setPrimaryColor] = useState('');
@@ -199,13 +200,17 @@ export default function SellpageDetailPage() {
     }
   }, [id]);
 
-  // ── Fetch pixel data ──
+  // ── Fetch pixel data + pixel connections ──
   const fetchPixelData = useCallback(async () => {
     if (!id) return;
     setPixelLoading(true);
     try {
-      const res = await apiGet<{ pixelId: string | null }>(`/sellpages/${id}/pixel`);
-      setPixelInput(res.pixelId ?? '');
+      const [pixelRes, connections] = await Promise.all([
+        apiGet<{ pixelId: string | null }>(`/sellpages/${id}/pixel`),
+        apiGet<FbConnection[]>('/fb/connections?connectionType=PIXEL'),
+      ]);
+      setPixelInput(pixelRes.pixelId ?? '');
+      setPixelConnections(connections ?? []);
     } catch {
       // Pixel data is non-critical; silently fail
     } finally {
@@ -338,16 +343,17 @@ export default function SellpageDetailPage() {
     }
   }
 
-  // ── B.2 Pixel ──
+  // ── B.2 Dataset (Pixel) ──
   async function handlePixelSave() {
     if (!sp) return;
     setPixelSaving(true);
     try {
       await apiPatch(`/sellpages/${sp.id}`, {
-        pixelId: pixelInput.trim() || null,
+        pixelId: pixelInput || null,
       } as UpdateSellpageDto & { pixelId: string | null });
+      const selectedPx = pixelConnections.find((c) => c.externalId === pixelInput);
       addToast(
-        pixelInput.trim() ? 'Facebook Pixel ID saved' : 'Facebook Pixel ID removed',
+        pixelInput ? `Dataset "${selectedPx?.name ?? pixelInput}" assigned` : 'Dataset removed',
         'success',
       );
     } catch (err) {
@@ -828,26 +834,37 @@ export default function SellpageDetailPage() {
         )}
       </div>
 
-      {/* ── B.2 Tracking Pixel ── */}
+      {/* ── B.2 Tracking Dataset (Pixel) ── */}
       <div className="bg-card border border-border rounded-xl p-4 mb-6">
         <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
           <Zap size={15} className="text-muted-foreground" />
-          Facebook Pixel
+          Dataset (Pixel)
         </h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Assign a Meta dataset to track events (PageView, Purchase, etc.) on this sellpage.
+        </p>
 
         {pixelLoading ? (
           <div className="h-9 bg-muted rounded animate-pulse w-48" />
+        ) : pixelConnections.length === 0 ? (
+          <div className="text-xs text-muted-foreground py-2">
+            No datasets found. Go to <a href="/settings" className="text-primary underline">Settings</a> and connect your Facebook account first.
+          </div>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
-            <input
-              type="text"
+            <select
               value={pixelInput}
               onChange={(e) => setPixelInput(e.target.value)}
-              placeholder="Enter Facebook Pixel ID (e.g. 123456789012345)"
-              className="px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground font-mono
-                         placeholder:text-muted-foreground placeholder:font-sans focus:outline-none focus:ring-2
-                         focus:ring-primary/50 min-w-[320px]"
-            />
+              className="px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground
+                         focus:outline-none focus:ring-2 focus:ring-primary/50 min-w-[320px]"
+            >
+              <option value="">None (no tracking)</option>
+              {pixelConnections.map((px) => (
+                <option key={px.id} value={px.externalId}>
+                  {px.name} ({px.externalId})
+                </option>
+              ))}
+            </select>
 
             <button
               onClick={handlePixelSave}

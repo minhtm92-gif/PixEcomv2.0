@@ -128,6 +128,22 @@ export async function generateMetadata({
   };
 }
 
+// ─── Meta Pixel / Dataset base code ─────────────────────────────────────────
+
+function buildMetaPixelScript(pixelId: string): string {
+  // Standard Meta Pixel base code — fires PageView on load
+  return `!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '${pixelId}');
+fbq('track', 'PageView');`;
+}
+
 // ─── Page component (server) ────────────────────────────────────────────────
 
 export default async function Page({
@@ -137,9 +153,24 @@ export default async function Page({
 }) {
   const data = await fetchSellpageData(params.store, params.slug);
   const jsonLd = data ? buildJsonLd(data, params.store, params.slug) : null;
+  const pixelId = data?.sellpage?.headerConfig?.pixelId as string | undefined;
 
   return (
     <>
+      {pixelId && (
+        <>
+          <script dangerouslySetInnerHTML={{ __html: buildMetaPixelScript(pixelId) }} />
+          <noscript>
+            <img
+              height="1"
+              width="1"
+              style={{ display: 'none' }}
+              src={`https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1`}
+              alt=""
+            />
+          </noscript>
+        </>
+      )}
       {jsonLd && (
         <script
           type="application/ld+json"
