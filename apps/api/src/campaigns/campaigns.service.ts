@@ -465,7 +465,7 @@ export class CampaignsService {
 
   // ─── LAUNCH ────────────────────────────────────────────────────────────────
   // Only campaigns that have NOT yet been pushed to Meta (externalCampaignId=null)
-  // can be launched.
+  // can be launched. Creates campaign + adsets + ads on Meta.
 
   async launchCampaign(sellerId: string, campaignId: string) {
     const campaign = await this.assertBelongsToSeller(sellerId, campaignId);
@@ -485,8 +485,9 @@ export class CampaignsService {
       throw new NotFoundException('Ad account connection not found');
     }
 
-    // POST to Meta: act_{externalId}/campaigns
-    const metaPath = `act_${adAccount.externalId}/campaigns`;
+    const actId = `act_${adAccount.externalId}`;
+
+    // ── Step 1: Create campaign on Meta ─────────────────────────────────────
     const budgetCents = Math.round(Number(campaign.budget) * 100);
     const budgetField =
       campaign.budgetType === 'LIFETIME'
@@ -503,28 +504,258 @@ export class CampaignsService {
     };
 
     this.logger.log(
-      `Launching campaign "${campaign.name}" → Meta path: ${metaPath}, payload: ${JSON.stringify(metaPayload)}`,
+      `Launching campaign "${campaign.name}" → ${actId}/campaigns, payload: ${JSON.stringify(metaPayload)}`,
     );
 
-    const metaResponse = await this.metaService.post<{ id: string }>(
+    const metaCampaign = await this.metaService.post<{ id: string }>(
       campaign.adAccountId,
-      metaPath,
+      `${actId}/campaigns`,
       metaPayload,
     );
 
-    // Update local record: set externalCampaignId + status=ACTIVE
-    const updated = await this.prisma.campaign.update({
+    // Update local campaign with Meta ID
+    await this.prisma.campaign.update({
       where: { id: campaignId },
       data: {
-        externalCampaignId: metaResponse.id,
+        externalCampaignId: metaCampaign.id,
         status: 'ACTIVE' as any,
       },
+    });
+
+    this.logger.log(`Campaign → Meta ID: ${metaCampaign.id}`);
+
+    // ── Step 2: Load adsets + ads + ad posts + assets ───────────────────────
+    const adsets = await this.prisma.adset.findMany({
+      where: { campaignId, sellerId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        targeting: true,
+        optimizationGoal: true,
+        ads: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            adPosts: {
+              take: 1,
+              select: {
+                id: true,
+                postSource: true,
+                externalPostId: true,
+                page: { select: { externalId: true } },
+                assetMedia: { select: { url: true, mediaType: true } },
+                assetThumbnail: { select: { url: true } },
+                assetAdtext: {
+                  select: { primaryText: true, headline: true, description: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    this.logger.log(
+      `Found ${adsets.length} adsets to push to Meta for campaign ${campaignId}`,
+    );
+
+    // ── Step 3: Create each adset on Meta ──────────────────────────────────
+    let adsetsPushed = 0;
+    let adsPushed = 0;
+
+    for (const adset of adsets) {
+      try {
+        const targeting = (adset.targeting ?? {}) as Record<string, unknown>;
+
+        // Build Meta targeting spec (audience fields only)
+        const metaTargeting: Record<string, unknown> = {};
+        if (targeting.geo_locations)
+          metaTargeting.geo_locations = targeting.geo_locations;
+        if (targeting.age_min !== undefined)
+          metaTargeting.age_min = targeting.age_min;
+        if (targeting.age_max !== undefined)
+          metaTargeting.age_max = targeting.age_max;
+        if (targeting.genders) metaTargeting.genders = targeting.genders;
+
+        // Build adset payload
+        const adsetPayload: Record<string, unknown> = {
+          campaign_id: metaCampaign.id,
+          name: adset.name,
+          optimization_goal:
+            (targeting.optimizationGoal as string) || 'OFFSITE_CONVERSIONS',
+          billing_event:
+            (targeting.billingEvent as string) || 'IMPRESSIONS',
+          status: 'ACTIVE',
+          targeting: JSON.stringify(metaTargeting),
+        };
+
+        // promoted_object required for conversion campaigns
+        if (targeting.promotedObject) {
+          adsetPayload.promoted_object = JSON.stringify(
+            targeting.promotedObject,
+          );
+        }
+
+        // attribution_spec
+        if (targeting.attributionSpec) {
+          adsetPayload.attribution_spec = JSON.stringify(
+            targeting.attributionSpec,
+          );
+        }
+
+        this.logger.log(
+          `Creating adset "${adset.name}" on Meta: ${JSON.stringify(adsetPayload)}`,
+        );
+
+        const metaAdset = await this.metaService.post<{ id: string }>(
+          campaign.adAccountId,
+          `${actId}/adsets`,
+          adsetPayload,
+        );
+
+        // Update local adset
+        await this.prisma.adset.update({
+          where: { id: adset.id },
+          data: {
+            externalAdsetId: metaAdset.id,
+            status: 'ACTIVE' as any,
+          },
+        });
+
+        this.logger.log(`Adset "${adset.name}" → Meta ID: ${metaAdset.id}`);
+        adsetsPushed++;
+
+        // ── Step 4: Create each ad on Meta ──────────────────────────────────
+        for (const ad of adset.ads) {
+          try {
+            const adPost = ad.adPosts?.[0];
+
+            if (!adPost?.page?.externalId) {
+              this.logger.warn(
+                `Ad "${ad.name}" (${ad.id}) has no page connection — skipping Meta push`,
+              );
+              // Still mark as ACTIVE locally so it matches campaign status
+              await this.prisma.ad.update({
+                where: { id: ad.id },
+                data: { status: 'ACTIVE' as any },
+              });
+              continue;
+            }
+
+            const pageExternalId = adPost.page.externalId;
+            const destinationUrl =
+              (targeting.destinationUrl as string) || '';
+
+            // Build ad creative
+            const creativePayload: Record<string, unknown> = {
+              name: `Creative - ${ad.name}`,
+            };
+
+            if (
+              adPost.postSource === 'EXISTING' &&
+              adPost.externalPostId
+            ) {
+              // Use existing Facebook post
+              creativePayload.object_story_id = `${pageExternalId}_${adPost.externalPostId}`;
+            } else {
+              // Build link_data creative
+              const linkData: Record<string, unknown> = {
+                link: destinationUrl,
+                message: adPost.assetAdtext?.primaryText || '',
+              };
+              if (adPost.assetAdtext?.headline) {
+                linkData.name = adPost.assetAdtext.headline;
+              }
+              if (adPost.assetAdtext?.description) {
+                linkData.description = adPost.assetAdtext.description;
+              }
+              // Thumbnail as image
+              if (adPost.assetThumbnail?.url) {
+                linkData.picture = adPost.assetThumbnail.url;
+              }
+
+              creativePayload.object_story_spec = JSON.stringify({
+                page_id: pageExternalId,
+                link_data: linkData,
+              });
+            }
+
+            this.logger.log(
+              `Creating creative for ad "${ad.name}": ${JSON.stringify(creativePayload)}`,
+            );
+
+            const metaCreative = await this.metaService.post<{
+              id: string;
+            }>(
+              campaign.adAccountId,
+              `${actId}/adcreatives`,
+              creativePayload,
+            );
+
+            // Create ad on Meta
+            const adPayload: Record<string, unknown> = {
+              adset_id: metaAdset.id,
+              creative: JSON.stringify({
+                creative_id: metaCreative.id,
+              }),
+              name: ad.name,
+              status: 'ACTIVE',
+            };
+
+            this.logger.log(
+              `Creating ad "${ad.name}" on Meta: ${JSON.stringify(adPayload)}`,
+            );
+
+            const metaAd = await this.metaService.post<{ id: string }>(
+              campaign.adAccountId,
+              `${actId}/ads`,
+              adPayload,
+            );
+
+            // Update local ad
+            await this.prisma.ad.update({
+              where: { id: ad.id },
+              data: {
+                externalAdId: metaAd.id,
+                status: 'ACTIVE' as any,
+              },
+            });
+
+            this.logger.log(
+              `Ad "${ad.name}" → Meta ID: ${metaAd.id}`,
+            );
+            adsPushed++;
+          } catch (err) {
+            this.logger.error(
+              `Failed to create ad "${ad.name}" (${ad.id}) on Meta: ${(err as Error).message}`,
+            );
+            // Continue with remaining ads
+          }
+        }
+      } catch (err) {
+        this.logger.error(
+          `Failed to create adset "${adset.name}" (${adset.id}) on Meta: ${(err as Error).message}`,
+        );
+        // Continue with remaining adsets
+      }
+    }
+
+    this.logger.log(
+      `Campaign "${campaign.name}" launched: ` +
+        `meta_campaign=${metaCampaign.id}, ` +
+        `adsets_pushed=${adsetsPushed}/${adsets.length}, ` +
+        `ads_pushed=${adsPushed}`,
+    );
+
+    // Return full campaign detail
+    const updated = await this.prisma.campaign.findFirst({
+      where: { id: campaignId },
       select: CAMPAIGN_DETAIL_SELECT,
     });
 
-    this.logger.log(`Campaign ${campaignId} launched. Meta ID: ${metaResponse.id}`);
-
-    return toCampaignDetail(updated);
+    return toCampaignDetail(updated!);
   }
 
   // ─── PAUSE ─────────────────────────────────────────────────────────────────

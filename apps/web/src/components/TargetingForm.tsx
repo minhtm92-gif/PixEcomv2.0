@@ -183,7 +183,7 @@ export function TargetingForm({ value, onChange, compact = false }: TargetingFor
         )}
 
         {/* Country search dropdown */}
-        <div className="relative">
+        <div className="relative" style={{ zIndex: countryDropdownOpen ? 50 : 'auto' }}>
           <div className="relative">
             <input
               type="text"
@@ -205,9 +205,9 @@ export function TargetingForm({ value, onChange, compact = false }: TargetingFor
           {countryDropdownOpen && filteredCountries.length > 0 && (
             <>
               {/* Backdrop to close dropdown */}
-              <div className="fixed inset-0 z-10" onClick={() => setCountryDropdownOpen(false)} />
+              <div className="fixed inset-0 z-40" onClick={() => setCountryDropdownOpen(false)} />
 
-              <div className="absolute z-20 mt-1 w-full max-h-48 overflow-y-auto bg-popover border border-border rounded-lg shadow-lg">
+              <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-popover border border-border rounded-lg shadow-lg">
                 {filteredCountries.map((c) => (
                   <button
                     key={c.code}
