@@ -14,6 +14,12 @@ interface CreativeSelectorProps {
 }
 
 const typeIcons: Record<string, typeof Film> = {
+  ADTEXT: FileText,
+  VIDEO: Film,
+  THUMBNAIL: ImageIcon,
+  HEADLINE: FileText,
+  DESCRIPTION: FileText,
+  // Legacy
   VIDEO_AD: Film,
   IMAGE_AD: ImageIcon,
   TEXT_ONLY: FileText,
@@ -21,6 +27,12 @@ const typeIcons: Record<string, typeof Film> = {
 };
 
 const typeLabels: Record<string, string> = {
+  ADTEXT: 'Adtext',
+  VIDEO: 'Video',
+  THUMBNAIL: 'Thumbnail',
+  HEADLINE: 'Headline',
+  DESCRIPTION: 'Description',
+  // Legacy
   VIDEO_AD: 'Video Ad',
   IMAGE_AD: 'Image Ad',
   TEXT_ONLY: 'Text Only',

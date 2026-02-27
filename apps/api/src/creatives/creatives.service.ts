@@ -20,36 +20,72 @@ const SINGLE_SLOT_ROLES = new Set([
   'DESCRIPTION',
 ] as const);
 
+/** Validation context for READY check */
+interface ValidationCtx {
+  roles: Set<string>;
+  metadata: Record<string, unknown> | null;
+}
+
 /** READY validation rules by creativeType */
 const READY_RULES: Record<
   string,
-  (roles: Set<string>) => { pass: boolean; missing: string[] }
+  (ctx: ValidationCtx) => { pass: boolean; missing: string[] }
 > = {
-  VIDEO_AD: (roles) => {
+  // ── Legacy bundle types ──
+  VIDEO_AD: ({ roles }) => {
     const missing: string[] = [];
     if (!roles.has('PRIMARY_VIDEO') && !roles.has('THUMBNAIL')) {
       missing.push('PRIMARY_VIDEO or THUMBNAIL');
     }
     if (!roles.has('THUMBNAIL')) missing.push('THUMBNAIL');
     if (!roles.has('PRIMARY_TEXT')) missing.push('PRIMARY_TEXT');
-    // De-dup — if both media and thumbnail are missing, report once
     const dedupMissing = Array.from(new Set(missing));
     return { pass: dedupMissing.length === 0, missing: dedupMissing };
   },
-  IMAGE_AD: (roles) => {
+  IMAGE_AD: ({ roles }) => {
     const missing: string[] = [];
     if (!roles.has('THUMBNAIL')) missing.push('IMAGE (THUMBNAIL role)');
     if (!roles.has('PRIMARY_TEXT')) missing.push('PRIMARY_TEXT');
     return { pass: missing.length === 0, missing };
   },
-  TEXT_ONLY: (roles) => {
+  TEXT_ONLY: ({ roles }) => {
     const missing: string[] = [];
     if (!roles.has('PRIMARY_TEXT')) missing.push('PRIMARY_TEXT');
     return { pass: missing.length === 0, missing };
   },
-  UGC_BUNDLE: (roles) => {
+  UGC_BUNDLE: ({ roles }) => {
     const missing: string[] = [];
     if (!roles.has('PRIMARY_VIDEO')) missing.push('PRIMARY_VIDEO');
+    return { pass: missing.length === 0, missing };
+  },
+
+  // ── Simple single-purpose types (v2) ──
+  VIDEO: ({ roles }) => {
+    const missing: string[] = [];
+    if (!roles.has('PRIMARY_VIDEO')) missing.push('PRIMARY_VIDEO (upload a video)');
+    return { pass: missing.length === 0, missing };
+  },
+  THUMBNAIL: ({ roles }) => {
+    const missing: string[] = [];
+    if (!roles.has('THUMBNAIL')) missing.push('THUMBNAIL (upload an image)');
+    return { pass: missing.length === 0, missing };
+  },
+  ADTEXT: ({ metadata }) => {
+    const content = (metadata?.content as string) ?? '';
+    const missing: string[] = [];
+    if (!content.trim()) missing.push('Ad text content (enter text)');
+    return { pass: missing.length === 0, missing };
+  },
+  HEADLINE: ({ metadata }) => {
+    const content = (metadata?.content as string) ?? '';
+    const missing: string[] = [];
+    if (!content.trim()) missing.push('Headline content (enter text)');
+    return { pass: missing.length === 0, missing };
+  },
+  DESCRIPTION: ({ metadata }) => {
+    const content = (metadata?.content as string) ?? '';
+    const missing: string[] = [];
+    if (!content.trim()) missing.push('Description content (enter text)');
     return { pass: missing.length === 0, missing };
   },
 };
@@ -307,7 +343,13 @@ export class CreativesService {
    *   UGC_BUNDLE: PRIMARY_VIDEO
    */
   async validateCreative(sellerId: string, id: string) {
-    const creative = await this.assertCreativeBelongsToSeller(sellerId, id);
+    const creative = await this.prisma.creative.findUnique({
+      where: { id },
+      select: { id: true, sellerId: true, status: true, creativeType: true, metadata: true },
+    });
+    if (!creative || creative.sellerId !== sellerId) {
+      throw new NotFoundException('Creative not found');
+    }
 
     if (creative.status === 'READY') {
       throw new BadRequestException('Creative is already READY');
@@ -321,13 +363,14 @@ export class CreativesService {
       select: { role: true },
     });
     const roles = new Set(slots.map((s) => s.role));
+    const metadata = (creative.metadata as Record<string, unknown>) ?? null;
 
     const rule = READY_RULES[creative.creativeType] ?? READY_RULES['VIDEO_AD'];
-    const { pass, missing } = rule(roles);
+    const { pass, missing } = rule({ roles, metadata });
 
     if (!pass) {
       throw new BadRequestException(
-        `Creative is missing required assets: ${missing.join(', ')}`,
+        `Creative is missing required content: ${missing.join(', ')}`,
       );
     }
 

@@ -30,13 +30,20 @@ import type {
 const STATUSES = ['ALL', 'DRAFT', 'READY', 'ARCHIVED'];
 const TYPES: { value: string; label: string }[] = [
   { value: 'ALL', label: 'All types' },
-  { value: 'VIDEO_AD', label: 'Video Ad' },
-  { value: 'IMAGE_AD', label: 'Image Ad' },
-  { value: 'TEXT_ONLY', label: 'Text Only' },
-  { value: 'UGC_BUNDLE', label: 'UGC Bundle' },
+  { value: 'ADTEXT', label: 'Adtext' },
+  { value: 'VIDEO', label: 'Video' },
+  { value: 'THUMBNAIL', label: 'Thumbnail' },
+  { value: 'HEADLINE', label: 'Headline' },
+  { value: 'DESCRIPTION', label: 'Description' },
 ];
 
 const TYPE_LABELS: Record<string, string> = {
+  ADTEXT: 'Adtext',
+  VIDEO: 'Video',
+  THUMBNAIL: 'Thumbnail',
+  HEADLINE: 'Headline',
+  DESCRIPTION: 'Description',
+  // Legacy
   VIDEO_AD: 'Video Ad',
   IMAGE_AD: 'Image Ad',
   TEXT_ONLY: 'Text Only',
@@ -67,7 +74,7 @@ export default function CreativesPage() {
   const [productsLoading, setProductsLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<CreativeType>('VIDEO_AD');
+  const [newType, setNewType] = useState<CreativeType>('VIDEO');
   const [newProductId, setNewProductId] = useState('');
   const [modalError, setModalError] = useState<string | null>(null);
 
@@ -109,7 +116,7 @@ export default function CreativesPage() {
     setModalOpen(true);
     setModalError(null);
     setNewName('');
-    setNewType('VIDEO_AD');
+    setNewType('VIDEO');
     setNewProductId('');
 
     if (products.length === 0) {
@@ -328,7 +335,7 @@ export default function CreativesPage() {
                   onChange={(e) => setNewName(e.target.value)}
                   required
                   className={inputCls}
-                  placeholder="My Video Ad"
+                  placeholder="e.g. Holiday promo video"
                 />
               </div>
 
@@ -343,10 +350,11 @@ export default function CreativesPage() {
                   onChange={(e) => setNewType(e.target.value as CreativeType)}
                   className={inputCls}
                 >
-                  <option value="VIDEO_AD">Video Ad</option>
-                  <option value="IMAGE_AD">Image Ad</option>
-                  <option value="TEXT_ONLY">Text Only</option>
-                  <option value="UGC_BUNDLE">UGC Bundle</option>
+                  <option value="ADTEXT">Adtext</option>
+                  <option value="VIDEO">Video</option>
+                  <option value="THUMBNAIL">Thumbnail</option>
+                  <option value="HEADLINE">Headline</option>
+                  <option value="DESCRIPTION">Description</option>
                 </select>
               </div>
 

@@ -435,7 +435,9 @@ export interface UploadUrlResponse {
 }
 
 // ── Creatives ──
-export type CreativeType = 'VIDEO_AD' | 'IMAGE_AD' | 'TEXT_ONLY' | 'UGC_BUNDLE';
+export type CreativeType =
+  | 'VIDEO_AD' | 'IMAGE_AD' | 'TEXT_ONLY' | 'UGC_BUNDLE'
+  | 'ADTEXT' | 'VIDEO' | 'THUMBNAIL' | 'HEADLINE' | 'DESCRIPTION';
 export type AssetRole = 'PRIMARY_VIDEO' | 'THUMBNAIL' | 'PRIMARY_TEXT' | 'HEADLINE' | 'DESCRIPTION' | 'EXTRA';
 
 export interface CreativeAsset {

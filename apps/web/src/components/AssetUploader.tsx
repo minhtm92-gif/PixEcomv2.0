@@ -58,9 +58,11 @@ type UploadStage = 'idle' | 'getting-url' | 'uploading' | 'registering' | 'done'
 export interface AssetUploaderProps {
   onSuccess: (assetId: string) => void;
   onClose: () => void;
+  /** Filter accepted file types: 'video' for video only, 'image' for image only, 'all' (default) */
+  accept?: 'video' | 'image' | 'all';
 }
 
-export function AssetUploader({ onSuccess, onClose }: AssetUploaderProps) {
+export function AssetUploader({ onSuccess, onClose, accept = 'all' }: AssetUploaderProps) {
   const addToast = useToastStore((s) => s.add);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -212,7 +214,13 @@ export function AssetUploader({ onSuccess, onClose }: AssetUploaderProps) {
         <input
           ref={fileInputRef}
           type="file"
-          accept={ACCEPTED_TYPES.join(',')}
+          accept={
+            accept === 'video'
+              ? ACCEPTED_TYPES.filter((t) => t.startsWith('video/')).join(',')
+              : accept === 'image'
+                ? ACCEPTED_TYPES.filter((t) => t.startsWith('image/')).join(',')
+                : ACCEPTED_TYPES.join(',')
+          }
           onChange={handleFileChange}
           className="hidden"
           disabled={isUploading}
@@ -245,7 +253,11 @@ export function AssetUploader({ onSuccess, onClose }: AssetUploaderProps) {
             <div className="text-center">
               <p className="text-sm text-foreground font-medium">Drop file here or click to browse</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Images (JPEG, PNG, GIF, WebP) up to 10 MB · Videos (MP4, WebM) up to 50 MB
+                {accept === 'video'
+                  ? 'Videos (MP4, WebM) up to 50 MB'
+                  : accept === 'image'
+                    ? 'Images (JPEG, PNG, GIF, WebP) up to 10 MB'
+                    : 'Images (JPEG, PNG, GIF, WebP) up to 10 MB · Videos (MP4, WebM) up to 50 MB'}
               </p>
             </div>
           </>

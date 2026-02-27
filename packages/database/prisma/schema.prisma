@@ -312,6 +312,12 @@ enum CreativeType {
   IMAGE_AD
   TEXT_ONLY
   UGC_BUNDLE
+  // Simple single-purpose types (v2)
+  ADTEXT
+  VIDEO
+  THUMBNAIL
+  HEADLINE
+  DESCRIPTION
 
   @@map("creative_type")
 }
