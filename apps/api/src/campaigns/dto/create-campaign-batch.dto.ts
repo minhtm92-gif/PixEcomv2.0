@@ -2,6 +2,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -90,6 +91,11 @@ export class CreateCampaignBatchDto {
   @IsOptional()
   @IsUUID()
   pixelId?: string;
+
+  /** Audience targeting (geo_locations, age_min, age_max, genders) */
+  @IsOptional()
+  @IsObject()
+  targeting?: Record<string, unknown>;
 
   @IsOptional()
   @ValidateNested({ each: true })

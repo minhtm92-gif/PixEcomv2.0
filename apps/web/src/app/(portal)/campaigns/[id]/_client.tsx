@@ -40,6 +40,7 @@ import type {
   FbConnection,
 } from '@/types/api';
 import { isDraftCampaign, isDraftAdUnit } from '@/types/api';
+import { TargetingForm, DEFAULT_TARGETING, targetingToJson, type TargetingState } from '@/components/TargetingForm';
 
 // ── Shared status helpers ──
 type DisplayStatus = 'draft' | 'active' | 'paused' | 'archived';
@@ -555,8 +556,7 @@ function AdsetsSection({ campaignId }: AdsetsSectionProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newGoal, setNewGoal] = useState<OptimizationGoal | ''>('');
-  const [newTargeting, setNewTargeting] = useState('');
-  const [targetingError, setTargetingError] = useState('');
+  const [newTargeting, setNewTargeting] = useState<TargetingState>({ ...DEFAULT_TARGETING });
   const [creating, setCreating] = useState(false);
 
   const GOALS: { value: OptimizationGoal; label: string }[] = [
@@ -584,37 +584,23 @@ function AdsetsSection({ campaignId }: AdsetsSectionProps) {
     fetchAdsets();
   }, [fetchAdsets]);
 
-  function validateTargeting(): Record<string, unknown> | null {
-    if (!newTargeting.trim()) return null;
-    try {
-      const parsed = JSON.parse(newTargeting.trim());
-      setTargetingError('');
-      return parsed as Record<string, unknown>;
-    } catch {
-      setTargetingError('Invalid JSON');
-      return undefined as unknown as null;
-    }
-  }
-
   async function handleAddAdset(e: FormEvent) {
     e.preventDefault();
     if (!newName.trim()) return;
 
-    const targeting = validateTargeting();
-    if (targeting === undefined) return; // JSON parse failed
-
     setCreating(true);
     try {
+      const targeting = targetingToJson(newTargeting);
       const body: CreateAdsetDto = { name: newName.trim() };
       if (newGoal) body.optimizationGoal = newGoal;
-      if (targeting) body.targeting = targeting;
+      if (Object.keys(targeting).length > 0) body.targeting = targeting;
 
       const created = await apiPost<AdsetUnit>(`/campaigns/${campaignId}/adsets`, body);
       setAdsets((prev) => [...prev, created]);
       addToast('Adset created', 'success');
       setNewName('');
       setNewGoal('');
-      setNewTargeting('');
+      setNewTargeting({ ...DEFAULT_TARGETING });
       setAddOpen(false);
       setExpanded(true);
     } catch (err) {
@@ -742,18 +728,10 @@ function AdsetsSection({ campaignId }: AdsetsSectionProps) {
           </div>
 
           <div>
-            <label className="block text-sm text-muted-foreground mb-1.5">
-              Targeting <span className="text-xs text-muted-foreground/60">(optional JSON)</span>
+            <label className="block text-sm text-muted-foreground mb-2">
+              Targeting
             </label>
-            <textarea
-              value={newTargeting}
-              onChange={(e) => { setNewTargeting(e.target.value); setTargetingError(''); }}
-              className={`${inputCls} h-20 resize-none font-mono text-xs`}
-              placeholder={'{\n  "age_min": 18,\n  "age_max": 65\n}'}
-            />
-            {targetingError && (
-              <p className="text-xs text-red-400 mt-1">{targetingError}</p>
-            )}
+            <TargetingForm value={newTargeting} onChange={setNewTargeting} compact />
           </div>
         </ModalShell>
       )}

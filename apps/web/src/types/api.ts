@@ -599,6 +599,7 @@ export interface CreateCampaignBatchDto {
   adsetsPerCampaign: number;
   adsPerAdset: number;
   pageId?: string;
+  targeting?: Record<string, unknown>;
   adCreatives?: AdCreativeConfig[];
 }
 

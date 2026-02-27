@@ -21,6 +21,7 @@ import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
 import { CreativeSelector } from '@/components/CreativeSelector';
 import { STRATEGY_PRESETS, type StrategyPreset } from '@/lib/strategyPresets';
+import { TargetingForm, DEFAULT_TARGETING, targetingToJson, type TargetingState } from '@/components/TargetingForm';
 import { fmtDate } from '@/lib/format';
 import type {
   CampaignListItem,
@@ -87,6 +88,7 @@ interface WizardState {
   pageId: string;
   pixelId: string;
   strategyKey: string;
+  targeting: TargetingState;
   // Step 3
   nameTemplate: string;
   campaignCount: number;
@@ -105,6 +107,7 @@ const INITIAL_WIZARD: WizardState = {
   pageId: '',
   pixelId: '',
   strategyKey: 'CBO_1_5_3',
+  targeting: { ...DEFAULT_TARGETING },
   nameTemplate: '',
   campaignCount: 1,
   budget: '',
@@ -237,6 +240,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
     setCreating(true);
     setWizardError(null);
     try {
+      const targeting = targetingToJson(state.targeting);
       const body: CreateCampaignBatchDto = {
         nameTemplate: state.nameTemplate.trim(),
         sellpageId: state.sellpageId,
@@ -250,6 +254,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
       };
       if (state.pageId) body.pageId = state.pageId;
       if (state.pixelId) (body as any).pixelId = state.pixelId;
+      if (Object.keys(targeting).length > 0) body.targeting = targeting;
       const validCreatives = state.adCreatives.filter((c) =>
         c.adFormat === 'VIDEO_AD'
           ? c.videoId || c.thumbnailId || c.adtextId || c.headlineId || c.descriptionId
@@ -415,7 +420,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
               {/* Strategy Preset */}
               <div>
                 <h3 className="text-sm font-medium text-foreground mb-1">Strategy Preset</h3>
-                <p className="text-xs text-muted-foreground mb-3">CBO with Advantage+ targeting, 1-day click attribution</p>
+                <p className="text-xs text-muted-foreground mb-3">CBO with 1-day click attribution</p>
                 <div className="grid grid-cols-3 gap-2">
                   {STRATEGY_PRESETS.map((preset) => (
                     <button
@@ -438,6 +443,20 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                       )}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Targeting */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-1">Audience Targeting</h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Leave empty for Advantage+ broad targeting, or specify location/age/gender
+                </p>
+                <div className="bg-muted/20 border border-border rounded-lg p-4">
+                  <TargetingForm
+                    value={state.targeting}
+                    onChange={(targeting) => update({ targeting })}
+                  />
                 </div>
               </div>
             </div>
@@ -601,6 +620,17 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                 <div className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">Strategy</span>
                   <span className="text-foreground">{selectedPreset.label}</span>
+                </div>
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">Targeting</span>
+                  <span className="text-foreground text-right text-xs">
+                    {state.targeting.countries.length > 0
+                      ? state.targeting.countries.join(', ')
+                      : 'Advantage+ (broad)'}
+                    {' | '}
+                    {state.targeting.ageMin}–{state.targeting.ageMax}
+                    {state.targeting.gender !== 'all' ? ` | ${state.targeting.gender}` : ''}
+                  </span>
                 </div>
                 <div className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">Campaigns</span>

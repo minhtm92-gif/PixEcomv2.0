@@ -272,6 +272,10 @@ export class CampaignsService {
               custom_event_type: 'PURCHASE',
             };
           }
+          // Merge audience targeting (geo_locations, age_min, age_max, genders)
+          if (dto.targeting) {
+            Object.assign(targeting, dto.targeting);
+          }
 
           const adset = await tx.adset.create({
             data: {
