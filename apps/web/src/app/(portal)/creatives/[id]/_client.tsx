@@ -8,7 +8,6 @@ import {
   X,
   Save,
   Loader2,
-  CheckCircle2,
   ExternalLink,
   Film,
   ImageIcon,
@@ -145,9 +144,6 @@ export default function CreativeDetailPage() {
   const [products, setProducts] = useState<ProductCardItem[]>([]);
   const [productsLoaded, setProductsLoaded] = useState(false);
 
-  // ── Validate state ──
-  const [validating, setValidating] = useState(false);
-
   // ── Upload modal ──
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -229,7 +225,6 @@ export default function CreativeDetailPage() {
       const oldProd = creative.productId ?? undefined;
       if (newProd !== oldProd) body.productId = newProd;
 
-      const updated = await apiGet<CreativeDetail>(`/creatives/${creative.id}`);
       await apiPatch<CreativeDetail>(`/creatives/${creative.id}`, body);
       addToast('Creative updated', 'success');
       setEditing(false);
@@ -241,15 +236,20 @@ export default function CreativeDetailPage() {
     }
   }
 
-  // ── Save text content ──
+  // ── Save text content + auto-validate to READY ──
   async function handleSaveText() {
-    if (!creative) return;
+    if (!creative || !textContent.trim()) return;
     setSavingText(true);
     try {
+      // 1. Save text content
       await apiPatch<CreativeDetail>(`/creatives/${creative.id}`, {
         metadata: { content: textContent },
       });
-      addToast('Content saved', 'success');
+      // 2. Auto-validate → READY
+      await apiPost(`/creatives/${creative.id}/validate`).catch(() => {
+        // Validation may fail if already READY — ignore
+      });
+      addToast('Creative saved', 'success');
       await fetchCreative();
     } catch (err) {
       toastApiError(err as ApiError);
@@ -258,22 +258,7 @@ export default function CreativeDetailPage() {
     }
   }
 
-  // ── Validate (DRAFT → READY) ──
-  async function handleValidate() {
-    if (!creative) return;
-    setValidating(true);
-    try {
-      await apiPost(`/creatives/${creative.id}/validate`);
-      addToast('Creative validated — status is now READY', 'success');
-      await fetchCreative();
-    } catch (err) {
-      toastApiError(err as ApiError);
-    } finally {
-      setValidating(false);
-    }
-  }
-
-  // ── Upload success → assign slot ──
+  // ── Upload success → assign slot + auto-validate to READY ──
   async function handleUploadSuccess(assetId: string) {
     if (!creative || !assetRole) return;
     setUploadOpen(false);
@@ -283,7 +268,9 @@ export default function CreativeDetailPage() {
         assetId,
         role: assetRole,
       });
-      addToast('Asset uploaded and assigned', 'success');
+      // Auto-validate → READY
+      await apiPost(`/creatives/${creative.id}/validate`).catch(() => {});
+      addToast('Creative saved', 'success');
       await fetchCreative();
     } catch (err) {
       toastApiError(err as ApiError);
@@ -361,20 +348,8 @@ export default function CreativeDetailPage() {
         <div className="flex items-center gap-2 shrink-0">
           {assigning && (
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 size={14} className="animate-spin" /> Assigning…
+              <Loader2 size={14} className="animate-spin" /> Saving…
             </span>
-          )}
-
-          {isDraft && (
-            <button
-              onClick={handleValidate}
-              disabled={validating}
-              className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium
-                         hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {validating ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-              Validate
-            </button>
           )}
 
           {!editing ? (
@@ -482,7 +457,7 @@ export default function CreativeDetailPage() {
                            hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
               >
                 {savingText ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                {savingText ? 'Saving...' : 'Save Content'}
+                {savingText ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>
