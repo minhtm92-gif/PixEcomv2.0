@@ -239,14 +239,8 @@ export class CampaignsService {
           ? `${dto.nameTemplate} #${ci + 1}`
           : dto.nameTemplate;
 
-        // UTM params per campaign
-        const utmParams = new URLSearchParams({
-          utm_source: 'facebook',
-          utm_medium: 'paid',
-          utm_campaign: campaignName.replace(/\s+/g, '_').toLowerCase(),
-          utm_content: `c${ci + 1}`,
-        });
-        const destinationUrl = `${baseUrl}?${utmParams.toString()}`;
+        // Destination URL: clean base URL (UTMs are added per-ad at launch time)
+        const destinationUrl = baseUrl;
 
         const campaign = await tx.campaign.create({
           data: {
@@ -653,8 +647,25 @@ export class CampaignsService {
             }
 
             const pageExternalId = adPost.page.externalId;
-            const destinationUrl =
+            const baseDestUrl =
               (targeting.destinationUrl as string) || '';
+
+            // Build per-ad destination URL with full UTM tracking
+            // utm_campaign = campaign UUID → Ads Manager matches orders to campaigns
+            // utm_term    = adset UUID   → Ads Manager matches orders to adsets
+            // utm_content = ad UUID      → Ads Manager matches orders to ads
+            const utmParams = new URLSearchParams({
+              utm_source: 'facebook',
+              utm_medium: 'paid',
+              utm_campaign: campaignId,
+              utm_term: adset.id,
+              utm_content: ad.id,
+            });
+            const separator = baseDestUrl.includes('?') ? '&' : '?';
+            const destinationUrl = baseDestUrl
+              ? `${baseDestUrl}${separator}${utmParams.toString()}`
+              : '';
+
             const adText = adPost.assetAdtext;
             const primaryText = adText?.primaryText || '';
             const headline = adText?.headline || '';

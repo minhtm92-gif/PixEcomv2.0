@@ -623,6 +623,8 @@ export class StorefrontService {
           utmSource: dto.utmSource ?? null,
           utmMedium: dto.utmMedium ?? null,
           utmCampaign: dto.utmCampaign ?? null,
+          utmTerm: dto.utmTerm ?? null,
+          utmContent: dto.utmContent ?? null,
           items: {
             create: orderItems.map((oi) => ({
               productId: oi.productId,

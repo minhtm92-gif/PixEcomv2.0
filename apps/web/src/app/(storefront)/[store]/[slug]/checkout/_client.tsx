@@ -127,6 +127,26 @@ function CheckoutForm() {
     };
   }
 
+  /** Read UTM params from URL — used for order attribution tracking */
+  function getUtmParams() {
+    if (typeof window === 'undefined') return {};
+    const sp = new URLSearchParams(window.location.search);
+    const utm: Record<string, string> = {};
+    const src = sp.get('utm_source');
+    const med = sp.get('utm_medium');
+    const cmp = sp.get('utm_campaign');
+    const trm = sp.get('utm_term');
+    const cnt = sp.get('utm_content');
+    if (src) utm.utmSource = src;
+    if (med) utm.utmMedium = med;
+    if (cmp) utm.utmCampaign = cmp;
+    if (trm) utm.utmTerm = trm;
+    if (cnt) utm.utmContent = cnt;
+    // Derive source from utm_source for attribution filtering
+    if (src && !utm.source) utm.source = src;
+    return utm;
+  }
+
   // Also read from React hook for reactive display (savings banner etc.)
   const urlUpsellPct = Number(searchParams?.get('upsellPct')) || (typeof window !== 'undefined' ? Number(new URLSearchParams(window.location.search).get('upsellPct')) || 0 : 0);
 
@@ -307,6 +327,8 @@ function CheckoutForm() {
       discountId: selectedDiscount ?? undefined,
       paymentMethod: payMethod,
       sellpageSlug: slug,
+      // UTM attribution — parsed from URL params set by Facebook ads
+      ...getUtmParams(),
     };
   }
 

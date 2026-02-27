@@ -102,6 +102,14 @@ export class CheckoutDto {
   @IsOptional()
   @IsString()
   utmCampaign?: string;
+
+  @IsOptional()
+  @IsString()
+  utmTerm?: string;
+
+  @IsOptional()
+  @IsString()
+  utmContent?: string;
 }
 
 export class ConfirmPaymentDto {
