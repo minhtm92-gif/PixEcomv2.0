@@ -28,7 +28,6 @@ import type {
   SellpagesListResponse,
   SellpageListItem,
   FbConnection,
-  FbConnectionsResponse,
 } from '@/types/api';
 import { isDraftCampaign } from '@/types/api';
 
@@ -157,8 +156,8 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
   useEffect(() => {
     if (step !== 2) return;
     setAdAccountsLoading(true);
-    apiGet<FbConnectionsResponse>('/fb/connections?connectionType=AD_ACCOUNT')
-      .then((res) => setAdAccounts(res.data ?? []))
+    apiGet<FbConnection[]>('/fb/connections?connectionType=AD_ACCOUNT')
+      .then((res) => setAdAccounts(res ?? []))
       .catch((err) => toastApiError(err as ApiError))
       .finally(() => setAdAccountsLoading(false));
   }, [step]);

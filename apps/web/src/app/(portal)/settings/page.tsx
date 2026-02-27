@@ -26,7 +26,6 @@ import type {
   UpdateSellerDto,
   UpdateSellerSettingsDto,
   FbConnection,
-  FbConnectionsResponse,
   MetaAuthUrlResponse,
 } from '@/types/api';
 

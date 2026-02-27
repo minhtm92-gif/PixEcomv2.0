@@ -35,7 +35,6 @@ import type {
   LinkedCampaign,
   LinkedAd,
   FbConnection,
-  FbConnectionsResponse,
   CreativeListItem,
   CreativesListResponse,
   SellerDomainItem,
@@ -425,8 +424,8 @@ export default function SellpageDetailPage() {
     if (pageConnections.length > 0) return;
     setPageConnectionsLoading(true);
     try {
-      const res = await apiGet<FbConnectionsResponse>('/fb/connections?connectionType=PAGE');
-      setPageConnections(res.data ?? []);
+      const res = await apiGet<FbConnection[]>('/fb/connections?connectionType=PAGE');
+      setPageConnections(res ?? []);
     } catch {
       // Non-critical
     } finally {

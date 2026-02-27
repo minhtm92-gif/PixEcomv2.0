@@ -38,7 +38,6 @@ import type {
   CreateAdPostDto,
   OptimizationGoal,
   FbConnection,
-  FbConnectionsResponse,
 } from '@/types/api';
 import { isDraftCampaign, isDraftAdUnit } from '@/types/api';
 
@@ -191,8 +190,8 @@ function AdRow({ ad, onLinked }: AdRowProps) {
     setLinkModalOpen(true);
     setPagesLoading(true);
     try {
-      const res = await apiGet<FbConnectionsResponse>('/fb/connections?connectionType=PAGE');
-      setPages(res.data);
+      const res = await apiGet<FbConnection[]>('/fb/connections?connectionType=PAGE');
+      setPages(res ?? []);
     } catch (err) {
       toastApiError(err as ApiError);
     } finally {
