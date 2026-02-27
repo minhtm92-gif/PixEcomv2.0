@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaService } from '../meta/meta.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
@@ -103,6 +104,7 @@ export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly metaService: MetaService,
+    private readonly config: ConfigService,
   ) {}
 
   // ─── CREATE ────────────────────────────────────────────────────────────────
@@ -175,16 +177,24 @@ export class CampaignsService {
         id: true,
         slug: true,
         domain: { select: { hostname: true } },
+        seller: { select: { slug: true } },
       },
     });
     if (!sellpage) {
       throw new NotFoundException(`Sellpage ${dto.sellpageId} not found`);
     }
 
-    // Build sellpage URL + UTM params
-    const baseUrl = sellpage.domain
-      ? `https://${sellpage.domain.hostname}/${sellpage.slug}`
-      : `/${sellpage.slug}`;
+    // Build sellpage full URL (always absolute — required by Meta)
+    let baseUrl: string;
+    if (sellpage.domain) {
+      baseUrl = `https://${sellpage.domain.hostname}/${sellpage.slug}`;
+    } else {
+      const frontendUrl = (
+        this.config.get<string>('FRONTEND_URL') ?? 'https://pixecom.pixelxlab.com'
+      ).replace(/\/$/, '');
+      const sellerSlug = sellpage.seller?.slug ?? 'store';
+      baseUrl = `${frontendUrl}/${sellerSlug}/${sellpage.slug}`;
+    }
 
     // Resolve pixel external ID if pixelId connection was provided
     let pixelExternalId: string | null = null;
@@ -236,9 +246,7 @@ export class CampaignsService {
           utm_campaign: campaignName.replace(/\s+/g, '_').toLowerCase(),
           utm_content: `c${ci + 1}`,
         });
-        const destinationUrl = baseUrl.startsWith('http')
-          ? `${baseUrl}?${utmParams.toString()}`
-          : baseUrl;
+        const destinationUrl = `${baseUrl}?${utmParams.toString()}`;
 
         const campaign = await tx.campaign.create({
           data: {
@@ -647,6 +655,10 @@ export class CampaignsService {
             const pageExternalId = adPost.page.externalId;
             const destinationUrl =
               (targeting.destinationUrl as string) || '';
+            const adText = adPost.assetAdtext;
+            const primaryText = adText?.primaryText || '';
+            const headline = adText?.headline || '';
+            const description = adText?.description || '';
 
             // Build ad creative
             const creativePayload: Record<string, unknown> = {
@@ -659,20 +671,66 @@ export class CampaignsService {
             ) {
               // Use existing Facebook post
               creativePayload.object_story_id = `${pageExternalId}_${adPost.externalPostId}`;
+            } else if (
+              adPost.assetMedia?.mediaType === 'VIDEO' &&
+              adPost.assetMedia.url
+            ) {
+              // ── VIDEO AD: Upload video to Meta first ──
+              this.logger.log(
+                `Uploading video for ad "${ad.name}": ${adPost.assetMedia.url}`,
+              );
+
+              const videoUpload = await this.metaService.post<{
+                id: string;
+              }>(campaign.adAccountId, `${actId}/advideos`, {
+                file_url: adPost.assetMedia.url,
+              });
+
+              this.logger.log(
+                `Video uploaded → Meta video ID: ${videoUpload.id}`,
+              );
+
+              // Build video_data creative
+              const videoData: Record<string, unknown> = {
+                video_id: videoUpload.id,
+                message: primaryText,
+                title: headline,
+                link_description: description,
+                call_to_action: {
+                  type: 'SHOP_NOW',
+                  value: { link: destinationUrl },
+                },
+              };
+
+              // Thumbnail as video poster image
+              if (adPost.assetThumbnail?.url) {
+                videoData.image_url = adPost.assetThumbnail.url;
+              }
+
+              creativePayload.object_story_spec = JSON.stringify({
+                page_id: pageExternalId,
+                video_data: videoData,
+              });
             } else {
-              // Build link_data creative
+              // ── IMAGE / LINK AD ──
               const linkData: Record<string, unknown> = {
                 link: destinationUrl,
-                message: adPost.assetAdtext?.primaryText || '',
+                message: primaryText,
+                call_to_action: {
+                  type: 'SHOP_NOW',
+                  value: { link: destinationUrl },
+                },
               };
-              if (adPost.assetAdtext?.headline) {
-                linkData.name = adPost.assetAdtext.headline;
-              }
-              if (adPost.assetAdtext?.description) {
-                linkData.description = adPost.assetAdtext.description;
-              }
-              // Thumbnail as image
-              if (adPost.assetThumbnail?.url) {
+              if (headline) linkData.name = headline;
+              if (description) linkData.description = description;
+
+              // Image from assetMedia (IMAGE type) or fallback to thumbnail
+              if (
+                adPost.assetMedia?.mediaType === 'IMAGE' &&
+                adPost.assetMedia.url
+              ) {
+                linkData.picture = adPost.assetMedia.url;
+              } else if (adPost.assetThumbnail?.url) {
                 linkData.picture = adPost.assetThumbnail.url;
               }
 
