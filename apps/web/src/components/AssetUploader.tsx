@@ -5,7 +5,7 @@
  *
  * Drag-and-drop + file-picker upload component.
  * Upload flow:
- *   1. POST /assets/upload-url → { uploadUrl, assetId }
+ *   1. POST /assets/signed-upload → { uploadUrl, assetId }
  *   2. PUT file to uploadUrl (R2 signed URL, no auth header) via XMLHttpRequest for progress
  *   3. POST /assets { filename, mimeType, size, url } to register asset record
  *   4. Calls onSuccess(assetId)
@@ -21,8 +21,6 @@ import { apiPost } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import type { UploadUrlResponse } from '@/types/api';
 import type { ApiError } from '@/lib/apiClient';
-
-const CDN_BASE = 'https://cdn.pixelxlab.com';
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // 50 MB
@@ -122,10 +120,11 @@ export function AssetUploader({ onSuccess, onClose }: AssetUploaderProps) {
     try {
       // Step 1: Get signed upload URL
       setStage('getting-url');
-      const { uploadUrl, assetId } = await apiPost<UploadUrlResponse>('/assets/upload-url', {
+      const mediaType = file.type.startsWith('video/') ? 'VIDEO' : 'IMAGE';
+      const { uploadUrl, publicUrl, storageKey } = await apiPost<UploadUrlResponse>('/assets/signed-upload', {
         filename: file.name,
-        mimeType: file.type,
-        size: file.size,
+        contentType: file.type,
+        mediaType,
       });
 
       // Step 2: PUT file directly to R2 via XHR (for progress tracking)
@@ -160,17 +159,18 @@ export function AssetUploader({ onSuccess, onClose }: AssetUploaderProps) {
 
       // Step 3: Register asset record in backend
       setStage('registering');
-      await apiPost('/assets', {
-        filename: file.name,
+      const registered = await apiPost<{ id: string }>('/assets', {
+        url: publicUrl,
+        storageKey,
+        mediaType,
         mimeType: file.type,
-        size: file.size,
-        url: `${CDN_BASE}/${assetId}`,
+        fileSizeBytes: file.size,
       });
 
       // Step 4: Done — notify parent
       setStage('done');
       addToast('Asset uploaded successfully', 'success');
-      onSuccess(assetId);
+      onSuccess(registered.id);
     } catch (err) {
       setStage('error');
       const msg = err instanceof Error ? err.message : (err as ApiError)?.message ?? 'Upload failed';

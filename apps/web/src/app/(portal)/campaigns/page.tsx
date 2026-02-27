@@ -92,19 +92,10 @@ interface WizardState {
   budgetType: BudgetType;
   initialStatus: 'ACTIVE' | 'PAUSED';
   // Step 4
-  headline: string;
-  description: string;
   adCreatives: AdCreativeConfig[];
 }
 
-const DEFAULT_CREATIVE: AdCreativeConfig = {
-  sourceType: 'CONTENT_SOURCE',
-  mediaType: 'VIDEO',
-  adText: '',
-  videoUrl: '',
-  thumbnailUrl: '',
-  imageUrl: '',
-};
+const DEFAULT_CREATIVE: AdCreativeConfig = { creativeId: '' };
 
 const INITIAL_WIZARD: WizardState = {
   sellpageId: '',
@@ -116,8 +107,6 @@ const INITIAL_WIZARD: WizardState = {
   budget: '',
   budgetType: 'DAILY',
   initialStatus: 'PAUSED',
-  headline: '',
-  description: '',
   adCreatives: [{ ...DEFAULT_CREATIVE }],
 };
 
@@ -250,9 +239,8 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
         adsPerAdset: selectedPreset.adsPerAdset,
       };
       if (state.pageId) body.pageId = state.pageId;
-      if (state.headline.trim()) body.headline = state.headline.trim();
-      if (state.description.trim()) body.description = state.description.trim();
-      if (state.adCreatives.length > 0) body.adCreatives = state.adCreatives;
+      const validCreatives = state.adCreatives.filter((c) => c.creativeId);
+      if (validCreatives.length > 0) body.adCreatives = validCreatives;
 
       const result = await apiPost<BatchCreateResponse>('/campaigns/batch', body);
       addToast(`${result.totalCampaigns} campaign(s) created`, 'success');
@@ -526,26 +514,15 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
 
           {/* Step 4: Creatives */}
           {step === 4 && (
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-1">Ad Creatives</h3>
-              <p className="text-xs text-muted-foreground mb-4">
-                Configure creatives for each ad slot ({selectedPreset.adsPerAdset} per adset).
-                All adsets share the same creative set.
-              </p>
-              <CreativeSelector
-                adsPerAdset={selectedPreset.adsPerAdset}
-                headline={state.headline}
-                description={state.description}
-                adCreatives={state.adCreatives}
-                onHeadlineChange={(v) => update({ headline: v })}
-                onDescriptionChange={(v) => update({ description: v })}
-                onAdCreativeChange={(index, config) => {
-                  const next = [...state.adCreatives];
-                  next[index] = config;
-                  update({ adCreatives: next });
-                }}
-              />
-            </div>
+            <CreativeSelector
+              adsPerAdset={selectedPreset.adsPerAdset}
+              adCreatives={state.adCreatives}
+              onAdCreativeChange={(index, config) => {
+                const next = [...state.adCreatives];
+                next[index] = config;
+                update({ adCreatives: next });
+              }}
+            />
           )}
 
           {/* Step 5: Review */}

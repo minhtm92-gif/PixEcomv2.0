@@ -429,7 +429,9 @@ export interface UpdateSellerSettingsDto {
 // ── Assets ──
 export interface UploadUrlResponse {
   uploadUrl: string;
-  assetId: string;
+  publicUrl: string;
+  storageKey: string;
+  expiresInSeconds: number;
 }
 
 // ── Creatives ──
@@ -574,13 +576,7 @@ export interface CreateCampaignDto {
 }
 
 export interface AdCreativeConfig {
-  sourceType: 'EXISTING' | 'CONTENT_SOURCE';
-  mediaType: 'VIDEO' | 'IMAGE';
-  externalPostId?: string;
-  adText?: string;
-  videoUrl?: string;
-  thumbnailUrl?: string;
-  imageUrl?: string;
+  creativeId: string;
 }
 
 export interface CreateCampaignBatchDto {
@@ -594,8 +590,6 @@ export interface CreateCampaignBatchDto {
   adsetsPerCampaign: number;
   adsPerAdset: number;
   pageId?: string;
-  headline?: string;
-  description?: string;
   adCreatives?: AdCreativeConfig[];
 }
 
