@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaService } from '../meta/meta.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { CreateCampaignBatchDto } from './dto/create-campaign-batch.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { ListCampaignsDto } from './dto/list-campaigns.dto';
 import { InlineBudgetDto } from '../ads-manager/dto/bulk-action.dto';
@@ -152,6 +153,126 @@ export class CampaignsService {
     });
 
     return mapCampaign(campaign);
+  }
+
+  // ─── BATCH CREATE ────────────────────────────────────────────────────────
+
+  async createCampaignBatch(sellerId: string, dto: CreateCampaignBatchDto) {
+    // Validate sellpage
+    const sellpage = await this.prisma.sellpage.findFirst({
+      where: { id: dto.sellpageId, sellerId },
+      select: { id: true },
+    });
+    if (!sellpage) {
+      throw new NotFoundException(`Sellpage ${dto.sellpageId} not found`);
+    }
+
+    // Validate ad account
+    const adAccount = await this.prisma.fbConnection.findFirst({
+      where: { id: dto.adAccountId, sellerId, connectionType: 'AD_ACCOUNT', isActive: true },
+      select: { id: true, externalId: true },
+    });
+    if (!adAccount) {
+      throw new BadRequestException('Ad account not found or inactive');
+    }
+
+    // Validate page if provided
+    if (dto.pageId) {
+      const page = await this.prisma.fbConnection.findFirst({
+        where: { id: dto.pageId, sellerId, connectionType: 'PAGE', isActive: true },
+        select: { id: true },
+      });
+      if (!page) {
+        throw new BadRequestException('Facebook page not found or inactive');
+      }
+    }
+
+    // Create all campaigns, adsets, ads, and ad posts in a transaction
+    const campaigns = await this.prisma.$transaction(async (tx) => {
+      const results: Array<{ id: string; name: string; adsetsCount: number; adsCount: number }> = [];
+
+      for (let ci = 0; ci < dto.count; ci++) {
+        const campaignName = dto.count > 1
+          ? `${dto.nameTemplate} #${ci + 1}`
+          : dto.nameTemplate;
+
+        const campaign = await tx.campaign.create({
+          data: {
+            sellerId,
+            sellpageId: dto.sellpageId,
+            adAccountId: dto.adAccountId,
+            name: campaignName,
+            budget: dto.budget,
+            budgetType: dto.budgetType as any,
+            status: 'PAUSED' as any,
+            externalCampaignId: null,
+          },
+          select: { id: true, name: true },
+        });
+
+        let totalAds = 0;
+
+        for (let si = 0; si < dto.adsetsPerCampaign; si++) {
+          const adset = await tx.adset.create({
+            data: {
+              campaignId: campaign.id,
+              sellerId,
+              name: `Adset ${si + 1}`,
+              status: 'PAUSED' as any,
+              optimizationGoal: 'CONVERSIONS',
+              targeting: {},
+            },
+            select: { id: true },
+          });
+
+          for (let ai = 0; ai < dto.adsPerAdset; ai++) {
+            const ad = await tx.ad.create({
+              data: {
+                adsetId: adset.id,
+                sellerId,
+                name: `Ad ${ai + 1}`,
+                status: 'PAUSED' as any,
+              },
+              select: { id: true },
+            });
+
+            // Create AdPost if page is provided and creative config exists
+            if (dto.pageId) {
+              const creativeIdx = ai; // Map ad index to creative config
+              const creative = dto.adCreatives?.[creativeIdx];
+
+              await tx.adPost.create({
+                data: {
+                  sellerId,
+                  adId: ad.id,
+                  pageId: dto.pageId,
+                  postSource: (creative?.sourceType === 'EXISTING' ? 'EXISTING' : 'CONTENT_SOURCE') as any,
+                  externalPostId: creative?.externalPostId ?? null,
+                },
+              });
+            }
+
+            totalAds++;
+          }
+        }
+
+        results.push({
+          id: campaign.id,
+          name: campaign.name,
+          adsetsCount: dto.adsetsPerCampaign,
+          adsCount: totalAds,
+        });
+      }
+
+      return results;
+    });
+
+    this.logger.log(
+      `Batch created ${campaigns.length} campaigns for seller ${sellerId} ` +
+      `(${dto.adsetsPerCampaign} adsets × ${dto.adsPerAdset} ads each)`,
+    );
+
+    return { campaigns, totalCampaigns: campaigns.length };
   }
 
   // ─── LIST ──────────────────────────────────────────────────────────────────

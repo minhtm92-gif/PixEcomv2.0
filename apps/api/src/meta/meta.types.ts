@@ -75,4 +75,15 @@ export interface MetaAdAccount {
   account_status: number;
   currency: string;
   timezone_name: string;
+  spend_cap?: string;
+  amount_spent?: string;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export interface MetaPage {
+  id: string;
+  name: string;
+  category: string;
+  access_token: string;
 }

@@ -499,6 +499,15 @@ export interface FbConnection {
   provider: 'META';
   fbUserId: string | null;
   fbUserName: string | null;
+  // Ad account metadata
+  accountStatus: number | null;
+  accountStatusLabel: string | null;
+  spendCap: string | null;
+  amountSpent: string | null;
+  currency: string | null;
+  timezone: string | null;
+  // Page metadata
+  category: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -509,6 +518,17 @@ export interface FbConnectionsResponse {
 
 export interface MetaAuthUrlResponse {
   url: string;
+}
+
+export interface AdAccountLiveDetails {
+  accountStatus: number;
+  accountStatusLabel: string;
+  spendCap: string | null;
+  amountSpent: string | null;
+  currency: string;
+  timezone: string;
+  disableReason: number | null;
+  name: string;
 }
 
 // ── Campaigns ──
@@ -551,6 +571,37 @@ export interface CreateCampaignDto {
   budgetType: BudgetType;
   startDate?: string;
   endDate?: string;
+}
+
+export interface AdCreativeConfig {
+  sourceType: 'EXISTING' | 'CONTENT_SOURCE';
+  mediaType: 'VIDEO' | 'IMAGE';
+  externalPostId?: string;
+  adText?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  imageUrl?: string;
+}
+
+export interface CreateCampaignBatchDto {
+  nameTemplate: string;
+  sellpageId: string;
+  adAccountId: string;
+  budget: number;
+  budgetType: BudgetType;
+  count: number;
+  initialStatus: 'ACTIVE' | 'PAUSED';
+  adsetsPerCampaign: number;
+  adsPerAdset: number;
+  pageId?: string;
+  headline?: string;
+  description?: string;
+  adCreatives?: AdCreativeConfig[];
+}
+
+export interface BatchCreateResponse {
+  campaigns: Array<{ id: string; name: string; adsetsCount: number; adsCount: number }>;
+  totalCampaigns: number;
 }
 
 export interface UpdateCampaignDto {

@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { MetaService } from '../meta/meta.service';
 import { CreateFbConnectionDto } from './dto/create-fb-connection.dto';
 import { ListFbConnectionsDto } from './dto/list-fb-connections.dto';
 import { UpdateFbConnectionDto } from './dto/update-fb-connection.dto';
@@ -55,9 +56,24 @@ const HIERARCHY_RULES: Record<
   CONVERSION: { requiresParent: true, allowedParentType: 'PIXEL' },
 };
 
+/** Map Meta numeric account_status to a human label. */
+const ACCOUNT_STATUS_MAP: Record<number, string> = {
+  1: 'Active',
+  2: 'Disabled',
+  3: 'Unsettled',
+  7: 'Pending Review',
+  9: 'In Grace Period',
+  100: 'Pending Closure',
+  101: 'Closed',
+  201: 'Any Active',
+};
+
 @Injectable()
 export class FbConnectionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly metaService: MetaService,
+  ) {}
 
   // ─── CREATE ────────────────────────────────────────────────────────────────
 
@@ -178,6 +194,50 @@ export class FbConnectionsService {
     return { ok: true, id, isActive: updated.isActive };
   }
 
+  // ─── ACCOUNT DETAILS (live from Meta) ─────────────────────────────────────
+
+  async getAccountDetails(sellerId: string, id: string) {
+    const conn = await this.prisma.fbConnection.findUnique({
+      where: { id },
+      select: { id: true, sellerId: true, connectionType: true, externalId: true },
+    });
+
+    if (!conn || conn.sellerId !== sellerId) {
+      throw new NotFoundException('Connection not found');
+    }
+
+    if (conn.connectionType !== 'AD_ACCOUNT') {
+      throw new BadRequestException('Account details are only available for AD_ACCOUNT connections');
+    }
+
+    const extId = conn.externalId.startsWith('act_')
+      ? conn.externalId
+      : `act_${conn.externalId}`;
+
+    const data = await this.metaService.get<{
+      account_status: number;
+      spend_cap: string;
+      amount_spent: string;
+      currency: string;
+      timezone_name: string;
+      disable_reason?: number;
+      name: string;
+    }>(id, extId, {
+      fields: 'account_status,spend_cap,amount_spent,currency,timezone_name,disable_reason,name',
+    });
+
+    return {
+      accountStatus: data.account_status,
+      accountStatusLabel: ACCOUNT_STATUS_MAP[data.account_status] ?? 'Unknown',
+      spendCap: data.spend_cap ?? null,
+      amountSpent: data.amount_spent ?? null,
+      currency: data.currency,
+      timezone: data.timezone_name,
+      disableReason: data.disable_reason ?? null,
+      name: data.name,
+    };
+  }
+
   // ─── PRIVATE ───────────────────────────────────────────────────────────────
 
   private async assertBelongsToSeller(sellerId: string, id: string) {
@@ -256,6 +316,17 @@ function mapToDto(c: FbConnectionRow) {
     provider: 'META' as const,
     fbUserId: (meta.fbUserId as string) ?? null,
     fbUserName: (meta.fbUserName as string) ?? null,
+    // Ad account metadata
+    accountStatus: (meta.accountStatus as number) ?? null,
+    accountStatusLabel: meta.accountStatus
+      ? (ACCOUNT_STATUS_MAP[meta.accountStatus as number] ?? 'Unknown')
+      : null,
+    spendCap: (meta.spendCap as string) ?? null,
+    amountSpent: (meta.amountSpent as string) ?? null,
+    currency: (meta.currency as string) ?? null,
+    timezone: (meta.timezone as string) ?? null,
+    // Page metadata
+    category: (meta.category as string) ?? null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
   };

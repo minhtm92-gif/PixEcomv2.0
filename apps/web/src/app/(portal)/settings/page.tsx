@@ -618,125 +618,227 @@ export default function SettingsPage() {
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {connections.map((conn) => (
-                <div
-                  key={conn.id}
-                  className={`border rounded-lg p-4 transition-colors ${
-                    conn.isActive ? 'border-[#1877F2]/30 bg-[#1877F2]/5' : 'border-border bg-muted/30'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    {/* Toggle */}
-                    <button
-                      onClick={() => handleToggle(conn)}
-                      disabled={togglingId === conn.id}
-                      className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-                      title={conn.isActive ? 'Deactivate' : 'Activate'}
-                    >
-                      {togglingId === conn.id ? (
-                        <Loader2 size={20} className="animate-spin" />
-                      ) : conn.isActive ? (
-                        <ToggleRight size={20} className="text-[#1877F2]" />
-                      ) : (
-                        <ToggleLeft size={20} />
-                      )}
-                    </button>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      {editingId === conn.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            className="px-2 py-1 bg-input border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-48"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveName(conn);
-                              if (e.key === 'Escape') cancelEditName();
-                            }}
-                          />
-                          <button
-                            onClick={() => handleSaveName(conn)}
-                            disabled={editSaving}
-                            className="text-green-400 hover:text-green-300 disabled:opacity-50"
-                          >
-                            {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                          </button>
-                          <button
-                            onClick={cancelEditName}
-                            disabled={editSaving}
-                            className="text-muted-foreground hover:text-foreground disabled:opacity-50"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div>
-                          <p className="text-sm font-medium text-foreground truncate">{conn.name}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[10px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                              {CONNECTION_TYPE_LABELS[conn.connectionType] ?? conn.connectionType}
-                            </span>
-                            {conn.fbUserName && (
-                            <span className="text-[10px] text-muted-foreground">
-                              {conn.fbUserName}
-                            </span>
-                            )}
-                            <span className="text-[10px] text-muted-foreground/50">
-                              ID: {conn.externalId}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Status */}
-                    <span
-                      className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
-                        conn.isActive
-                          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                          : 'bg-muted text-muted-foreground border border-border'
-                      }`}
-                    >
-                      {conn.isActive ? 'Active' : 'Inactive'}
-                    </span>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1">
-                      {editingId !== conn.id && (
-                        <button
-                          onClick={() => startEditName(conn)}
-                          className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-                          title="Rename"
-                        >
-                          <Pencil size={13} />
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDelete(conn)}
-                        disabled={deletingId === conn.id}
-                        className="p-1.5 text-muted-foreground hover:text-red-400 rounded transition-colors disabled:opacity-50"
-                        title="Remove connection"
-                      >
-                        {deletingId === conn.id ? (
-                          <Loader2 size={13} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={13} />
-                        )}
-                      </button>
+            <div className="space-y-6">
+              {/* Ad Accounts Table */}
+              {(() => {
+                const adAccounts = connections.filter((c) => c.connectionType === 'AD_ACCOUNT');
+                if (adAccounts.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3">
+                      Ad Accounts ({adAccounts.length})
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left">
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-8" />
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Name</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">External ID</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Account Status</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Spend Cap</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Currency</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-20">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {adAccounts.map((conn) => (
+                            <tr key={conn.id} className={conn.isActive ? '' : 'opacity-50'}>
+                              <td className="py-2.5">
+                                <button
+                                  onClick={() => handleToggle(conn)}
+                                  disabled={togglingId === conn.id}
+                                  className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                                  title={conn.isActive ? 'Deactivate' : 'Activate'}
+                                >
+                                  {togglingId === conn.id ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                  ) : conn.isActive ? (
+                                    <ToggleRight size={16} className="text-[#1877F2]" />
+                                  ) : (
+                                    <ToggleLeft size={16} />
+                                  )}
+                                </button>
+                              </td>
+                              <td className="py-2.5">
+                                {editingId === conn.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="text"
+                                      value={editName}
+                                      onChange={(e) => setEditName(e.target.value)}
+                                      className="px-2 py-0.5 bg-input border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-36"
+                                      autoFocus
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSaveName(conn);
+                                        if (e.key === 'Escape') cancelEditName();
+                                      }}
+                                    />
+                                    <button onClick={() => handleSaveName(conn)} disabled={editSaving} className="text-green-400 hover:text-green-300 disabled:opacity-50">
+                                      {editSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                    </button>
+                                    <button onClick={cancelEditName} disabled={editSaving} className="text-muted-foreground hover:text-foreground disabled:opacity-50">
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <p className="text-sm font-medium text-foreground">{conn.name}</p>
+                                    {conn.fbUserName && (
+                                      <p className="text-[10px] text-muted-foreground">{conn.fbUserName}</p>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2.5">
+                                <code className="text-[11px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                                  {conn.externalId}
+                                </code>
+                              </td>
+                              <td className="py-2.5">
+                                {conn.accountStatusLabel ? (
+                                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                                    conn.accountStatus === 1
+                                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                                      : conn.accountStatus === 2
+                                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                        : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                                  }`}>
+                                    {conn.accountStatusLabel}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground">&mdash;</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 text-sm text-foreground">
+                                {conn.spendCap ? `$${(Number(conn.spendCap) / 100).toLocaleString()}` : '\u2014'}
+                              </td>
+                              <td className="py-2.5 text-sm text-muted-foreground">
+                                {conn.currency ?? '\u2014'}
+                              </td>
+                              <td className="py-2.5">
+                                <div className="flex items-center gap-1">
+                                  {editingId !== conn.id && (
+                                    <button onClick={() => startEditName(conn)} className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors" title="Rename">
+                                      <Pencil size={12} />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDelete(conn)}
+                                    disabled={deletingId === conn.id}
+                                    className="p-1 text-muted-foreground hover:text-red-400 rounded transition-colors disabled:opacity-50"
+                                    title="Remove"
+                                  >
+                                    {deletingId === conn.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
+                );
+              })()}
 
-                  {/* Last sync */}
-                  {/* Updated timestamp */}
-                  <p className="text-[10px] text-muted-foreground/50 mt-2 ml-8">
-                    Connected: {new Date(conn.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              ))}
+              {/* Pages Table */}
+              {(() => {
+                const pages = connections.filter((c) => c.connectionType === 'PAGE');
+                if (pages.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3">
+                      Pages ({pages.length})
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left">
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-8" />
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Name</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Page ID</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Category</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-20">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {pages.map((conn) => (
+                            <tr key={conn.id} className={conn.isActive ? '' : 'opacity-50'}>
+                              <td className="py-2.5">
+                                <button
+                                  onClick={() => handleToggle(conn)}
+                                  disabled={togglingId === conn.id}
+                                  className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                                  title={conn.isActive ? 'Deactivate' : 'Activate'}
+                                >
+                                  {togglingId === conn.id ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                  ) : conn.isActive ? (
+                                    <ToggleRight size={16} className="text-[#1877F2]" />
+                                  ) : (
+                                    <ToggleLeft size={16} />
+                                  )}
+                                </button>
+                              </td>
+                              <td className="py-2.5">
+                                {editingId === conn.id ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="text"
+                                      value={editName}
+                                      onChange={(e) => setEditName(e.target.value)}
+                                      className="px-2 py-0.5 bg-input border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-36"
+                                      autoFocus
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') handleSaveName(conn);
+                                        if (e.key === 'Escape') cancelEditName();
+                                      }}
+                                    />
+                                    <button onClick={() => handleSaveName(conn)} disabled={editSaving} className="text-green-400 hover:text-green-300 disabled:opacity-50">
+                                      {editSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                    </button>
+                                    <button onClick={cancelEditName} disabled={editSaving} className="text-muted-foreground hover:text-foreground disabled:opacity-50">
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm font-medium text-foreground">{conn.name}</p>
+                                )}
+                              </td>
+                              <td className="py-2.5">
+                                <code className="text-[11px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                                  {conn.externalId}
+                                </code>
+                              </td>
+                              <td className="py-2.5 text-sm text-muted-foreground">
+                                {conn.category ?? '\u2014'}
+                              </td>
+                              <td className="py-2.5">
+                                <div className="flex items-center gap-1">
+                                  {editingId !== conn.id && (
+                                    <button onClick={() => startEditName(conn)} className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors" title="Rename">
+                                      <Pencil size={12} />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleDelete(conn)}
+                                    disabled={deletingId === conn.id}
+                                    className="p-1 text-muted-foreground hover:text-red-400 rounded transition-colors disabled:opacity-50"
+                                    title="Remove"
+                                  >
+                                    {deletingId === conn.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

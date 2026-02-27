@@ -376,7 +376,7 @@ export function AdsMetricsTable({
   };
 
   const allColumns = tier
-    ? [checkboxCol, ...metricColumns, actionCol]
+    ? [checkboxCol, actionCol, ...metricColumns]
     : metricColumns;
 
   return (

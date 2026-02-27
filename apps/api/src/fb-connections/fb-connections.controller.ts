@@ -72,6 +72,19 @@ export class FbConnectionsController {
   }
 
   /**
+   * GET /api/fb/connections/:id/account-details
+   * Fetch live ad account details from Meta Graph API.
+   * Only works for AD_ACCOUNT connections.
+   */
+  @Get(':id/account-details')
+  getAccountDetails(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getAccountDetails(user.sellerId, id);
+  }
+
+  /**
    * PATCH /api/fb/connections/:id
    * Update name / isPrimary / isActive.
    * connectionType, externalId, parentId are immutable.

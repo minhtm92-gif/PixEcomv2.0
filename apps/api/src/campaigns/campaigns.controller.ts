@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/strategies/jwt.strategy';
 import { CampaignsService } from './campaigns.service';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
+import { CreateCampaignBatchDto } from './dto/create-campaign-batch.dto';
 import { ListCampaignsDto } from './dto/list-campaigns.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { InlineBudgetDto } from '../ads-manager/dto/bulk-action.dto';
@@ -40,6 +41,14 @@ export class CampaignsController {
   @HttpCode(HttpStatus.CREATED)
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateCampaignDto) {
     return this.service.createCampaign(user.sellerId, dto);
+  }
+
+  // ─── POST /campaigns/batch ──────────────────────────────────────────────
+
+  @Post('batch')
+  @HttpCode(HttpStatus.CREATED)
+  createBatch(@CurrentUser() user: AuthUser, @Body() dto: CreateCampaignBatchDto) {
+    return this.service.createCampaignBatch(user.sellerId, dto);
   }
 
   // ─── GET /campaigns ───────────────────────────────────────────────────────

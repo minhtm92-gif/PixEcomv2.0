@@ -13,21 +13,25 @@ import {
   ArrowRight,
   ArrowLeft,
   Check,
+  Zap,
 } from 'lucide-react';
 import { apiGet, apiPost, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
 import { PageShell } from '@/components/PageShell';
 import { DataTable, type Column } from '@/components/DataTable';
+import { CreativeSelector } from '@/components/CreativeSelector';
+import { STRATEGY_PRESETS, type StrategyPreset } from '@/lib/strategyPresets';
 import { fmtDate } from '@/lib/format';
 import type {
   CampaignListItem,
   CampaignsListResponse,
-  CampaignDetail,
-  CreateCampaignDto,
   BudgetType,
   SellpagesListResponse,
   SellpageListItem,
   FbConnection,
+  AdCreativeConfig,
+  CreateCampaignBatchDto,
+  BatchCreateResponse,
 } from '@/types/api';
 import { isDraftCampaign } from '@/types/api';
 
@@ -70,29 +74,51 @@ const inputCls =
   'w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
 
 // ── Wizard ────────────────────────────────────────────────────────────
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 5;
+
+const STEP_LABELS = ['Sellpage', 'Account & Strategy', 'Campaign Config', 'Creatives', 'Review'];
 
 interface WizardState {
   // Step 1
   sellpageId: string;
   // Step 2
   adAccountId: string;
+  pageId: string;
+  strategyKey: string;
   // Step 3
-  name: string;
+  nameTemplate: string;
+  campaignCount: number;
   budget: string;
   budgetType: BudgetType;
-  startDate: string;
-  endDate: string;
+  initialStatus: 'ACTIVE' | 'PAUSED';
+  // Step 4
+  headline: string;
+  description: string;
+  adCreatives: AdCreativeConfig[];
 }
+
+const DEFAULT_CREATIVE: AdCreativeConfig = {
+  sourceType: 'CONTENT_SOURCE',
+  mediaType: 'VIDEO',
+  adText: '',
+  videoUrl: '',
+  thumbnailUrl: '',
+  imageUrl: '',
+};
 
 const INITIAL_WIZARD: WizardState = {
   sellpageId: '',
   adAccountId: '',
-  name: '',
+  pageId: '',
+  strategyKey: 'CBO_1_5_3',
+  nameTemplate: '',
+  campaignCount: 1,
   budget: '',
   budgetType: 'DAILY',
-  startDate: '',
-  endDate: '',
+  initialStatus: 'PAUSED',
+  headline: '',
+  description: '',
+  adCreatives: [{ ...DEFAULT_CREATIVE }],
 };
 
 function WizardStepIndicator({ step }: { step: number }) {
@@ -141,9 +167,13 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
   const [sellpages, setSellpages] = useState<SellpageListItem[]>([]);
   const [sellpagesLoading, setSellpagesLoading] = useState(false);
 
-  // Ad accounts
+  // Ad accounts + Pages
   const [adAccounts, setAdAccounts] = useState<FbConnection[]>([]);
-  const [adAccountsLoading, setAdAccountsLoading] = useState(false);
+  const [pages, setPages] = useState<FbConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+
+  // Derived: selected strategy preset
+  const selectedPreset = STRATEGY_PRESETS.find((p) => p.key === state.strategyKey) ?? STRATEGY_PRESETS[0];
 
   useEffect(() => {
     setSellpagesLoading(true);
@@ -153,14 +183,35 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
       .finally(() => setSellpagesLoading(false));
   }, []);
 
+  // Fetch ad accounts + pages when entering step 2
   useEffect(() => {
     if (step !== 2) return;
-    setAdAccountsLoading(true);
-    apiGet<FbConnection[]>('/fb/connections?connectionType=AD_ACCOUNT')
-      .then((res) => setAdAccounts(res ?? []))
+    setConnectionsLoading(true);
+    Promise.all([
+      apiGet<FbConnection[]>('/fb/connections?connectionType=AD_ACCOUNT'),
+      apiGet<FbConnection[]>('/fb/connections?connectionType=PAGE'),
+    ])
+      .then(([accs, pgs]) => {
+        setAdAccounts(accs ?? []);
+        setPages(pgs ?? []);
+      })
       .catch((err) => toastApiError(err as ApiError))
-      .finally(() => setAdAccountsLoading(false));
+      .finally(() => setConnectionsLoading(false));
   }, [step]);
+
+  // Sync adCreatives array when strategy preset changes
+  useEffect(() => {
+    const needed = selectedPreset.adsPerAdset;
+    setState((prev) => {
+      const current = prev.adCreatives;
+      if (current.length === needed) return prev;
+      const next: AdCreativeConfig[] = [];
+      for (let i = 0; i < needed; i++) {
+        next.push(current[i] ?? { ...DEFAULT_CREATIVE });
+      }
+      return { ...prev, adCreatives: next };
+    });
+  }, [selectedPreset.adsPerAdset]);
 
   function update(patch: Partial<WizardState>) {
     setState((s) => ({ ...s, ...patch }));
@@ -169,8 +220,9 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
 
   function canNext(): boolean {
     if (step === 1) return !!state.sellpageId;
-    if (step === 2) return !!state.adAccountId;
-    if (step === 3) return !!state.name.trim() && !!state.budget && Number(state.budget) > 0;
+    if (step === 2) return !!state.adAccountId && !!state.strategyKey;
+    if (step === 3) return !!state.nameTemplate.trim() && !!state.budget && Number(state.budget) > 0 && state.campaignCount >= 1;
+    if (step === 4) return true; // creatives are optional
     return true;
   }
 
@@ -178,22 +230,33 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
     setCreating(true);
     setWizardError(null);
     try {
-      const body: CreateCampaignDto = {
-        name: state.name.trim(),
+      const body: CreateCampaignBatchDto = {
+        nameTemplate: state.nameTemplate.trim(),
         sellpageId: state.sellpageId,
         adAccountId: state.adAccountId,
         budget: Number(state.budget),
         budgetType: state.budgetType,
+        count: state.campaignCount,
+        initialStatus: state.initialStatus,
+        adsetsPerCampaign: selectedPreset.adsets,
+        adsPerAdset: selectedPreset.adsPerAdset,
       };
-      if (state.startDate) body.startDate = state.startDate;
-      if (state.endDate) body.endDate = state.endDate;
+      if (state.pageId) body.pageId = state.pageId;
+      if (state.headline.trim()) body.headline = state.headline.trim();
+      if (state.description.trim()) body.description = state.description.trim();
+      if (state.adCreatives.length > 0) body.adCreatives = state.adCreatives;
 
-      const created = await apiPost<CampaignDetail>('/campaigns', body);
-      addToast('Campaign created', 'success');
-      onCreated(created.id);
+      const result = await apiPost<BatchCreateResponse>('/campaigns/batch', body);
+      addToast(`${result.totalCampaigns} campaign(s) created`, 'success');
+      // Navigate to first campaign
+      if (result.campaigns.length > 0) {
+        onCreated(result.campaigns[0].id);
+      } else {
+        onClose();
+      }
     } catch (err) {
       const e = err as ApiError;
-      setWizardError(e.message ?? 'Failed to create campaign');
+      setWizardError(e.message ?? 'Failed to create campaigns');
       toastApiError(e);
     } finally {
       setCreating(false);
@@ -202,14 +265,15 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
 
   const selectedSellpage = sellpages.find((s) => s.id === state.sellpageId);
   const selectedAdAccount = adAccounts.find((a) => a.id === state.adAccountId);
+  const selectedPage = pages.find((p) => p.id === state.pageId);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={() => !creating && onClose()} />
 
-      <div className="relative bg-card border border-border rounded-xl w-full max-w-lg mx-4 shadow-xl">
+      <div className="relative bg-card border border-border rounded-xl w-full max-w-2xl mx-4 shadow-xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <h2 className="text-base font-semibold text-foreground">New Campaign</h2>
           <button
             onClick={() => !creating && onClose()}
@@ -219,7 +283,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
           </button>
         </div>
 
-        <div className="p-5">
+        <div className="p-5 overflow-y-auto flex-1">
           <WizardStepIndicator step={step} />
 
           {/* Step 1: Select Sellpage */}
@@ -246,47 +310,105 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
             </div>
           )}
 
-          {/* Step 2: Select Ad Account */}
+          {/* Step 2: Ad Account + Page + Strategy */}
           {step === 2 && (
-            <div>
-              <h3 className="text-sm font-medium text-foreground mb-1">Select Ad Account</h3>
-              <p className="text-xs text-muted-foreground mb-4">Choose which Facebook Ad Account to use</p>
-              {adAccountsLoading ? (
-                <div className="h-10 bg-muted rounded animate-pulse" />
-              ) : adAccounts.length === 0 ? (
-                <div className="text-center py-6 text-sm text-muted-foreground">
-                  No connected Ad Accounts.{' '}
-                  <a href="/settings" className="text-primary underline">Go to Settings</a> to connect one.
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {adAccounts.map((acc) => (
+            <div className="space-y-5">
+              {/* Ad Account */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-1">Ad Account <span className="text-red-400">*</span></h3>
+                <p className="text-xs text-muted-foreground mb-3">Choose which Facebook Ad Account to use</p>
+                {connectionsLoading ? (
+                  <div className="h-10 bg-muted rounded animate-pulse" />
+                ) : adAccounts.length === 0 ? (
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    No connected Ad Accounts.{' '}
+                    <a href="/settings" className="text-primary underline">Go to Settings</a> to connect one.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {adAccounts.map((acc) => (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => update({ adAccountId: acc.id })}
+                        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm transition-colors ${
+                          state.adAccountId === acc.id
+                            ? 'border-primary bg-primary/10 text-foreground'
+                            : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        <div className="text-left">
+                          <p className="font-medium">{acc.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{acc.externalId}</p>
+                        </div>
+                        {state.adAccountId === acc.id && <Check size={14} className="text-primary" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Facebook Page */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-1">
+                  Facebook Page <span className="text-xs text-muted-foreground/60">(optional)</span>
+                </h3>
+                <p className="text-xs text-muted-foreground mb-3">Select a page for ad delivery</p>
+                {connectionsLoading ? (
+                  <div className="h-10 bg-muted rounded animate-pulse" />
+                ) : pages.length === 0 ? (
+                  <div className="text-xs text-muted-foreground py-2">No connected Pages found.</div>
+                ) : (
+                  <select
+                    value={state.pageId}
+                    onChange={(e) => update({ pageId: e.target.value })}
+                    className={inputCls}
+                  >
+                    <option value="">None</option>
+                    {pages.map((pg) => (
+                      <option key={pg.id} value={pg.id}>
+                        {pg.name} ({pg.externalId})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Strategy Preset */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-1">Strategy Preset</h3>
+                <p className="text-xs text-muted-foreground mb-3">CBO with Advantage+ targeting, 1-day click attribution</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {STRATEGY_PRESETS.map((preset) => (
                     <button
-                      key={acc.id}
+                      key={preset.key}
                       type="button"
-                      onClick={() => update({ adAccountId: acc.id })}
-                      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-sm transition-colors ${
-                        state.adAccountId === acc.id
+                      onClick={() => update({ strategyKey: preset.key })}
+                      className={`relative px-3 py-3 rounded-lg border text-center transition-colors ${
+                        state.strategyKey === preset.key
                           ? 'border-primary bg-primary/10 text-foreground'
-                          : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                          : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50'
                       }`}
                     >
-                      <div className="text-left">
-                        <p className="font-medium">{acc.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{acc.externalId}</p>
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        <Zap size={12} className="text-primary" />
+                        <span className="text-sm font-semibold">{preset.label}</span>
                       </div>
-                      {state.adAccountId === acc.id && <Check size={14} className="text-primary" />}
+                      <p className="text-[10px] text-muted-foreground">{preset.totalAds} ads total</p>
+                      {state.strategyKey === preset.key && (
+                        <Check size={12} className="absolute top-1.5 right-1.5 text-primary" />
+                      )}
                     </button>
                   ))}
                 </div>
-              )}
+              </div>
             </div>
           )}
 
-          {/* Step 3: Campaign Details */}
+          {/* Step 3: Campaign Config */}
           {step === 3 && (
             <div className="space-y-4">
-              <h3 className="text-sm font-medium text-foreground mb-1">Campaign Details</h3>
+              <h3 className="text-sm font-medium text-foreground mb-1">Campaign Configuration</h3>
 
               <div>
                 <label className="block text-sm text-muted-foreground mb-1.5">
@@ -294,18 +416,36 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                 </label>
                 <input
                   type="text"
-                  value={state.name}
-                  onChange={(e) => update({ name: e.target.value })}
+                  value={state.nameTemplate}
+                  onChange={(e) => update({ nameTemplate: e.target.value })}
                   className={inputCls}
                   placeholder="My Campaign"
                   autoFocus
                 />
+                {state.campaignCount > 1 && (
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Will generate: {state.nameTemplate || 'My Campaign'} #1, #2, ... #{state.campaignCount}
+                  </p>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-sm text-muted-foreground mb-1.5">
-                    Budget <span className="text-red-400">*</span>
+                    Campaigns <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={state.campaignCount}
+                    onChange={(e) => update({ campaignCount: Math.max(1, Math.min(20, Number(e.target.value) || 1)) })}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-muted-foreground mb-1.5">
+                    Budget / campaign <span className="text-red-400">*</span>
                   </label>
                   <input
                     type="number"
@@ -330,41 +470,84 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm text-muted-foreground mb-1.5">
-                    Start Date <span className="text-xs text-muted-foreground/60">(optional)</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={state.startDate}
-                    onChange={(e) => update({ startDate: e.target.value })}
-                    className={inputCls}
-                  />
+              <div>
+                <label className="block text-sm text-muted-foreground mb-2">Initial Status</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => update({ initialStatus: 'PAUSED' })}
+                    className={`flex-1 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      state.initialStatus === 'PAUSED'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-border bg-muted/30 text-muted-foreground hover:border-primary/50'
+                    }`}
+                  >
+                    Paused (Draft)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update({ initialStatus: 'ACTIVE' })}
+                    className={`flex-1 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                      state.initialStatus === 'ACTIVE'
+                        ? 'border-green-500 bg-green-500/10 text-green-400'
+                        : 'border-border bg-muted/30 text-muted-foreground hover:border-green-500/50'
+                    }`}
+                  >
+                    Active
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-sm text-muted-foreground mb-1.5">
-                    End Date <span className="text-xs text-muted-foreground/60">(optional)</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={state.endDate}
-                    onChange={(e) => update({ endDate: e.target.value })}
-                    className={inputCls}
-                  />
-                </div>
+              </div>
+
+              {/* Summary box */}
+              <div className="bg-muted/30 border border-border rounded-lg px-4 py-3 text-xs text-muted-foreground">
+                <span className="text-foreground font-medium">{state.campaignCount}</span> campaign{state.campaignCount > 1 ? 's' : ''} ×{' '}
+                <span className="text-foreground font-medium">{selectedPreset.adsets}</span> adsets ×{' '}
+                <span className="text-foreground font-medium">{selectedPreset.adsPerAdset}</span> ads ={' '}
+                <span className="text-primary font-semibold">{state.campaignCount * selectedPreset.totalAds} total ads</span>
+                {state.budget && (
+                  <>
+                    {' '}| Total budget:{' '}
+                    <span className="text-foreground font-medium">
+                      ${(Number(state.budget) * state.campaignCount).toFixed(2)}/{state.budgetType === 'DAILY' ? 'day' : 'lifetime'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           )}
 
-          {/* Step 4: Review */}
+          {/* Step 4: Creatives */}
           {step === 4 && (
+            <div>
+              <h3 className="text-sm font-medium text-foreground mb-1">Ad Creatives</h3>
+              <p className="text-xs text-muted-foreground mb-4">
+                Configure creatives for each ad slot ({selectedPreset.adsPerAdset} per adset).
+                All adsets share the same creative set.
+              </p>
+              <CreativeSelector
+                adsPerAdset={selectedPreset.adsPerAdset}
+                headline={state.headline}
+                description={state.description}
+                adCreatives={state.adCreatives}
+                onHeadlineChange={(v) => update({ headline: v })}
+                onDescriptionChange={(v) => update({ description: v })}
+                onAdCreativeChange={(index, config) => {
+                  const next = [...state.adCreatives];
+                  next[index] = config;
+                  update({ adCreatives: next });
+                }}
+              />
+            </div>
+          )}
+
+          {/* Step 5: Review */}
+          {step === 5 && (
             <div>
               <h3 className="text-sm font-medium text-foreground mb-4">Review & Create</h3>
               <div className="bg-muted/30 border border-border rounded-lg divide-y divide-border text-sm">
                 <div className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">Name</span>
-                  <span className="text-foreground font-medium">{state.name}</span>
+                  <span className="text-foreground font-medium">{state.nameTemplate}</span>
                 </div>
                 <div className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">Sellpage</span>
@@ -376,25 +559,41 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                   <span className="text-muted-foreground">Ad Account</span>
                   <span className="text-foreground">{selectedAdAccount?.name ?? state.adAccountId}</span>
                 </div>
+                {selectedPage && (
+                  <div className="flex justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground">Page</span>
+                    <span className="text-foreground">{selectedPage.name}</span>
+                  </div>
+                )}
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">Strategy</span>
+                  <span className="text-foreground">{selectedPreset.label}</span>
+                </div>
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">Campaigns</span>
+                  <span className="text-foreground">{state.campaignCount}</span>
+                </div>
                 <div className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">Budget</span>
-                  <span className="text-foreground">${state.budget} / {state.budgetType === 'DAILY' ? 'day' : 'lifetime'}</span>
+                  <span className="text-foreground">
+                    ${state.budget} / {state.budgetType === 'DAILY' ? 'day' : 'lifetime'} / campaign
+                  </span>
                 </div>
-                {state.startDate && (
-                  <div className="flex justify-between px-4 py-2.5">
-                    <span className="text-muted-foreground">Start Date</span>
-                    <span className="text-foreground">{state.startDate}</span>
-                  </div>
-                )}
-                {state.endDate && (
-                  <div className="flex justify-between px-4 py-2.5">
-                    <span className="text-muted-foreground">End Date</span>
-                    <span className="text-foreground">{state.endDate}</span>
-                  </div>
-                )}
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className={state.initialStatus === 'ACTIVE' ? 'text-green-400' : 'text-yellow-400'}>
+                    {state.initialStatus === 'ACTIVE' ? 'Active' : 'Paused (Draft)'}
+                  </span>
+                </div>
+                <div className="flex justify-between px-4 py-2.5">
+                  <span className="text-muted-foreground">Total Ads</span>
+                  <span className="text-primary font-semibold">{state.campaignCount * selectedPreset.totalAds}</span>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                Campaign will be created as <strong className="text-foreground">Draft</strong>. You can launch it from the campaign detail page.
+                {state.initialStatus === 'PAUSED'
+                  ? 'Campaigns will be created as Draft. You can launch them from the campaign detail page.'
+                  : 'Campaigns will be created as Active and will start spending immediately after launch.'}
               </p>
               {wizardError && (
                 <div className="mt-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
@@ -406,7 +605,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-5 py-4 border-t border-border">
+        <div className="flex items-center justify-between px-5 py-4 border-t border-border shrink-0">
           <button
             type="button"
             onClick={() => step > 1 ? setStep(step - 1) : onClose()}
@@ -418,7 +617,9 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
             {step === 1 ? 'Cancel' : 'Back'}
           </button>
 
-          <span className="text-xs text-muted-foreground">{step} / {TOTAL_STEPS}</span>
+          <span className="text-xs text-muted-foreground">
+            {step}/{TOTAL_STEPS} — {STEP_LABELS[step - 1]}
+          </span>
 
           {step < TOTAL_STEPS ? (
             <button
@@ -440,7 +641,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                          hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
             >
               {creating && <Loader2 size={14} className="animate-spin" />}
-              {creating ? 'Creating...' : 'Create Campaign'}
+              {creating ? 'Creating...' : `Create ${state.campaignCount} Campaign${state.campaignCount > 1 ? 's' : ''}`}
             </button>
           )}
         </div>
