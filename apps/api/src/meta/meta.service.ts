@@ -13,7 +13,7 @@ import { MetaApiErrorResponse, MetaPagedResponse } from './meta.types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const META_GRAPH_BASE = 'https://graph.facebook.com/v21.0';
+const META_GRAPH_BASE = 'https://graph.facebook.com/v22.0';
 
 /** Retry configuration for transient 5xx errors */
 const RETRY_DELAYS_MS = [1_000, 2_000, 4_000]; // 3 attempts: 1s, 2s, 4s backoff

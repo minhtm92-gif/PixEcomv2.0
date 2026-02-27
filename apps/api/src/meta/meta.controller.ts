@@ -16,11 +16,11 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/strategies/jwt.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaTokenService } from './meta-token.service';
-import { MetaAdAccount, MetaOAuthTokenResponse, MetaPage } from './meta.types';
+import { MetaAdAccount, MetaOAuthTokenResponse, MetaPage, MetaPixel } from './meta.types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const META_GRAPH_BASE = 'https://graph.facebook.com/v21.0';
+const META_GRAPH_BASE = 'https://graph.facebook.com/v22.0';
 const OAUTH_SCOPES = [
   'ads_management',
   'ads_read',
@@ -238,8 +238,70 @@ export class MetaController {
         });
       }
 
+      // 7. Upsert FbConnections for Pixels / Datasets (per ad account)
+      let totalPixels = 0;
+      for (const acc of adAccounts) {
+        const adAccountExternalId = acc.id.replace('act_', '');
+        const pixels = await this.fetchPixels(accessToken, acc.id);
+
+        // Find the parent FbConnection for this ad account
+        const parentConn = await this.prisma.fbConnection.findUnique({
+          where: {
+            uq_fb_connection: {
+              sellerId,
+              connectionType: 'AD_ACCOUNT',
+              externalId: adAccountExternalId,
+            },
+          },
+          select: { id: true },
+        });
+
+        for (const pixel of pixels) {
+          await this.prisma.fbConnection.upsert({
+            where: {
+              uq_fb_connection: {
+                sellerId,
+                connectionType: 'PIXEL',
+                externalId: pixel.id,
+              },
+            },
+            update: {
+              accessTokenEnc: encToken,
+              name: pixel.name,
+              isActive: true,
+              parentId: parentConn?.id ?? null,
+              metadata: {
+                fbUserId: fbUser.id,
+                fbUserName: fbUser.name,
+                adAccountId: adAccountExternalId,
+                lastFiredTime: pixel.last_fired_time ?? null,
+                creationTime: pixel.creation_time ?? null,
+              },
+            },
+            create: {
+              sellerId,
+              connectionType: 'PIXEL',
+              externalId: pixel.id,
+              name: pixel.name,
+              accessTokenEnc: encToken,
+              parentId: parentConn?.id ?? null,
+              isPrimary: false,
+              isActive: true,
+              metadata: {
+                fbUserId: fbUser.id,
+                fbUserName: fbUser.name,
+                adAccountId: adAccountExternalId,
+                lastFiredTime: pixel.last_fired_time ?? null,
+                creationTime: pixel.creation_time ?? null,
+              },
+            },
+          });
+        }
+        totalPixels += pixels.length;
+      }
+
       this.logger.log(
-        `OAuth callback: upserted FbConnections for seller ${sellerId} (FB user: ${fbUser.name}, ad accounts: ${adAccounts.length}, pages: ${pages.length})`,
+        `OAuth callback: upserted FbConnections for seller ${sellerId} (FB user: ${fbUser.name}, ad accounts: ${adAccounts.length}, pages: ${pages.length}, pixels: ${totalPixels})`,
       );
 
       res.redirect(`${frontendBase}/meta/connected`);
@@ -370,6 +432,34 @@ export class MetaController {
       return data.data ?? [];
     } catch (err) {
       this.logger.warn('Failed to fetch ad accounts, proceeding without', err);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch Pixels / Datasets for a specific ad account.
+   * Meta API still uses the `/adspixels` endpoint (UI renamed to "Datasets").
+   */
+  private async fetchPixels(
+    accessToken: string,
+    adAccountId: string,
+  ): Promise<MetaPixel[]> {
+    try {
+      const response = await fetch(
+        `${META_GRAPH_BASE}/${adAccountId}/adspixels?fields=id,name,last_fired_time,creation_time&access_token=${accessToken}`,
+      );
+
+      if (!response.ok) {
+        this.logger.warn(
+          `FB /${adAccountId}/adspixels failed: ${response.status} — proceeding without pixels`,
+        );
+        return [];
+      }
+
+      const data = (await response.json()) as { data: MetaPixel[] };
+      return data.data ?? [];
+    } catch (err) {
+      this.logger.warn(`Failed to fetch pixels for ${adAccountId}, proceeding without`, err);
       return [];
     }
   }

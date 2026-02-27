@@ -53,7 +53,7 @@ const TIMEZONES = [
 const CONNECTION_TYPE_LABELS: Record<string, string> = {
   AD_ACCOUNT: 'Ad Account',
   PAGE: 'Page',
-  PIXEL: 'Pixel',
+  PIXEL: 'Dataset (Pixel)',
 };
 
 const inputCls =

@@ -87,3 +87,12 @@ export interface MetaPage {
   category: string;
   access_token: string;
 }
+
+// ─── Pixel / Dataset ─────────────────────────────────────────────────────────
+
+export interface MetaPixel {
+  id: string;
+  name: string;
+  last_fired_time?: string;
+  creation_time?: string;
+}

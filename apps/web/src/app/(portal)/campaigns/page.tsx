@@ -386,16 +386,16 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                 )}
               </div>
 
-              {/* Facebook Pixel */}
+              {/* Dataset (Pixel) */}
               <div>
                 <h3 className="text-sm font-medium text-foreground mb-1">
-                  Facebook Pixel <span className="text-xs text-muted-foreground/60">(optional)</span>
+                  Dataset (Pixel) <span className="text-xs text-muted-foreground/60">(optional)</span>
                 </h3>
-                <p className="text-xs text-muted-foreground mb-3">Select a pixel for conversion tracking (Purchase event)</p>
+                <p className="text-xs text-muted-foreground mb-3">Select a dataset for conversion tracking (Purchase event)</p>
                 {connectionsLoading ? (
                   <div className="h-10 bg-muted rounded animate-pulse" />
                 ) : pixels.length === 0 ? (
-                  <div className="text-xs text-muted-foreground py-2">No connected Pixels found.</div>
+                  <div className="text-xs text-muted-foreground py-2">No datasets found. Connect via Facebook Events Manager.</div>
                 ) : (
                   <select
                     value={state.pixelId}
@@ -594,7 +594,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                 )}
                 {selectedPixel && (
                   <div className="flex justify-between px-4 py-2.5">
-                    <span className="text-muted-foreground">Pixel</span>
+                    <span className="text-muted-foreground">Dataset (Pixel)</span>
                     <span className="text-foreground">{selectedPixel.name} ({selectedPixel.externalId})</span>
                   </div>
                 )}
