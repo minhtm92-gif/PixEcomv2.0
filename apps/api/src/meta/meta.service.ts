@@ -19,21 +19,21 @@ const META_GRAPH_BASE = 'https://graph.facebook.com/v22.0';
 const RETRY_DELAYS_MS = [1_000, 2_000, 4_000]; // 3 attempts: 1s, 2s, 4s backoff
 
 /** Meta API error codes → NestJS exception mapping */
-const META_ERROR_CODE_MAP: Record<number, () => never> = {
-  190: () => {
+const META_ERROR_CODE_MAP: Record<number, (msg: string) => never> = {
+  190: (msg) => {
     throw new UnauthorizedException(
-      'Meta access token has expired or is invalid. Please re-authenticate.',
+      `Meta access token has expired or is invalid. Please re-authenticate. (${msg})`,
     );
   },
-  17: () => {
+  17: (msg) => {
     throw new HttpException(
-      { message: 'Meta API rate limit exceeded. Retry later.' },
+      { message: `Meta API rate limit exceeded. Retry later. (${msg})` },
       429,
     );
   },
-  100: () => {
+  100: (msg) => {
     throw new BadRequestException(
-      'Invalid Meta API request parameters.',
+      `Invalid Meta API request: ${msg}`,
     );
   },
 };
@@ -224,11 +224,11 @@ export class MetaService {
    * Unmapped codes fall through to InternalServerErrorException.
    */
   private mapMetaError(code: number, message: string): never {
+    this.logger.error(`Meta API error code ${code}: ${message}`);
     const thrower = META_ERROR_CODE_MAP[code];
     if (thrower) {
-      thrower();
+      thrower(message);
     }
-    this.logger.error(`Unmapped Meta error code ${code}: ${message}`);
     throw new InternalServerErrorException(
       `Meta API error ${code}: ${message}`,
     );
