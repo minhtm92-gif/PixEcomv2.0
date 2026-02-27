@@ -202,13 +202,54 @@ export class CreativesService {
 
   // ─── LIST ──────────────────────────────────────────────────────────────────
 
-  async listCreatives(sellerId: string) {
-    const creatives = await this.prisma.creative.findMany({
-      where: { sellerId },
-      orderBy: { createdAt: 'desc' },
-      select: CREATIVE_CARD_SELECT,
-    });
-    return creatives.map((c) => mapToCardDto(c as CreativeCardRow));
+  async listCreatives(
+    sellerId: string,
+    opts: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      creativeType?: string;
+      q?: string;
+    } = {},
+  ) {
+    const page = Math.max(1, opts.page ?? 1);
+    const limit = Math.min(100, Math.max(1, opts.limit ?? 20));
+    const skip = (page - 1) * limit;
+
+    const where: Record<string, unknown> = { sellerId };
+    if (opts.status && opts.status !== 'ALL') {
+      where.status = opts.status;
+    }
+    if (opts.creativeType && opts.creativeType !== 'ALL') {
+      where.creativeType = opts.creativeType;
+    }
+    if (opts.q?.trim()) {
+      where.name = { contains: opts.q.trim(), mode: 'insensitive' };
+    }
+
+    const [creatives, total] = await Promise.all([
+      this.prisma.creative.findMany({
+        where: where as any,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          ...CREATIVE_CARD_SELECT,
+          product: { select: { id: true, name: true } },
+        },
+      }),
+      this.prisma.creative.count({ where: where as any }),
+    ]);
+
+    return {
+      data: creatives.map((c) => ({
+        ...mapToCardDto(c as CreativeCardRow),
+        product: (c as any).product ?? null,
+      })),
+      total,
+      page,
+      limit,
+    };
   }
 
   // ─── GET ONE ───────────────────────────────────────────────────────────────
