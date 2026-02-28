@@ -619,6 +619,7 @@ model AdPost {
   assetMediaId     String?    @map("asset_media_id") @db.Uuid
   assetThumbnailId String?    @map("asset_thumbnail_id") @db.Uuid
   assetAdtextId    String?    @map("asset_adtext_id") @db.Uuid
+  creativeConfig   Json       @default("{}") @map("creative_config") @db.JsonB
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 

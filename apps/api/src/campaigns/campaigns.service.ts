@@ -230,6 +230,95 @@ export class CampaignsService {
       }
     }
 
+    // ── Resolve Creative IDs → actual URLs/text before transaction ─────
+    // Creative IDs from wizard map to the Creative model, which stores
+    // media as CreativeAsset→Asset (url) and text as metadata.content.
+    const resolvedCreatives: Array<Record<string, unknown>> = [];
+    if (dto.adCreatives?.length) {
+      // Collect all unique Creative IDs
+      const allCreativeIds = new Set<string>();
+      for (const ac of dto.adCreatives) {
+        if (ac.videoId) allCreativeIds.add(ac.videoId);
+        if (ac.thumbnailId) allCreativeIds.add(ac.thumbnailId);
+        if (ac.adtextId) allCreativeIds.add(ac.adtextId);
+        if (ac.headlineId) allCreativeIds.add(ac.headlineId);
+        if (ac.descriptionId) allCreativeIds.add(ac.descriptionId);
+      }
+
+      // Bulk-load all creatives with their assets
+      const creativeRows = allCreativeIds.size > 0
+        ? await this.prisma.creative.findMany({
+            where: { id: { in: [...allCreativeIds] }, sellerId },
+            select: {
+              id: true,
+              creativeType: true,
+              metadata: true,
+              assets: {
+                select: {
+                  role: true,
+                  asset: { select: { url: true, mediaType: true } },
+                },
+              },
+            },
+          })
+        : [];
+
+      const creativeMap = new Map(creativeRows.map((c) => [c.id, c]));
+
+      // Resolve each ad's creative config
+      for (const ac of dto.adCreatives) {
+        const resolved: Record<string, unknown> = {
+          adFormat: ac.adFormat,
+        };
+
+        // Video: Creative → CreativeAsset (PRIMARY_VIDEO) → Asset.url
+        if (ac.videoId) {
+          const vc = creativeMap.get(ac.videoId);
+          const videoAsset = vc?.assets?.find(
+            (a) => a.role === 'PRIMARY_VIDEO',
+          );
+          if (videoAsset?.asset?.url) {
+            resolved.videoUrl = videoAsset.asset.url;
+            resolved.videoMediaType = videoAsset.asset.mediaType;
+          }
+        }
+
+        // Thumbnail: Creative → CreativeAsset (THUMBNAIL) → Asset.url
+        if (ac.thumbnailId) {
+          const tc = creativeMap.get(ac.thumbnailId);
+          const thumbAsset = tc?.assets?.find(
+            (a) => a.role === 'THUMBNAIL',
+          );
+          if (thumbAsset?.asset?.url) {
+            resolved.thumbnailUrl = thumbAsset.asset.url;
+          }
+        }
+
+        // Adtext: Creative.metadata.content
+        if (ac.adtextId) {
+          const atc = creativeMap.get(ac.adtextId);
+          const meta = atc?.metadata as Record<string, unknown> | null;
+          if (meta?.content) resolved.primaryText = meta.content;
+        }
+
+        // Headline: Creative.metadata.content
+        if (ac.headlineId) {
+          const hc = creativeMap.get(ac.headlineId);
+          const meta = hc?.metadata as Record<string, unknown> | null;
+          if (meta?.content) resolved.headline = meta.content;
+        }
+
+        // Description: Creative.metadata.content
+        if (ac.descriptionId) {
+          const dc = creativeMap.get(ac.descriptionId);
+          const meta = dc?.metadata as Record<string, unknown> | null;
+          if (meta?.content) resolved.description = meta.content;
+        }
+
+        resolvedCreatives.push(resolved);
+      }
+    }
+
     // Create all campaigns, adsets, ads, and ad posts in a transaction
     const campaigns = await this.prisma.$transaction(async (tx) => {
       const results: Array<{ id: string; name: string; adsetsCount: number; adsCount: number }> = [];
@@ -292,9 +381,6 @@ export class CampaignsService {
           });
 
           for (let ai = 0; ai < dto.adsPerAdset; ai++) {
-            // Get creative config for this ad
-            const creativeConfig = dto.adCreatives?.[ai] ?? null;
-
             const ad = await tx.ad.create({
               data: {
                 adsetId: adset.id,
@@ -305,8 +391,10 @@ export class CampaignsService {
               select: { id: true },
             });
 
-            // Create AdPost if page is provided
+            // Create AdPost with resolved creative config
             if (dto.pageId) {
+              const creativeConfig = resolvedCreatives[ai] ?? {};
+
               await tx.adPost.create({
                 data: {
                   sellerId,
@@ -314,6 +402,7 @@ export class CampaignsService {
                   pageId: dto.pageId,
                   postSource: 'CONTENT_SOURCE' as any,
                   externalPostId: null,
+                  creativeConfig: creativeConfig as any,
                 },
               });
             }
@@ -526,7 +615,7 @@ export class CampaignsService {
 
     this.logger.log(`Campaign → Meta ID: ${metaCampaign.id}`);
 
-    // ── Step 2: Load adsets + ads + ad posts + assets ───────────────────────
+    // ── Step 2: Load adsets + ads + ad posts (with creativeConfig) ───────
     const adsets = await this.prisma.adset.findMany({
       where: { campaignId, sellerId },
       orderBy: { createdAt: 'asc' },
@@ -546,6 +635,7 @@ export class CampaignsService {
                 id: true,
                 postSource: true,
                 externalPostId: true,
+                creativeConfig: true,
                 page: { select: { externalId: true } },
                 assetMedia: { select: { url: true, mediaType: true } },
                 assetThumbnail: { select: { url: true } },
@@ -638,7 +728,6 @@ export class CampaignsService {
               this.logger.warn(
                 `Ad "${ad.name}" (${ad.id}) has no page connection — skipping Meta push`,
               );
-              // Still mark as ACTIVE locally so it matches campaign status
               await this.prisma.ad.update({
                 where: { id: ad.id },
                 data: { status: 'ACTIVE' as any },
@@ -651,9 +740,6 @@ export class CampaignsService {
               (targeting.destinationUrl as string) || '';
 
             // Build per-ad destination URL with full UTM tracking
-            // utm_campaign = campaign UUID → Ads Manager matches orders to campaigns
-            // utm_term    = adset UUID   → Ads Manager matches orders to adsets
-            // utm_content = ad UUID      → Ads Manager matches orders to ads
             const utmParams = new URLSearchParams({
               utm_source: 'facebook',
               utm_medium: 'paid',
@@ -666,10 +752,39 @@ export class CampaignsService {
               ? `${baseDestUrl}${separator}${utmParams.toString()}`
               : '';
 
-            const adText = adPost.assetAdtext;
-            const primaryText = adText?.primaryText || '';
-            const headline = adText?.headline || '';
-            const description = adText?.description || '';
+            // ── Resolve creative data ──
+            // Priority: creativeConfig (new system) > old product assets (fallback)
+            const cc = (adPost.creativeConfig ?? {}) as Record<string, unknown>;
+            const hasCreativeConfig = Object.keys(cc).length > 0;
+
+            // Text fields: prefer creativeConfig, fallback to old assetAdtext
+            const primaryText =
+              (cc.primaryText as string) ||
+              adPost.assetAdtext?.primaryText ||
+              '';
+            const headline =
+              (cc.headline as string) ||
+              adPost.assetAdtext?.headline ||
+              '';
+            const description =
+              (cc.description as string) ||
+              adPost.assetAdtext?.description ||
+              '';
+
+            // Media: prefer creativeConfig, fallback to old assetMedia
+            const videoUrl = (cc.videoUrl as string) || null;
+            const thumbnailUrl =
+              (cc.thumbnailUrl as string) ||
+              adPost.assetThumbnail?.url ||
+              null;
+            const isVideoAd =
+              cc.adFormat === 'VIDEO_AD' ||
+              (videoUrl !== null) ||
+              adPost.assetMedia?.mediaType === 'VIDEO';
+            const imageUrl =
+              adPost.assetMedia?.mediaType === 'IMAGE'
+                ? adPost.assetMedia.url
+                : null;
 
             // Build ad creative
             const creativePayload: Record<string, unknown> = {
@@ -682,26 +797,24 @@ export class CampaignsService {
             ) {
               // Use existing Facebook post
               creativePayload.object_story_id = `${pageExternalId}_${adPost.externalPostId}`;
-            } else if (
-              adPost.assetMedia?.mediaType === 'VIDEO' &&
-              adPost.assetMedia.url
-            ) {
+            } else if (isVideoAd && (videoUrl || adPost.assetMedia?.url)) {
               // ── VIDEO AD: Upload video to Meta first ──
+              const videoSrc = videoUrl || adPost.assetMedia?.url;
               this.logger.log(
-                `Uploading video for ad "${ad.name}": ${adPost.assetMedia.url}`,
+                `Uploading video for ad "${ad.name}": ${videoSrc}`,
               );
 
               const videoUpload = await this.metaService.post<{
                 id: string;
               }>(campaign.adAccountId, `${actId}/advideos`, {
-                file_url: adPost.assetMedia.url,
+                file_url: videoSrc,
               });
 
               this.logger.log(
                 `Video uploaded → Meta video ID: ${videoUpload.id}`,
               );
 
-              // Build video_data creative
+              // Build video_data creative (per PDF guide spec)
               const videoData: Record<string, unknown> = {
                 video_id: videoUpload.id,
                 message: primaryText,
@@ -714,8 +827,8 @@ export class CampaignsService {
               };
 
               // Thumbnail as video poster image
-              if (adPost.assetThumbnail?.url) {
-                videoData.image_url = adPost.assetThumbnail.url;
+              if (thumbnailUrl) {
+                videoData.image_url = thumbnailUrl;
               }
 
               creativePayload.object_story_spec = JSON.stringify({
@@ -735,14 +848,11 @@ export class CampaignsService {
               if (headline) linkData.name = headline;
               if (description) linkData.description = description;
 
-              // Image from assetMedia (IMAGE type) or fallback to thumbnail
-              if (
-                adPost.assetMedia?.mediaType === 'IMAGE' &&
-                adPost.assetMedia.url
-              ) {
-                linkData.picture = adPost.assetMedia.url;
-              } else if (adPost.assetThumbnail?.url) {
-                linkData.picture = adPost.assetThumbnail.url;
+              // Image from old assetMedia or thumbnail
+              if (imageUrl) {
+                linkData.picture = imageUrl;
+              } else if (thumbnailUrl) {
+                linkData.picture = thumbnailUrl;
               }
 
               creativePayload.object_story_spec = JSON.stringify({
