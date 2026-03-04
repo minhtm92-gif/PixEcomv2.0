@@ -32,6 +32,7 @@ import {
   submitCheckout,
   confirmPayment,
   type SellpageData,
+  type CheckoutRequest,
   type CheckoutResponse,
 } from '@/lib/storefrontApi';
 import {
@@ -42,6 +43,7 @@ import {
 } from '@/mock/storefront';
 import { storeHref } from '@/lib/storefrontLinks';
 import { resolveColor, themeVars } from '@/lib/storeTheme';
+import { COUNTRIES, countryName } from '@/lib/countries';
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
@@ -52,11 +54,23 @@ interface FormData {
   lastName: string;
   email: string;
   phone: string;
+  // Shipping
   address: string;
+  address2: string;
   city: string;
   state: string;
   zip: string;
   country: string;
+  // Billing
+  billingSameAsShipping: boolean;
+  billingFirstName: string;
+  billingLastName: string;
+  billingAddress: string;
+  billingAddress2: string;
+  billingCity: string;
+  billingState: string;
+  billingZip: string;
+  billingCountry: string;
 }
 
 interface ProductInfo {
@@ -161,7 +175,10 @@ function CheckoutForm() {
   // Form state
   const [form, setForm] = useState<FormData>({
     firstName: '', lastName: '', email: '', phone: '',
-    address: '', city: '', state: '', zip: '', country: 'US',
+    address: '', address2: '', city: '', state: '', zip: '', country: 'US',
+    billingSameAsShipping: true,
+    billingFirstName: '', billingLastName: '',
+    billingAddress: '', billingAddress2: '', billingCity: '', billingState: '', billingZip: '', billingCountry: 'US',
   });
   const [shipping, setShipping] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'paypal'>('card');
@@ -291,7 +308,7 @@ function CheckoutForm() {
   const savings = compareTotal - total;
   const hasSavings = savings > 0.01 && urlUpsellPct > 0;
 
-  function updateForm(field: keyof FormData, value: string) {
+  function updateForm(field: keyof FormData, value: string | boolean) {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
@@ -301,22 +318,32 @@ function CheckoutForm() {
     if (!form.email.trim() || !form.email.includes('@')) return 'Valid email is required';
     if (!form.address.trim()) return 'Street address is required';
     if (!form.city.trim()) return 'City is required';
-    if (!form.state.trim()) return 'State is required';
-    if (!form.zip.trim()) return 'ZIP code is required';
+    if (!form.state.trim()) return 'State / Province is required';
+    if (!form.zip.trim()) return 'ZIP / Postal code is required';
+    if (!form.billingSameAsShipping) {
+      if (!form.billingFirstName.trim()) return 'Billing first name is required';
+      if (!form.billingLastName.trim()) return 'Billing last name is required';
+      if (!form.billingAddress.trim()) return 'Billing street address is required';
+      if (!form.billingCity.trim()) return 'Billing city is required';
+      if (!form.billingState.trim()) return 'Billing state / province is required';
+      if (!form.billingZip.trim()) return 'Billing ZIP / postal code is required';
+    }
     return null;
   }
 
-  function buildCheckoutRequest(payMethod: 'stripe' | 'paypal') {
-    return {
+  function buildCheckoutRequest(payMethod: 'stripe' | 'paypal'): CheckoutRequest {
+    const req: CheckoutRequest = {
       customerEmail: form.email.trim(),
       customerName: `${form.firstName.trim()} ${form.lastName.trim()}`,
       customerPhone: form.phone.trim() || undefined,
       shippingAddress: {
-        street: form.address.trim(),
+        line1: form.address.trim(),
+        line2: form.address2.trim() || undefined,
         city: form.city.trim(),
         state: form.state.trim(),
-        zip: form.zip.trim(),
-        country: form.country,
+        postalCode: form.zip.trim(),
+        country: countryName(form.country),
+        countryCode: form.country,
       },
       shippingMethod: shipping as 'standard' | 'express' | 'overnight',
       items: [{
@@ -330,6 +357,20 @@ function CheckoutForm() {
       // UTM attribution — parsed from URL params set by Facebook ads
       ...getUtmParams(),
     };
+    if (!form.billingSameAsShipping) {
+      req.billingAddress = {
+        firstName: form.billingFirstName.trim(),
+        lastName: form.billingLastName.trim(),
+        line1: form.billingAddress.trim(),
+        line2: form.billingAddress2.trim() || undefined,
+        city: form.billingCity.trim(),
+        state: form.billingState.trim(),
+        postalCode: form.billingZip.trim(),
+        country: countryName(form.billingCountry),
+        countryCode: form.billingCountry,
+      };
+    }
+    return req;
   }
 
   // ── Stripe card submit ──
@@ -620,7 +661,11 @@ function CheckoutForm() {
               <div className="space-y-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Street Address</label>
-                  <input type="text" value={form.address} onChange={e => updateForm('address', e.target.value)} placeholder="123 Main Street, Apt 4B" className={inputCls} />
+                  <input type="text" value={form.address} onChange={e => updateForm('address', e.target.value)} placeholder="123 Main Street" className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Apt, Suite, Unit <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input type="text" value={form.address2} onChange={e => updateForm('address2', e.target.value)} placeholder="Apt 4B" className={inputCls} />
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   <div>
@@ -628,15 +673,83 @@ function CheckoutForm() {
                     <input type="text" value={form.city} onChange={e => updateForm('city', e.target.value)} placeholder="New York" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">State / Province</label>
                     <input type="text" value={form.state} onChange={e => updateForm('state', e.target.value)} placeholder="NY" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">ZIP</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">ZIP / Postal Code</label>
                     <input type="text" value={form.zip} onChange={e => updateForm('zip', e.target.value)} placeholder="10001" className={inputCls} />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Country</label>
+                  <select value={form.country} onChange={e => updateForm('country', e.target.value)} className={inputCls}>
+                    {COUNTRIES.map(c => (
+                      <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
+            </div>
+
+            {/* Billing address */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-gray-900">Billing Address</h2>
+              </div>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.billingSameAsShipping}
+                  onChange={e => updateForm('billingSameAsShipping', e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-[var(--sp-primary)] focus:ring-[var(--sp-primary)]"
+                />
+                <span className="text-sm text-gray-700">Same as shipping address</span>
+              </label>
+              {!form.billingSameAsShipping && (
+                <div className="space-y-3 mt-4 pt-4 border-t border-gray-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">First Name</label>
+                      <input type="text" value={form.billingFirstName} onChange={e => updateForm('billingFirstName', e.target.value)} placeholder="Jane" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Last Name</label>
+                      <input type="text" value={form.billingLastName} onChange={e => updateForm('billingLastName', e.target.value)} placeholder="Doe" className={inputCls} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Street Address</label>
+                    <input type="text" value={form.billingAddress} onChange={e => updateForm('billingAddress', e.target.value)} placeholder="456 Oak Avenue" className={inputCls} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Apt, Suite, Unit <span className="text-gray-400 font-normal">(optional)</span></label>
+                    <input type="text" value={form.billingAddress2} onChange={e => updateForm('billingAddress2', e.target.value)} placeholder="Suite 200" className={inputCls} />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                      <input type="text" value={form.billingCity} onChange={e => updateForm('billingCity', e.target.value)} placeholder="New York" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">State / Province</label>
+                      <input type="text" value={form.billingState} onChange={e => updateForm('billingState', e.target.value)} placeholder="NY" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">ZIP / Postal Code</label>
+                      <input type="text" value={form.billingZip} onChange={e => updateForm('billingZip', e.target.value)} placeholder="10001" className={inputCls} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Country</label>
+                    <select value={form.billingCountry} onChange={e => updateForm('billingCountry', e.target.value)} className={inputCls}>
+                      {COUNTRIES.map(c => (
+                        <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Shipping method — fixed if sellpage has config, selectable otherwise */}

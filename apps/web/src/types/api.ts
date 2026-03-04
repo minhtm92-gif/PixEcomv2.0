@@ -49,6 +49,10 @@ export interface OrderShippingAddress {
   state: string | null;
   postalCode: string | null;
   country: string | null;
+  /** @deprecated Legacy field — use line1 instead */
+  street?: string | null;
+  /** @deprecated Legacy field — use postalCode instead */
+  zip?: string | null;
 }
 
 export interface OrderAttribution {

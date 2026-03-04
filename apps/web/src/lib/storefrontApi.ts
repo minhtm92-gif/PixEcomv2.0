@@ -123,17 +123,24 @@ export interface SellpageReview {
   images: string[];
 }
 
+export interface CheckoutAddress {
+  firstName?: string;
+  lastName?: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+  countryCode?: string;
+}
+
 export interface CheckoutRequest {
   customerEmail: string;
   customerName: string;
   customerPhone?: string;
-  shippingAddress: {
-    street: string;
-    city: string;
-    state: string;
-    zip: string;
-    country: string;
-  };
+  shippingAddress: CheckoutAddress;
+  billingAddress?: CheckoutAddress;
   shippingMethod: 'standard' | 'express' | 'overnight';
   items: Array<{
     productId: string;
