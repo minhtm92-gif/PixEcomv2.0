@@ -458,6 +458,34 @@ async function main() {
 
   console.log(`Superadmin seeded: admin@pixecom.com / admin123456 (alpha seller: ${ALPHA_SELLER_ID})`);
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // SEED WEBHOOK ENDPOINT (for PixFul fulfillment integration)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  await prisma.webhookEndpoint.upsert({
+    where: { id: '00000000-0000-0000-0000-000000000099' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-000000000099',
+      sellerId: SEED_SELLER_ID,
+      url: 'http://localhost:3007/api/v1/webhooks/pixecom/order',
+      secret: 'dev-webhook-secret-pixful',
+      description: 'PixFul Development — receives order events',
+      events: [
+        'order.created',
+        'order.confirmed',
+        'order.processing',
+        'order.shipped',
+        'order.delivered',
+        'order.cancelled',
+        'order.refunded',
+      ],
+      isActive: true,
+    },
+  });
+
+  console.log('Webhook endpoint seeded for PixFul dev');
+
   const pc = await prisma.product.count();
   const vc = await prisma.productVariant.count();
   const lc = await prisma.productLabel.count();

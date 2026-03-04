@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
 import { ListOrdersQueryDto } from './dto/list-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
@@ -153,6 +154,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    private readonly webhookOutbound: WebhookOutboundService,
   ) {}
 
   async listOrders(sellerId: string, query: ListOrdersQueryDto): Promise<OrderListResult> {
@@ -440,6 +442,11 @@ export class OrdersService {
         this.logger.error(`Failed to send shipping email for ${orderId}: ${err.message}`),
       );
     }
+
+    // Dispatch outbound webhook (fire-and-forget)
+    this.webhookOutbound.dispatchOrderEvent(sellerId, `order.${target.toLowerCase()}`, orderId).catch((err) =>
+      this.logger.error(`Webhook outbound failed: ${err.message}`),
+    );
 
     return updated;
   }

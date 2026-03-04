@@ -10,6 +10,7 @@ import { StripePaymentService } from './payments/stripe.service';
 import { PayPalPaymentService } from './payments/paypal.service';
 import { ReviewsService } from './reviews.service';
 import { EmailService } from '../email/email.service';
+import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
 
 // ─── Shipping cost config ──────────────────────────────────────────────────
 const SHIPPING_COSTS: Record<string, number> = {
@@ -29,6 +30,7 @@ export class StorefrontService {
     private readonly paypal: PayPalPaymentService,
     private readonly reviewsSvc: ReviewsService,
     private readonly email: EmailService,
+    private readonly webhookOutbound: WebhookOutboundService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -611,6 +613,9 @@ export class StorefrontService {
           customerName: dto.customerName,
           customerPhone: dto.customerPhone ?? null,
           shippingAddress: dto.shippingAddress as unknown as any,
+          billingAddress: dto.billingAddress
+            ? (dto.billingAddress as unknown as any)
+            : null,
           subtotal,
           shippingCost,
           taxAmount: 0,
@@ -660,6 +665,9 @@ export class StorefrontService {
 
       return created;
     });
+
+    // Dispatch outbound webhook for order creation (fire-and-forget)
+    this.webhookOutbound.dispatchOrderEvent(seller.id, 'order.created', order.id).catch(() => {});
 
     // Initiate payment
     const metadata = {
@@ -772,6 +780,8 @@ export class StorefrontService {
     // Update order status + create event + decrement stock
     // Use updateMany with status filter for atomic race-condition safety:
     // if webhook already confirmed this order, rowCount === 0 and we skip.
+    let confirmed = false;
+
     await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.order.updateMany({
         where: { id: order.id, status: 'PENDING' },
@@ -789,6 +799,8 @@ export class StorefrontService {
         );
         return;
       }
+
+      confirmed = true;
 
       await tx.orderEvent.create({
         data: {
@@ -812,14 +824,20 @@ export class StorefrontService {
       }
     });
 
-    this.logger.log(
-      `Order ${order.orderNumber} confirmed. Transaction: ${transactionId}`,
-    );
+    // Only send email + webhook if this process actually confirmed the order
+    if (confirmed) {
+      this.logger.log(
+        `Order ${order.orderNumber} confirmed. Transaction: ${transactionId}`,
+      );
 
-    // F.3: Send order confirmation email (fire-and-forget, never blocks response)
-    this.sendOrderConfirmationEmail(order.id, seller.slug).catch((err) =>
-      this.logger.error(`Failed to queue confirmation email: ${err.message}`),
-    );
+      // F.3: Send order confirmation email (fire-and-forget, never blocks response)
+      this.sendOrderConfirmationEmail(order.id, seller.slug).catch((err) =>
+        this.logger.error(`Failed to queue confirmation email: ${err.message}`),
+      );
+
+      // Dispatch outbound webhook (fire-and-forget)
+      this.webhookOutbound.dispatchOrderEvent(seller.id, 'order.confirmed', orderId).catch(() => {});
+    }
 
     return {
       success: true,
@@ -943,11 +961,13 @@ export class StorefrontService {
       currency: order.currency,
       paymentMethod: order.paymentMethod ?? 'stripe',
       shippingAddress: {
-        street: addr.street ?? '',
+        street: addr.line1 ?? addr.street ?? '',
+        line2: addr.line2 ?? '',
         city: addr.city ?? '',
         state: addr.state ?? '',
-        zip: addr.zip ?? '',
+        zip: addr.postalCode ?? addr.zip ?? '',
         country: addr.country ?? '',
+        countryCode: addr.countryCode ?? '',
       },
       storeName: order.seller.name,
       storeSlug: order.seller.slug,

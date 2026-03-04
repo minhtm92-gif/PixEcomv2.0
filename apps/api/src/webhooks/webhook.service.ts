@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
 
 /**
  * Shared service for webhook handlers — order confirmation + stock decrement.
@@ -13,6 +14,7 @@ export class WebhookService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    private readonly webhookOutbound: WebhookOutboundService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -106,10 +108,13 @@ export class WebhookService {
       `Webhook: Order ${order.orderNumber} confirmed + stock decremented. Tx: ${transactionId}`,
     );
 
-    // F.3: Send order confirmation email (fire-and-forget)
+    // F.3: Send order confirmation email + dispatch outbound webhook (fire-and-forget)
     if (confirmed) {
       this.sendOrderConfirmationEmail(order.id).catch((err) =>
         this.logger.error(`Webhook: Failed to send confirmation email: ${err.message}`),
+      );
+      this.webhookOutbound.dispatchOrderEvent(order.sellerId, 'order.confirmed', order.id).catch((err) =>
+        this.logger.error(`Webhook outbound failed: ${err.message}`),
       );
     }
 
@@ -202,6 +207,11 @@ export class WebhookService {
         }
       }
     });
+
+    // Dispatch outbound webhook (fire-and-forget)
+    this.webhookOutbound.dispatchOrderEvent(order.sellerId, 'order.refunded', order.id).catch((err) =>
+      this.logger.error(`Webhook outbound failed: ${err.message}`),
+    );
 
     this.logger.log(
       `Webhook: Order ${order.orderNumber} refunded + stock restored. Refund: ${refundId}`,

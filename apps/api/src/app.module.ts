@@ -22,6 +22,7 @@ import { SellerModule } from './seller/seller.module';
 import { SellpagesModule } from './sellpages/sellpages.module';
 import { StorefrontModule } from './storefront/storefront.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { WebhookOutboundModule } from './webhook-outbound/webhook-outbound.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     AdminModule,
     StorefrontModule,
     WebhooksModule,
+    WebhookOutboundModule,
   ],
 })
 export class AppModule {}

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
 import { BulkStatusDto } from './dto/bulk-status.dto';
 import { canTransition } from './orders.service';
 
@@ -24,7 +25,10 @@ const STATUS_TO_EVENT: Record<string, string> = {
 
 @Injectable()
 export class OrdersBulkService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly webhookOutbound: WebhookOutboundService,
+  ) {}
 
   /**
    * Bulk update order status.
@@ -89,6 +93,11 @@ export class OrdersBulkService {
         ]);
 
         updated++;
+
+        // Dispatch outbound webhook (fire-and-forget)
+        this.webhookOutbound
+          .dispatchOrderEvent(sellerId, `order.${dto.status.toLowerCase()}`, orderId)
+          .catch(() => {}); // Silent — bulk ops don't log individual webhook failures
       } catch {
         failed.push({ orderId, reason: 'Internal error processing order' });
       }
