@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { safeDivide } from '../ads-manager/ads-manager.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateProductDto } from './dto/create-product.dto';
 import { ProductCardDto, ProductLabelDto, ProductStatsDto } from './dto/product-card.dto';
 import { ProductDetailDto, ProductVariantDto } from './dto/product-detail.dto';
 import { ListProductsDto } from './dto/list-products.dto';
@@ -11,6 +12,35 @@ const MAX_PAGE_LIMIT = 100;
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CREATE
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async create(dto: CreateProductDto): Promise<Record<string, unknown>> {
+    const slug = dto.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 90);
+
+    const productCode = `PRD-${Date.now()}`;
+
+    const uniqueSuffix = `-${Math.random().toString(36).slice(2, 8)}`;
+    const uniqueSlug = `${slug}${uniqueSuffix}`;
+
+    return this.prisma.product.create({
+      data: {
+        name: dto.name,
+        productCode,
+        slug: uniqueSlug,
+        basePrice: dto.price ?? 0,
+        description: dto.description,
+        images: dto.images ?? [],
+        status: 'DRAFT',
+      },
+    });
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // LIST
