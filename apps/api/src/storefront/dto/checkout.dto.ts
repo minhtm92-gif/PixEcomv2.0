@@ -17,10 +17,22 @@ import { Type } from 'class-transformer';
 // Regex that accepts any UUID-shaped string (no version check) for seed data compat
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-class ShippingAddressDto {
+class AddressDto {
+  @IsOptional()
+  @IsString()
+  firstName?: string;
+
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
   @IsString()
   @MinLength(1)
-  street!: string;
+  line1!: string;
+
+  @IsOptional()
+  @IsString()
+  line2?: string;
 
   @IsString()
   @MinLength(1)
@@ -32,11 +44,15 @@ class ShippingAddressDto {
 
   @IsString()
   @MinLength(1)
-  zip!: string;
+  postalCode!: string;
 
   @IsString()
   @MinLength(1)
   country!: string;
+
+  @IsOptional()
+  @IsString()
+  countryCode?: string;
 }
 
 class CheckoutItemDto {
@@ -65,8 +81,13 @@ export class CheckoutDto {
   customerPhone?: string;
 
   @ValidateNested()
-  @Type(() => ShippingAddressDto)
-  shippingAddress!: ShippingAddressDto;
+  @Type(() => AddressDto)
+  shippingAddress!: AddressDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AddressDto)
+  billingAddress?: AddressDto;
 
   @IsIn(['standard', 'express', 'overnight'])
   shippingMethod!: 'standard' | 'express' | 'overnight';

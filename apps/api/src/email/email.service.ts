@@ -25,10 +25,12 @@ export interface OrderEmailData {
   paymentMethod: string;
   shippingAddress: {
     street: string;
+    line2?: string;
     city: string;
     state: string;
     zip: string;
     country: string;
+    countryCode?: string;
   };
   storeName: string;
   storeSlug: string;
@@ -217,7 +219,7 @@ export class EmailService {
         <p style="margin:0 0 8px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Shipping to</p>
         <p style="margin:0;font-size:14px;color:#333;line-height:1.6">
           ${this.esc(data.customerName)}<br>
-          ${this.esc(addr.street)}<br>
+          ${this.esc(addr.street)}${addr.line2 ? `<br>${this.esc(addr.line2)}` : ''}<br>
           ${this.esc(addr.city)}, ${this.esc(addr.state)} ${this.esc(addr.zip)}<br>
           ${this.esc(addr.country)}
         </p>
