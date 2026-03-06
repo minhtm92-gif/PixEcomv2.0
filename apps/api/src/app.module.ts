@@ -22,6 +22,7 @@ import { SellerModule } from './seller/seller.module';
 import { SellpagesModule } from './sellpages/sellpages.module';
 import { StorefrontModule } from './storefront/storefront.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { PaymentGatewaysModule } from './payment-gateways/payment-gateways.module';
 import { WebhookOutboundModule } from './webhook-outbound/webhook-outbound.module';
 
 @Module({
@@ -53,6 +54,7 @@ import { WebhookOutboundModule } from './webhook-outbound/webhook-outbound.modul
     StorefrontModule,
     WebhooksModule,
     WebhookOutboundModule,
+    PaymentGatewaysModule,
   ],
 })
 export class AppModule {}
