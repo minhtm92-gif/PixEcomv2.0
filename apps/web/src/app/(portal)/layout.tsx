@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { Sidebar } from '@/components/Sidebar';
+import { PortalMobileHeader } from '@/components/PortalMobileHeader';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 /**
@@ -53,7 +54,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 ml-56">
+      <PortalMobileHeader />
+      <main className="flex-1 min-w-0 md:ml-56 mt-14 md:mt-0">
         <ErrorBoundary>
           {children}
         </ErrorBoundary>

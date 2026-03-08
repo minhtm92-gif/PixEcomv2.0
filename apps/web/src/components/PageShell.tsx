@@ -16,7 +16,7 @@ interface PageShellProps {
 
 export function PageShell({ title, subtitle, icon, actions, backHref, backLabel, children }: PageShellProps) {
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {backHref && (
         <Link
           href={backHref}
@@ -26,7 +26,7 @@ export function PageShell({ title, subtitle, icon, actions, backHref, backLabel,
           {backLabel ?? 'Back'}
         </Link>
       )}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             {icon}
@@ -34,7 +34,7 @@ export function PageShell({ title, subtitle, icon, actions, backHref, backLabel,
           </h1>
           {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && <div className="flex items-center gap-2 w-full sm:w-auto">{actions}</div>}
       </div>
       {children}
     </div>

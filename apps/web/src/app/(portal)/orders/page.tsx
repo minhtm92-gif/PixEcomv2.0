@@ -351,7 +351,7 @@ export default function OrdersPage() {
         }
       >
         {/* Filters bar */}
-        <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-4">
           {/* Status */}
           <select
             value={status}
@@ -394,7 +394,7 @@ export default function OrdersPage() {
           />
 
           {/* Search */}
-          <form onSubmit={handleSearch} className="flex gap-2 ml-auto">
+          <form onSubmit={handleSearch} className="flex gap-2 w-full sm:w-auto sm:ml-auto">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -403,7 +403,7 @@ export default function OrdersPage() {
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="Order # or email..."
                 className="pl-8 pr-3 py-1.5 bg-input border border-border rounded-lg text-sm text-foreground
-                           placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 w-48"
+                           placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 w-full sm:w-48"
               />
             </div>
             <button type="submit" className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90">

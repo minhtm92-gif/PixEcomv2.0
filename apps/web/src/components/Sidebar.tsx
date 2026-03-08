@@ -19,7 +19,7 @@ import {
 import { cn } from '@/lib/cn';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
-const NAV = [
+export const NAV = [
   { label: 'Orders', href: '/orders', icon: ClipboardList },
   { label: 'Ads Manager', href: '/ads-manager', icon: Megaphone },
   { label: 'Campaigns', href: '/campaigns', icon: Rocket },
@@ -50,7 +50,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-sidebar border-r border-sidebar-border flex flex-col z-50">
+    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-sidebar border-r border-sidebar-border hidden md:flex flex-col z-50">
       {/* Brand */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
         <Link href="/products" className="text-lg font-bold text-foreground">

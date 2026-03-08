@@ -58,7 +58,7 @@ export default function AdminDashboardPage() {
   // Error state
   if (error) {
     return (
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-8 text-center">
           {error}
         </div>
@@ -72,7 +72,7 @@ export default function AdminDashboardPage() {
   const todayRevenue = kpis.revenueByDay[kpis.revenueByDay.length - 1]?.revenue ?? 0;
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Shield size={22} className="text-amber-400" />

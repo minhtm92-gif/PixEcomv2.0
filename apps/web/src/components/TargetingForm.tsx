@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { X, ChevronDown, MapPin, Users, Calendar } from 'lucide-react';
+import { COUNTRIES, type CountryOption } from '@/lib/countries';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,47 +59,7 @@ export function jsonToTargeting(json: Record<string, unknown> | null | undefined
   };
 }
 
-// ─── Country list (ISO 3166-1 alpha-2) ───────────────────────────────────────
-
-interface CountryOption {
-  code: string;
-  name: string;
-  flag: string;
-}
-
-const COUNTRIES: CountryOption[] = [
-  // Southeast Asia
-  { code: 'VN', name: 'Vietnam', flag: '🇻🇳' },
-  { code: 'TH', name: 'Thailand', flag: '🇹🇭' },
-  { code: 'ID', name: 'Indonesia', flag: '🇮🇩' },
-  { code: 'PH', name: 'Philippines', flag: '🇵🇭' },
-  { code: 'MY', name: 'Malaysia', flag: '🇲🇾' },
-  { code: 'SG', name: 'Singapore', flag: '🇸🇬' },
-  // North America
-  { code: 'US', name: 'United States', flag: '🇺🇸' },
-  { code: 'CA', name: 'Canada', flag: '🇨🇦' },
-  { code: 'MX', name: 'Mexico', flag: '🇲🇽' },
-  // Europe
-  { code: 'GB', name: 'United Kingdom', flag: '🇬🇧' },
-  { code: 'DE', name: 'Germany', flag: '🇩🇪' },
-  { code: 'FR', name: 'France', flag: '🇫🇷' },
-  { code: 'IT', name: 'Italy', flag: '🇮🇹' },
-  { code: 'ES', name: 'Spain', flag: '🇪🇸' },
-  { code: 'NL', name: 'Netherlands', flag: '🇳🇱' },
-  { code: 'PL', name: 'Poland', flag: '🇵🇱' },
-  // Asia-Pacific
-  { code: 'JP', name: 'Japan', flag: '🇯🇵' },
-  { code: 'KR', name: 'South Korea', flag: '🇰🇷' },
-  { code: 'AU', name: 'Australia', flag: '🇦🇺' },
-  { code: 'NZ', name: 'New Zealand', flag: '🇳🇿' },
-  { code: 'IN', name: 'India', flag: '🇮🇳' },
-  { code: 'TW', name: 'Taiwan', flag: '🇹🇼' },
-  { code: 'HK', name: 'Hong Kong', flag: '🇭🇰' },
-  // Middle East / Africa
-  { code: 'AE', name: 'UAE', flag: '🇦🇪' },
-  { code: 'SA', name: 'Saudi Arabia', flag: '🇸🇦' },
-  { code: 'BR', name: 'Brazil', flag: '🇧🇷' },
-];
+// Countries imported from '@/lib/countries'
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 

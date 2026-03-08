@@ -138,7 +138,7 @@ export default function AdminOrderDetailPage() {
   const subtotal = safeDecimal(order.subtotal);
   const shippingAddr = order.shippingAddress as Record<string, string> | null;
   const addressLine = shippingAddr
-    ? [shippingAddr.line1, shippingAddr.line2, shippingAddr.city, shippingAddr.state, shippingAddr.zip, shippingAddr.country]
+    ? [shippingAddr.line1 ?? shippingAddr.street, shippingAddr.line2, shippingAddr.city, shippingAddr.state, shippingAddr.postalCode ?? shippingAddr.zip, shippingAddr.country]
         .filter(Boolean)
         .join(', ')
     : '—';

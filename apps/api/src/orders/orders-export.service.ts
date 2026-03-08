@@ -27,6 +27,17 @@ function buildRow(fields: (string | number | null | undefined)[]): string {
   return fields.map(escapeCsv).join(',');
 }
 
+/** Extract address field with backward compat (line1/street, postalCode/zip) */
+function addr(
+  obj: Record<string, unknown> | null | undefined,
+  field: string,
+): string {
+  if (!obj) return '';
+  if (field === 'line1') return String(obj.line1 ?? obj.street ?? '');
+  if (field === 'postalCode') return String(obj.postalCode ?? obj.zip ?? '');
+  return String(obj[field] ?? '');
+}
+
 const CSV_HEADER = buildRow([
   'OrderNumber',
   'Date',
@@ -36,14 +47,39 @@ const CSV_HEADER = buildRow([
   'CustomerPhone',
   'ProductName',
   'VariantName',
+  'SKU',
   'Qty',
   'UnitPrice',
   'LineTotal',
+  'Subtotal',
+  'ShippingPrice',
+  'DiscountPrice',
   'Total',
+  'Currency',
   'Source',
   'TrackingNumber',
   'TransactionId',
-  'ShippingAddress',
+  'PaymentMethod',
+  'PaidAt',
+  // Shipping address (parsed)
+  'ShippingAddress1',
+  'ShippingAddress2',
+  'ShippingCity',
+  'ShippingState',
+  'ShippingZip',
+  'ShippingCountry',
+  'ShippingCountryCode',
+  'ShippingPhone',
+  // Billing address (parsed)
+  'BillingFirstName',
+  'BillingLastName',
+  'BillingAddress1',
+  'BillingAddress2',
+  'BillingCity',
+  'BillingState',
+  'BillingZip',
+  'BillingCountry',
+  'BillingCountryCode',
 ]);
 
 // ─── Date helpers (reuse same pattern as orders.service) ──────────────────────
@@ -104,8 +140,6 @@ export class OrdersExportService {
     }
 
     // ── Query orders + items ─────────────────────────────────────────────────
-    // Take enough orders so that we don't exceed MAX_EXPORT_ROWS total items.
-    // We over-fetch by order then truncate at row level.
     const orders = await this.prisma.order.findMany({
       where: { AND: andClauses },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -116,15 +150,23 @@ export class OrdersExportService {
         customerName: true,
         customerEmail: true,
         customerPhone: true,
+        subtotal: true,
+        shippingCost: true,
+        discountAmount: true,
         total: true,
+        currency: true,
         source: true,
         trackingNumber: true,
         transactionId: true,
+        paymentMethod: true,
+        paidAt: true,
         shippingAddress: true,
+        billingAddress: true,
         items: {
           select: {
             productName: true,
             variantName: true,
+            sku: true,
             quantity: true,
             unitPrice: true,
             lineTotal: true,
@@ -142,7 +184,11 @@ export class OrdersExportService {
       if (rowCount >= MAX_EXPORT_ROWS) break;
 
       const dateStr = order.createdAt.toISOString().replace('T', ' ').slice(0, 19);
-      const addressOneLine = JSON.stringify(order.shippingAddress ?? {});
+      const paidStr = order.paidAt
+        ? order.paidAt.toISOString().replace('T', ' ').slice(0, 19)
+        : '';
+      const sa = (order.shippingAddress ?? {}) as Record<string, unknown>;
+      const ba = (order.billingAddress ?? null) as Record<string, unknown> | null;
 
       // Orders with no items still get 1 row
       const items = order.items.length > 0 ? order.items : [null];
@@ -159,14 +205,39 @@ export class OrdersExportService {
           order.customerPhone,
           item?.productName ?? '',
           item?.variantName ?? '',
+          item?.sku ?? '',
           item?.quantity ?? '',
           item ? Number(item.unitPrice) : '',
           item ? Number(item.lineTotal) : '',
+          Number(order.subtotal),
+          Number(order.shippingCost),
+          Number(order.discountAmount),
           Number(order.total),
+          order.currency,
           order.source,
           order.trackingNumber,
           order.transactionId,
-          addressOneLine,
+          order.paymentMethod,
+          paidStr,
+          // Shipping address (parsed)
+          addr(sa, 'line1'),
+          addr(sa, 'line2'),
+          addr(sa, 'city'),
+          addr(sa, 'state'),
+          addr(sa, 'postalCode'),
+          addr(sa, 'country'),
+          addr(sa, 'countryCode'),
+          order.customerPhone,
+          // Billing address
+          addr(ba, 'firstName'),
+          addr(ba, 'lastName'),
+          addr(ba, 'line1'),
+          addr(ba, 'line2'),
+          addr(ba, 'city'),
+          addr(ba, 'state'),
+          addr(ba, 'postalCode'),
+          addr(ba, 'country'),
+          addr(ba, 'countryCode'),
         ]));
 
         rowCount++;

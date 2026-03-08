@@ -151,7 +151,7 @@ export default function AdminSellersPage() {
       }
     >
       {/* Tabs */}
-      <div className="flex gap-1 bg-muted/50 rounded-lg p-1 mb-4 w-fit">
+      <div className="flex gap-1 bg-muted/50 rounded-lg p-1 mb-4 overflow-x-auto flex-nowrap md:flex-wrap md:w-fit">
         {STATUS_TABS.map((t) => (
           <button
             key={t.value}
@@ -167,7 +167,7 @@ export default function AdminSellersPage() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-4 max-w-xs">
+      <div className="relative mb-4 w-full md:max-w-xs">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"

@@ -8,6 +8,7 @@ export interface Column<T> {
   key: string;
   label: ReactNode;
   className?: string;
+  hiddenOnMobile?: boolean;
   render: (row: T, idx: number) => ReactNode;
 }
 
@@ -34,7 +35,7 @@ export function DataTable<T>({
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[600px] md:min-w-0 text-sm">
           {/* Sticky header */}
           <thead className="sticky top-0 z-10 bg-card">
             <tr className="border-b border-border">
@@ -42,7 +43,8 @@ export function DataTable<T>({
                 <th
                   key={col.key}
                   className={cn(
-                    'text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap',
+                    'text-left px-2 py-2 md:px-4 md:py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap',
+                    col.hiddenOnMobile && 'hidden md:table-cell',
                     col.className,
                   )}
                 >
@@ -57,7 +59,7 @@ export function DataTable<T>({
               Array.from({ length: skeletonRows }).map((_, i) => (
                 <tr key={`sk-${i}`} className="border-b border-border last:border-0">
                   {columns.map((col) => (
-                    <td key={col.key} className="px-4 py-3">
+                    <td key={col.key} className={cn('px-2 py-2 md:px-4 md:py-3', col.hiddenOnMobile && 'hidden md:table-cell')}>
                       <div className="h-4 bg-muted rounded w-3/4 animate-pulse" />
                     </td>
                   ))}
@@ -65,7 +67,7 @@ export function DataTable<T>({
               ))
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="px-4 py-16 text-center text-muted-foreground">
+                <td colSpan={columns.length} className="px-2 py-8 md:px-4 md:py-16 text-center text-muted-foreground">
                   {emptyMessage}
                 </td>
               </tr>
@@ -80,7 +82,7 @@ export function DataTable<T>({
                   )}
                 >
                   {columns.map((col) => (
-                    <td key={col.key} className={cn('px-4 py-3', col.className)}>
+                    <td key={col.key} className={cn('px-2 py-2 md:px-4 md:py-3', col.hiddenOnMobile && 'hidden md:table-cell', col.className)}>
                       {col.render(row, idx)}
                     </td>
                   ))}

@@ -4,8 +4,8 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { AdminSidebar } from '@/components/AdminSidebar';
+import { AdminMobileHeader } from '@/components/AdminMobileHeader';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Shield } from 'lucide-react';
 
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
@@ -25,15 +25,9 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   if (IS_PREVIEW) {
     return (
       <div className="flex min-h-screen bg-background">
-        <div className="hidden lg:block">
-          <AdminSidebar />
-        </div>
-        <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-card border-b border-border flex items-center px-4 z-50">
-          <Shield size={18} className="text-amber-400 mr-2" />
-          <span className="text-sm font-bold text-foreground">PixEcom Admin</span>
-          <span className="ml-auto text-xs text-muted-foreground">Desktop recommended</span>
-        </div>
-        <main className="flex-1 lg:ml-56 mt-14 lg:mt-0">
+        <AdminSidebar />
+        <AdminMobileHeader />
+        <main className="flex-1 min-w-0 md:ml-56 mt-14 md:mt-0">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>
@@ -62,7 +56,8 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   return (
     <div className="flex min-h-screen bg-background">
       <AdminSidebar />
-      <main className="flex-1 ml-56">
+      <AdminMobileHeader />
+      <main className="flex-1 min-w-0 md:ml-56 mt-14 md:mt-0">
         <ErrorBoundary>{children}</ErrorBoundary>
       </main>
     </div>

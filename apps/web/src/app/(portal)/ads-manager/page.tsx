@@ -375,7 +375,7 @@ export default function AdsManagerPage() {
           placeholder="Search by campaign name..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full max-w-sm px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground
+          className="w-full md:max-w-sm px-3 py-2 bg-input border border-border rounded-lg text-sm text-foreground
                      placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
         />
       </div>

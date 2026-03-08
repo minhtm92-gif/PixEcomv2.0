@@ -203,7 +203,13 @@ export default function OrderDetailPage() {
     );
   }
 
-  const addr = order.shippingAddress;
+  const rawAddr = order.shippingAddress;
+  // Backward compat: old orders use street/zip, new orders use line1/postalCode
+  const addr = rawAddr ? {
+    ...rawAddr,
+    line1: rawAddr.line1 ?? rawAddr.street,
+    postalCode: rawAddr.postalCode ?? rawAddr.zip,
+  } : null;
   const hasAddress = addr && (addr.line1 || addr.city || addr.country);
   const hasPayment = order.paymentMethod || order.paymentId;
   const attr = order.attribution;

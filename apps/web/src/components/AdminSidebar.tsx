@@ -25,7 +25,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
 /** Full admin navigation */
-const ADMIN_NAV = [
+export const ADMIN_NAV = [
   { label: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
   { label: 'Sellers', href: '/admin/sellers', icon: Users },
   { label: 'Orders', href: '/admin/orders', icon: ClipboardList },
@@ -36,7 +36,7 @@ const ADMIN_NAV = [
 ];
 
 /** Content role: restricted navigation (FB-20) */
-const CONTENT_NAV = [
+export const CONTENT_NAV = [
   { label: 'Products', href: '/admin/products', icon: ShoppingBag },
   { label: 'Sellpages', href: '/admin/sellpages', icon: FileText },
   { label: 'Creatives', href: '/admin/creatives', icon: Palette },
@@ -67,7 +67,7 @@ export function AdminSidebar() {
   }
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-sidebar border-r border-sidebar-border flex flex-col z-50">
+    <aside className="fixed left-0 top-0 bottom-0 w-56 bg-sidebar border-r border-sidebar-border hidden md:flex flex-col z-50">
       {/* Brand */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-sidebar-border">
         <Link href={isContentRole ? '/admin/products' : '/admin/dashboard'} className="text-lg font-bold text-foreground flex items-center gap-2">

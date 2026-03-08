@@ -187,7 +187,7 @@ export default function AdminOrdersPage() {
       }
     >
       {/* Status tabs */}
-      <div className="flex items-center gap-1 mb-4 bg-muted/50 rounded-lg p-1 w-fit flex-wrap">
+      <div className="flex items-center gap-1 mb-4 bg-muted/50 rounded-lg p-1 overflow-x-auto flex-nowrap md:flex-wrap md:w-fit">
         {ALL_STATUSES.map((s) => (
           <button
             key={s}
@@ -211,7 +211,7 @@ export default function AdminOrdersPage() {
           placeholder="Search orders, customers, sellers…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full max-w-sm px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors"
+          className="w-full md:max-w-sm px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors"
         />
       </div>
 

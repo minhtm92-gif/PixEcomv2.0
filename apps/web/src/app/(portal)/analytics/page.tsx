@@ -87,7 +87,7 @@ export default function AnalyticsPage() {
       icon={<BarChart3 size={22} />}
     >
       {/* Date presets */}
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         {DATE_PRESETS.map((p) => (
           <button
             key={p.label}
