@@ -15,11 +15,14 @@ export class InternalProductsService {
     name: string;
     description?: string;
     images?: string[];
+    optionDefinitions?: Array<{ name: string; values: string[] }>;
     variants?: Array<{
       name: string;
+      sku?: string;
       price: number;
       compareAtPrice?: number;
       costPrice?: number;
+      fulfillmentCost?: number;
       options?: Record<string, string>;
       image?: string;
     }>;
@@ -49,6 +52,13 @@ export class InternalProductsService {
         description: data.description ?? null,
         images: data.images ?? [],
         status: 'DRAFT',
+        optionDefinitions: data.optionDefinitions
+          ? data.optionDefinitions.map((d) => ({
+              name: d.name,
+              type: 'default',
+              values: d.values,
+            }))
+          : [],
         quantityCosts: data.quantityCosts
           ? Object.entries(data.quantityCosts).map(([qty, cost]) => ({
               qty: parseInt(qty),
@@ -65,9 +75,11 @@ export class InternalProductsService {
         data: data.variants.map((v, idx) => ({
           productId: product.id,
           name: v.name,
+          sku: v.sku ?? null,
           priceOverride: v.price,
           compareAtPrice: v.compareAtPrice ?? null,
           costPrice: v.costPrice ?? null,
+          fulfillmentCost: v.fulfillmentCost ?? null,
           options: v.options ?? {},
           image: v.image ?? null,
           position: idx,
