@@ -113,7 +113,20 @@ interface ProductDetail {
   variants: VariantData[];
   labels: LabelJoin[];
   pricingRules: PricingRuleData[];
+  assetMedia: AssetMediaData[];
   _count: { sellpages: number; orderItems: number };
+}
+
+interface AssetMediaData {
+  id: string;
+  version: string;
+  url: string;
+  mediaType: string;
+  durationSec: number | null;
+  fileSize: number | null;
+  position: number;
+  isCurrent: boolean;
+  createdAt: string;
 }
 
 interface LabelItem {
@@ -205,6 +218,7 @@ const TABS = [
   { label: 'Description', value: 'description' },
   { label: 'Variants', value: 'variants' },
   { label: 'Cost / Quantity', value: 'cost' },
+  { label: 'Videos', value: 'videos' },
   { label: 'Labels', value: 'labels' },
   { label: 'Pricing Rules', value: 'pricing' },
   { label: 'Stats', value: 'stats' },
@@ -317,6 +331,9 @@ export default function ProductDetailClient() {
       )}
       {tab === 'cost' && (
         <CostQuantityTab product={product} saveProduct={saveProduct} saving={saving} />
+      )}
+      {tab === 'videos' && (
+        <VideosTab product={product} />
       )}
       {tab === 'labels' && (
         <LabelsTab product={product} allLabels={allLabels ?? []} refetch={refetch} refetchLabels={refetchLabels} />
@@ -1491,6 +1508,67 @@ function StatsTab({ product }: { product: ProductDetail }) {
       <KpiCard label="Labels" value={num(product.labels.length)} />
       <KpiCard label="Pricing Rules" value={num(product.pricingRules.length)} />
       <KpiCard label="Images" value={num(((product.images as string[]) ?? []).length)} />
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VIDEOS TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function VideosTab({ product }: { product: ProductDetail }) {
+  const videos = product.assetMedia ?? [];
+
+  if (videos.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p className="text-sm font-medium">No videos yet</p>
+        <p className="text-xs mt-1">
+          Push approved brief videos from PixCon to add them here
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold">Product Videos ({videos.length})</h3>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {videos.map((video) => (
+          <div
+            key={video.id}
+            className="rounded-lg border overflow-hidden"
+          >
+            <video
+              src={video.url}
+              controls
+              className="w-full aspect-video bg-black"
+              preload="metadata"
+            />
+            <div className="p-3 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1 rounded bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                  From PixCon Brief
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {video.version}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                {video.durationSec && (
+                  <span>{Math.floor(video.durationSec / 60)}:{String(video.durationSec % 60).padStart(2, '0')}</span>
+                )}
+                {video.fileSize && (
+                  <span>{(video.fileSize / 1024 / 1024).toFixed(1)} MB</span>
+                )}
+                <span>{fmtDate(video.createdAt)}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

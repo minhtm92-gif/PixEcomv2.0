@@ -539,6 +539,10 @@ export class AdminService {
         variants: { orderBy: { position: 'asc' } },
         labels: { include: { label: true } },
         pricingRules: { orderBy: { effectiveFrom: 'desc' } },
+        assetMedia: {
+          where: { mediaType: 'VIDEO' },
+          orderBy: { position: 'asc' },
+        },
         _count: { select: { sellpages: true, orderItems: true } },
       },
     });

@@ -1,0 +1,146 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+
+@Injectable()
+export class InternalProductsService {
+  private readonly logger = new Logger(InternalProductsService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Create a product from PixCon project data.
+   * Called internally via API with X-Internal-Key header.
+   */
+  async createFromPixcon(data: {
+    name: string;
+    description?: string;
+    images?: string[];
+    variants?: Array<{
+      name: string;
+      price: number;
+      compareAtPrice?: number;
+      costPrice?: number;
+      options?: Record<string, string>;
+      image?: string;
+    }>;
+    quantityCosts?: Record<string, number>;
+    allowOutOfStockPurchase?: boolean;
+  }): Promise<Record<string, unknown>> {
+    const slug = data.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 90);
+
+    const productCode = `PRD-${Date.now()}`;
+    const uniqueSuffix = `-${Math.random().toString(36).slice(2, 8)}`;
+    const uniqueSlug = `${slug}${uniqueSuffix}`;
+
+    // Determine base price from first variant or 0
+    const basePrice =
+      data.variants && data.variants.length > 0 ? data.variants[0].price : 0;
+
+    const product = await this.prisma.product.create({
+      data: {
+        name: data.name,
+        productCode,
+        slug: uniqueSlug,
+        basePrice,
+        description: data.description ?? null,
+        images: data.images ?? [],
+        status: 'DRAFT',
+        quantityCosts: data.quantityCosts
+          ? Object.entries(data.quantityCosts).map(([qty, cost]) => ({
+              qty: parseInt(qty),
+              cost,
+            }))
+          : [],
+        allowOutOfStockPurchase: data.allowOutOfStockPurchase ?? true,
+      },
+    });
+
+    // Create variants
+    if (data.variants && data.variants.length > 0) {
+      await this.prisma.productVariant.createMany({
+        data: data.variants.map((v, idx) => ({
+          productId: product.id,
+          name: v.name,
+          priceOverride: v.price,
+          compareAtPrice: v.compareAtPrice ?? null,
+          costPrice: v.costPrice ?? null,
+          options: v.options ?? {},
+          image: v.image ?? null,
+          position: idx,
+          stockQuantity: 0,
+          isActive: true,
+        })),
+      });
+    }
+
+    this.logger.log(
+      `Created product ${product.id} (${product.name}) from PixCon`,
+    );
+
+    return product;
+  }
+
+  /**
+   * Add videos to a product (from PixCon approved briefs).
+   */
+  async addVideos(
+    productId: string,
+    videos: Array<{
+      url: string;
+      filename?: string;
+      durationSec?: number;
+      fileSize?: number;
+    }>,
+  ): Promise<any[]> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new Error(`Product ${productId} not found`);
+    }
+
+    // Get next version number
+    const latest = await this.prisma.assetMedia.findFirst({
+      where: { productId },
+      orderBy: { createdAt: 'desc' },
+      select: { version: true },
+    });
+    const version = latest?.version ?? 'v1';
+
+    // Get max position
+    const maxPos = await this.prisma.assetMedia.findFirst({
+      where: { productId },
+      orderBy: { position: 'desc' },
+      select: { position: true },
+    });
+    let nextPos = (maxPos?.position ?? -1) + 1;
+
+    const created = [];
+    for (const video of videos) {
+      const media = await this.prisma.assetMedia.create({
+        data: {
+          productId,
+          version,
+          url: video.url,
+          mediaType: 'VIDEO',
+          durationSec: video.durationSec ?? null,
+          fileSize: video.fileSize ?? null,
+          position: nextPos++,
+          isCurrent: true,
+        },
+      });
+      created.push(media);
+    }
+
+    this.logger.log(
+      `Added ${created.length} videos to product ${productId}`,
+    );
+
+    return created;
+  }
+}
