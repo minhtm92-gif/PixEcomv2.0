@@ -413,7 +413,6 @@ export interface SellerSettings {
   supportEmail: string;
   metaPixelId: string;
   googleAnalyticsId: string;
-  checkoutForm: string;
 }
 
 export interface UpdateSellerDto {
@@ -429,7 +428,6 @@ export interface UpdateSellerSettingsDto {
   supportEmail?: string;
   metaPixelId?: string;
   googleAnalyticsId?: string;
-  checkoutForm?: string;
 }
 
 // ── Assets ──

@@ -21,6 +21,7 @@ import {
   Trash2,
   Shield,
   Truck,
+  CreditCard,
 } from 'lucide-react';
 import { apiGet, apiPatch, apiPost, apiDelete, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
@@ -124,6 +125,10 @@ export default function SellpageDetailPage() {
   const [shippingEnabled, setShippingEnabled] = useState(false);
   const [shippingSaving, setShippingSaving] = useState(false);
 
+  // ── B.7 Checkout Form ──
+  const [checkoutForm, setCheckoutForm] = useState('PAYPAL_ONLY');
+  const [checkoutFormSaving, setCheckoutFormSaving] = useState(false);
+
   // ── B.3 Link by Post ID modal ──
   const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [linkCampaignId, setLinkCampaignId] = useState('');
@@ -176,6 +181,10 @@ export default function SellpageDetailPage() {
         setShippingLabel(shippingCfg.label || 'Secured Express Shipping');
         setShippingPrice(String(shippingCfg.price ?? '4.99'));
         if (shippingCfg.freeThreshold) setShippingFreeThreshold(String(shippingCfg.freeThreshold));
+      }
+      // Init checkout form
+      if (hc?.checkoutForm) {
+        setCheckoutForm(hc.checkoutForm as string);
       }
     } catch (err) {
       const e = err as ApiError;
@@ -422,6 +431,20 @@ export default function SellpageDetailPage() {
       toastApiError(err as ApiError);
     } finally {
       setShippingSaving(false);
+    }
+  }
+
+  // ── B.7 Save Checkout Form ──
+  async function handleCheckoutFormSave() {
+    if (!sp) return;
+    setCheckoutFormSaving(true);
+    try {
+      await apiPatch(`/sellpages/${sp.id}`, { checkoutForm } as any);
+      addToast('Checkout form settings saved', 'success');
+    } catch (err) {
+      toastApiError(err as ApiError);
+    } finally {
+      setCheckoutFormSaving(false);
     }
   }
 
@@ -1349,6 +1372,58 @@ export default function SellpageDetailPage() {
         >
           <Save size={12} />
           {shippingSaving ? 'Saving...' : 'Save Shipping Settings'}
+        </button>
+      </div>
+
+      {/* ── B.7 Checkout Form ── */}
+      <div className="bg-card border border-border rounded-xl p-4 mb-6">
+        <h2 className="text-sm font-medium text-foreground flex items-center gap-2 mb-3">
+          <CreditCard size={15} className="text-muted-foreground" />
+          Checkout Form
+        </h2>
+
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Choose which payment methods are available during checkout.
+          </p>
+
+          <div className="space-y-2">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <input
+                type="radio"
+                name="checkoutForm"
+                value="PAYPAL_ONLY"
+                checked={checkoutForm === 'PAYPAL_ONLY'}
+                onChange={(e) => setCheckoutForm(e.target.value)}
+                className="w-4 h-4 accent-primary"
+              />
+              <span className="text-sm text-foreground group-hover:text-foreground/80">
+                PayPal only
+              </span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <input
+                type="radio"
+                name="checkoutForm"
+                value="PAYPAL_AND_CARD"
+                checked={checkoutForm === 'PAYPAL_AND_CARD'}
+                onChange={(e) => setCheckoutForm(e.target.value)}
+                className="w-4 h-4 accent-primary"
+              />
+              <span className="text-sm text-foreground group-hover:text-foreground/80">
+                Allow purchase with credit card
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <button
+          onClick={handleCheckoutFormSave}
+          disabled={checkoutFormSaving}
+          className="mt-3 px-4 py-1.5 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+        >
+          <Save size={12} />
+          {checkoutFormSaving ? 'Saving...' : 'Save Checkout Settings'}
         </button>
       </div>
 

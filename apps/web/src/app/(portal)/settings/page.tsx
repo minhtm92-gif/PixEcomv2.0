@@ -19,7 +19,6 @@ import {
   ExternalLink,
   Upload,
   Image as ImageIcon,
-  Globe,
 } from 'lucide-react';
 import type {
   SellerProfile,
@@ -88,9 +87,6 @@ export default function SettingsPage() {
   const [supportEmail, setSupportEmail] = useState('');
   const [metaPixelId, setMetaPixelId] = useState('');
   const [gaId, setGaId] = useState('');
-  const [checkoutForm, setCheckoutForm] = useState('PAYPAL_ONLY');
-  const [sellpageSaving, setSellpageSaving] = useState(false);
-
   // ── FB Connections state ──
   const [connections, setConnections] = useState<FbConnection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(true);
@@ -129,7 +125,6 @@ export default function SettingsPage() {
       setSupportEmail(data.supportEmail ?? '');
       setMetaPixelId(data.metaPixelId ?? '');
       setGaId(data.googleAnalyticsId ?? '');
-      setCheckoutForm(data.checkoutForm ?? 'PAYPAL_ONLY');
     } catch (err) {
       toastApiError(err as ApiError);
     } finally {
@@ -236,21 +231,6 @@ export default function SettingsPage() {
       toastApiError(err as ApiError);
     } finally {
       setSettingsSaving(false);
-    }
-  }
-
-  // ── Save sellpage settings ──
-  async function handleSaveSellpage() {
-    setSellpageSaving(true);
-    try {
-      const body: UpdateSellerSettingsDto = { checkoutForm };
-      const updated = await apiPatch<SellerSettings>('/sellers/me/settings', body);
-      setSettings(updated);
-      addToast('Sellpage settings updated', 'success');
-    } catch (err) {
-      toastApiError(err as ApiError);
-    } finally {
-      setSellpageSaving(false);
     }
   }
 
@@ -599,71 +579,7 @@ export default function SettingsPage() {
         </div>
       </form>
 
-      {/* Section 3: Sellpage */}
-      <div className="mb-6">
-        <div className="bg-card border border-border rounded-xl">
-          <div className="px-5 py-4 border-b border-border">
-            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Globe size={16} />
-              Sellpage
-            </h2>
-          </div>
-
-          <div className="p-5 space-y-4">
-            {settingsLoading ? (
-              <div className="h-10 bg-muted rounded animate-pulse" />
-            ) : (
-              <div>
-                <label className="block text-sm text-muted-foreground mb-3">
-                  Checkout Form
-                </label>
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="checkoutForm"
-                      value="PAYPAL_ONLY"
-                      checked={checkoutForm === 'PAYPAL_ONLY'}
-                      onChange={(e) => setCheckoutForm(e.target.value)}
-                      className="w-4 h-4 accent-primary"
-                    />
-                    <span className="text-sm text-foreground group-hover:text-foreground/80">
-                      PayPal only
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="radio"
-                      name="checkoutForm"
-                      value="PAYPAL_AND_CARD"
-                      checked={checkoutForm === 'PAYPAL_AND_CARD'}
-                      onChange={(e) => setCheckoutForm(e.target.value)}
-                      className="w-4 h-4 accent-primary"
-                    />
-                    <span className="text-sm text-foreground group-hover:text-foreground/80">
-                      Allow purchase with credit card
-                    </span>
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="px-5 py-3 border-t border-border flex justify-end">
-            <button
-              onClick={handleSaveSellpage}
-              disabled={sellpageSaving || settingsLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium
-                         hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-            >
-              {sellpageSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              {sellpageSaving ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Section 4: Facebook Connections */}
+      {/* Section 3: Facebook Connections */}
       <div className="bg-card border border-border rounded-xl">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">

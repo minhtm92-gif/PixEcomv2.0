@@ -88,4 +88,13 @@ export class UpdateSellpageDto {
    */
   @IsOptional()
   shippingConfig?: Record<string, unknown> | null;
+
+  /**
+   * Checkout form configuration.
+   * Stored in headerConfig.checkoutForm.
+   * Controls payment methods available at checkout (PAYPAL_ONLY or PAYPAL_AND_CARD).
+   */
+  @IsOptional()
+  @IsString()
+  checkoutForm?: string;
 }

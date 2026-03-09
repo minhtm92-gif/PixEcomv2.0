@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, Length, MaxLength } from 'class-validator';
 
 export class UpdateSellerSettingsDto {
   @IsString()
@@ -29,8 +29,4 @@ export class UpdateSellerSettingsDto {
   @IsOptional()
   @MaxLength(100)
   googleAnalyticsId?: string;
-
-  @IsOptional()
-  @IsIn(['PAYPAL_ONLY', 'PAYPAL_AND_CARD'])
-  checkoutForm?: string;
 }

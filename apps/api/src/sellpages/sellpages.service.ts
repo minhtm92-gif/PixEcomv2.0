@@ -350,7 +350,8 @@ export class SellpagesService {
       dto.primaryColor !== undefined ||
       dto.guaranteeConfig !== undefined ||
       dto.boostModules !== undefined ||
-      dto.shippingConfig !== undefined;
+      dto.shippingConfig !== undefined ||
+      dto.checkoutForm !== undefined;
 
     if (!hasFields) {
       throw new BadRequestException(
@@ -381,7 +382,7 @@ export class SellpagesService {
 
     // Merge pixelId, primaryColor, guaranteeConfig into headerConfig
     let headerConfigUpdate: Record<string, unknown> | undefined;
-    if (dto.pixelId !== undefined || dto.primaryColor !== undefined || dto.guaranteeConfig !== undefined || dto.shippingConfig !== undefined) {
+    if (dto.pixelId !== undefined || dto.primaryColor !== undefined || dto.guaranteeConfig !== undefined || dto.shippingConfig !== undefined || dto.checkoutForm !== undefined) {
       const current = await this.prisma.sellpage.findUnique({
         where: { id },
         select: { headerConfig: true },
@@ -408,6 +409,9 @@ export class SellpagesService {
         } else {
           headerConfigUpdate.shipping = dto.shippingConfig;
         }
+      }
+      if (dto.checkoutForm !== undefined) {
+        headerConfigUpdate.checkoutForm = dto.checkoutForm;
       }
     }
 
