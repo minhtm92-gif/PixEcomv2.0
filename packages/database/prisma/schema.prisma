@@ -138,6 +138,7 @@ model SellerSettings {
   supportEmail      String?  @map("support_email") @db.VarChar(255)
   metaPixelId       String?  @map("meta_pixel_id") @db.VarChar(100)
   googleAnalyticsId String?  @map("google_analytics_id") @db.VarChar(100)
+  checkoutForm      String   @default("PAYPAL_ONLY") @map("checkout_form") @db.VarChar(30)
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
