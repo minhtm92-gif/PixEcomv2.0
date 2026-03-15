@@ -5,12 +5,15 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Logger,
   Post,
+  Query,
   Req,
   Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -21,7 +24,12 @@ import { AuthUser } from './strategies/jwt.strategy';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  private readonly logger = new Logger(AuthController.name);
+
+  constructor(
+    private readonly authService: AuthService,
+    private readonly config: ConfigService,
+  ) {}
 
   /**
    * POST /api/auth/register
@@ -133,6 +141,54 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   async me(@CurrentUser() user: AuthUser) {
     return this.authService.getMe(user.userId, user.sellerId);
+  }
+
+  /**
+   * GET /api/auth/sso/callback?token=xxx&redirect=/orders
+   * PixHub SSO callback — verifies SSO token, upserts local user, sets session.
+   */
+  @Get('sso/callback')
+  async ssoCallback(
+    @Query('token') token: string,
+    @Query('redirect') redirect: string,
+    @Res() res: Response,
+  ) {
+    const pixhubApiUrl = this.config.get<string>('PIXHUB_API_URL', 'https://api-hub.pixelxlab.com/api/v1');
+    const pixhubLoginUrl = this.config.get<string>('PIXHUB_LOGIN_URL', 'https://hub.pixelxlab.com/login');
+
+    if (!token) {
+      return res.redirect(`${pixhubLoginUrl}?redirect_app=PIXECOM`);
+    }
+
+    try {
+      // 1. Verify SSO token with PixHub
+      const verifyRes = await fetch(`${pixhubApiUrl}/auth/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const verification = await verifyRes.json() as any;
+
+      if (!verification.valid) {
+        this.logger.warn('SSO token verification failed');
+        return res.redirect(`${pixhubLoginUrl}?redirect_app=PIXECOM`);
+      }
+
+      const ssoUser = verification.user;
+
+      // 2. Upsert local user + seller
+      const result = await this.authService.ssoLogin(ssoUser);
+
+      // 3. Set refresh cookie
+      this.authService.setRefreshCookie(res, result.rawRefreshToken);
+
+      // 4. Redirect to frontend (auth store will pick up session via /auth/refresh)
+      const targetPath = redirect || '/orders';
+      return res.redirect(targetPath);
+    } catch (err) {
+      this.logger.error('SSO callback error', err);
+      return res.redirect(`${pixhubLoginUrl}?redirect_app=PIXECOM`);
+    }
   }
 
   /**

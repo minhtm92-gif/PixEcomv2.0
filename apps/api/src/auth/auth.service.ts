@@ -295,6 +295,51 @@ export class AuthService {
     };
   }
 
+  // ─── SSO Login ──────────────────────────────────────────────────────────
+
+  /**
+   * Handle PixHub SSO login — upsert local user + seller, generate tokens.
+   */
+  async ssoLogin(ssoUser: {
+    id: string;
+    email: string;
+    sellerId?: string | null;
+    role: string;
+    displayName: string;
+    avatarUrl?: string | null;
+  }): Promise<TokenPair> {
+    // Find or create user by email
+    let user = await this.prisma.user.findUnique({
+      where: { email: ssoUser.email.toLowerCase() },
+      select: { id: true, isSuperadmin: true },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email: ssoUser.email.toLowerCase(),
+          displayName: ssoUser.displayName,
+          avatarUrl: ssoUser.avatarUrl,
+          passwordHash: '', // SSO user — no local password
+          isActive: true,
+          isSuperadmin: ssoUser.role === 'SUPERADMIN',
+        },
+        select: { id: true, isSuperadmin: true },
+      });
+    }
+
+    // Find seller context
+    const sellerUser = await this.prisma.sellerUser.findFirst({
+      where: { userId: user.id, isActive: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const sellerId = sellerUser?.sellerId ?? 'ADMIN';
+    const role = sellerUser?.role ?? 'ADMIN';
+
+    return this.generateTokens(user.id, sellerId, role, user.isSuperadmin);
+  }
+
   // ─── Token Helpers ────────────────────────────────────────────────────────
 
   async generateTokens(
