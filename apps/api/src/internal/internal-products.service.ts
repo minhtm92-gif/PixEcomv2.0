@@ -97,6 +97,79 @@ export class InternalProductsService {
   }
 
   /**
+   * Create sellpages for a product from PixCon data.
+   */
+  async createSellpagesFromPixcon(
+    productId: string,
+    sellerId: string,
+    sellpages: Array<{
+      slug: string;
+      titleOverride?: string;
+      descriptionOverride?: string;
+      seoTitle?: string;
+      seoDescription?: string;
+      seoOgImage?: string;
+      sections?: unknown;
+      headerConfig?: unknown;
+      footerConfig?: unknown;
+      boostModules?: unknown;
+      discountRules?: unknown;
+      pixconSellpageId?: string;
+    }>,
+  ): Promise<Array<Record<string, unknown>>> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new Error(`Product ${productId} not found`);
+    }
+
+    const seller = await this.prisma.seller.findUnique({
+      where: { id: sellerId },
+      select: { id: true },
+    });
+    if (!seller) {
+      throw new Error(`Seller ${sellerId} not found`);
+    }
+
+    const created = [];
+    for (const sp of sellpages) {
+      // Ensure unique slug per seller
+      const uniqueSuffix = `-${Math.random().toString(36).slice(2, 8)}`;
+      const slug = sp.slug
+        ? `${sp.slug}${uniqueSuffix}`
+        : `${productId.slice(0, 8)}${uniqueSuffix}`;
+
+      const sellpage = await this.prisma.sellpage.create({
+        data: {
+          sellerId,
+          productId,
+          slug,
+          titleOverride: sp.titleOverride ?? null,
+          descriptionOverride: sp.descriptionOverride ?? null,
+          seoTitle: sp.seoTitle ?? null,
+          seoDescription: sp.seoDescription ?? null,
+          seoOgImage: sp.seoOgImage ?? null,
+          sections: (sp.sections as any) ?? [],
+          headerConfig: (sp.headerConfig as any) ?? {},
+          footerConfig: (sp.footerConfig as any) ?? {},
+          boostModules: (sp.boostModules as any) ?? [],
+          discountRules: (sp.discountRules as any) ?? [],
+          status: 'DRAFT',
+        },
+      });
+      created.push(sellpage);
+    }
+
+    this.logger.log(
+      `Created ${created.length} sellpages for product ${productId} from PixCon`,
+    );
+
+    return created;
+  }
+
+  /**
    * Add videos to a product (from PixCon approved briefs).
    */
   async addVideos(

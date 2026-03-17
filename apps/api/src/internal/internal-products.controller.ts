@@ -49,6 +49,38 @@ export class InternalProductsController {
     return this.service.createFromPixcon(body);
   }
 
+  @Post(':id/sellpages')
+  @HttpCode(201)
+  createSellpages(
+    @Headers('x-internal-key') apiKey: string,
+    @Param('id') productId: string,
+    @Body()
+    body: {
+      sellerId: string;
+      sellpages: Array<{
+        slug: string;
+        titleOverride?: string;
+        descriptionOverride?: string;
+        seoTitle?: string;
+        seoDescription?: string;
+        seoOgImage?: string;
+        sections?: unknown;
+        headerConfig?: unknown;
+        footerConfig?: unknown;
+        boostModules?: unknown;
+        discountRules?: unknown;
+        pixconSellpageId?: string;
+      }>;
+    },
+  ) {
+    this.validateApiKey(apiKey);
+    return this.service.createSellpagesFromPixcon(
+      productId,
+      body.sellerId,
+      body.sellpages,
+    );
+  }
+
   @Post(':id/videos')
   @HttpCode(201)
   addVideos(
