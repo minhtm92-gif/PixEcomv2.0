@@ -1080,3 +1080,21 @@ model WebhookDelivery {
   @@index([success, createdAt])
   @@map("webhook_deliveries")
 }
+
+// ─── AUDIT LOG ──────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  event     String   @db.VarChar(50) // LOGIN_SUCCESS, LOGIN_FAILED, LOGOUT, SSO_LOGIN, REGISTER
+  userId    String?  @map("user_id")
+  email     String?  @db.VarChar(255)
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  userAgent String?  @map("user_agent") @db.VarChar(500)
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([event, createdAt])
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+  @@map("audit_logs")
+}

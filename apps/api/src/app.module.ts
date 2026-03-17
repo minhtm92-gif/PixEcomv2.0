@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { EmailModule } from './email/email.module';
 import { AdsManagerModule } from './ads-manager/ads-manager.module';
 import { AdStrategiesModule } from './ad-strategies/ad-strategies.module';
@@ -32,6 +34,7 @@ import { InternalModule } from './internal/internal.module';
       isGlobal: true,
       envFilePath: '../../.env',
     }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
     PrismaModule,
     EmailModule,
     HealthModule,
@@ -57,6 +60,9 @@ import { InternalModule } from './internal/internal.module';
     WebhookOutboundModule,
     PaymentGatewaysModule,
     InternalModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

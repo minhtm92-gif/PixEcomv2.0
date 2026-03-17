@@ -390,6 +390,33 @@ export class AuthService {
     });
   }
 
+  // ─── Audit Logging ──────────────────────────────────────────────────────
+
+  /**
+   * Fire-and-forget audit log entry. Never blocks the response.
+   */
+  logAuditEvent(params: {
+    event: string;
+    userId?: string;
+    email?: string;
+    ipAddress?: string;
+    userAgent?: string;
+    metadata?: Record<string, unknown>;
+  }): void {
+    this.prisma.auditLog
+      .create({
+        data: {
+          event: params.event,
+          userId: params.userId,
+          email: params.email,
+          ipAddress: params.ipAddress,
+          userAgent: params.userAgent,
+          metadata: params.metadata ?? undefined,
+        },
+      })
+      .catch(() => {});
+  }
+
   // ─── Slug Generation ─────────────────────────────────────────────────────
 
   private generateSlug(name: string): string {

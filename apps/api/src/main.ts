@@ -1,5 +1,6 @@
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
+import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 import { PrismaService } from "./prisma/prisma.service";
@@ -43,6 +44,9 @@ async function bootstrap() {
 
   // Graceful shutdown hooks (handles SIGTERM from Railway/Docker)
   app.enableShutdownHooks();
+
+  // Security headers (Helmet) — disable CSP since frontend is served separately
+  app.use(helmet({ contentSecurityPolicy: false }));
 
   app.use(cookieParser());
   app.setGlobalPrefix("api");
