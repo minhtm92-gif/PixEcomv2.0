@@ -347,7 +347,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                       <button
                         key={acc.id}
                         type="button"
-                        onClick={() => update({ adAccountId: acc.id })}
+                        onClick={() => update({ adAccountId: acc.id, pixelId: '' })}
                         className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm transition-colors ${
                           state.adAccountId === acc.id
                             ? 'border-primary bg-primary/10 text-foreground'
@@ -408,7 +408,9 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                     className={inputCls}
                   >
                     <option value="">None</option>
-                    {pixels.map((px) => (
+                    {pixels
+                      .filter((px) => !state.adAccountId || px.parentId === state.adAccountId)
+                      .map((px) => (
                       <option key={px.id} value={px.id}>
                         {px.name} ({px.externalId})
                       </option>
