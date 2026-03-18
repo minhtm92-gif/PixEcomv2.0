@@ -156,8 +156,8 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Sellpage section (read-only, synced from PixCon) */}
-      {product.sellpages && product.sellpages.length > 0 && (
+      {/* Sellpage = Product Description (read-only, synced from PixCon) */}
+      {product.sellpages && product.sellpages.length > 0 ? (
         <div className="bg-card border border-border rounded-xl overflow-hidden mb-6">
           <div className="px-4 py-3 border-b border-border flex items-center gap-2">
             <FileText size={16} className="text-muted-foreground" />
@@ -219,7 +219,20 @@ export default function ProductDetailPage() {
             ))}
           </div>
         </div>
-      )}
+      ) : product.description ? (
+        <div className="bg-card border border-border rounded-xl overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+            <FileText size={16} className="text-muted-foreground" />
+            <h3 className="text-sm font-medium text-foreground">Sellpage</h3>
+            <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">
+              Read-only — managed in PixCon
+            </span>
+          </div>
+          <div className="p-4">
+            <p className="text-sm text-foreground">{product.description}</p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Variants table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">

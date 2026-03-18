@@ -164,6 +164,26 @@ export class InternalProductsService {
       created.push(sellpage);
     }
 
+    // Sync sellpage content into Product description (Sellpage = Product Description)
+    // Use the first sellpage's content as the product description
+    const primary = sellpages[0];
+    if (primary) {
+      const descriptionBlocks = sellpages.map((sp) => ({
+        variant: sp.variant ?? null,
+        headline: sp.titleOverride ?? null,
+        subheadline: sp.descriptionOverride ?? null,
+        sections: sp.sections ?? [],
+      }));
+
+      await this.prisma.product.update({
+        where: { id: productId },
+        data: {
+          description: primary.titleOverride ?? primary.descriptionOverride ?? null,
+          descriptionBlocks: descriptionBlocks as any,
+        },
+      });
+    }
+
     this.logger.log(
       `Created ${created.length} sellpages for product ${productId} from PixCon`,
     );
