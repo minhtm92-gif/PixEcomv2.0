@@ -165,9 +165,19 @@ export class InternalProductsService {
     }
 
     // Sync sellpage content into Product description (Sellpage = Product Description)
-    // Use the first sellpage's content as the product description
+    // Build rich HTML from the first sellpage's sections (including images)
     const primary = sellpages[0];
     if (primary) {
+      const sections = (primary.sections as Array<{ content?: string; imageUrl?: string }>) ?? [];
+      const htmlParts = sections.map((s) => {
+        let html = s.content ?? '';
+        if (s.imageUrl) {
+          html += `<img src="${s.imageUrl}" alt="" style="max-width:100%;height:auto;border-radius:8px;margin:12px 0" />`;
+        }
+        return html;
+      });
+      const fullHtml = htmlParts.join('');
+
       const descriptionBlocks = sellpages.map((sp) => ({
         variant: sp.variant ?? null,
         headline: sp.titleOverride ?? null,
@@ -178,7 +188,7 @@ export class InternalProductsService {
       await this.prisma.product.update({
         where: { id: productId },
         data: {
-          description: primary.titleOverride ?? primary.descriptionOverride ?? null,
+          description: fullHtml || primary.titleOverride || primary.descriptionOverride || null,
           descriptionBlocks: descriptionBlocks as any,
         },
       });
