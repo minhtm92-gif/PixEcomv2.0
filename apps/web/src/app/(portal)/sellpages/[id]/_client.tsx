@@ -69,6 +69,7 @@ export default function SellpageDetailPage() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editSlug, setEditSlug] = useState('');
+  const [editVariant, setEditVariant] = useState('');
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
 
@@ -264,6 +265,7 @@ export default function SellpageDetailPage() {
   function startEditing() {
     if (!sp) return;
     setEditSlug(sp.slug);
+    setEditVariant(sp.variant ?? '');
     setEditTitle(sp.titleOverride ?? '');
     setEditDesc(sp.descriptionOverride ?? '');
     setEditing(true);
@@ -276,6 +278,7 @@ export default function SellpageDetailPage() {
     try {
       const body: UpdateSellpageDto = {};
       if (editSlug.trim() !== sp.slug) body.slug = editSlug.trim();
+      if (editVariant !== (sp.variant ?? '')) body.variant = editVariant;
       if (editTitle.trim() !== (sp.titleOverride ?? '')) body.titleOverride = editTitle.trim();
       if (editDesc.trim() !== (sp.descriptionOverride ?? ''))
         body.descriptionOverride = editDesc.trim();
@@ -598,6 +601,11 @@ export default function SellpageDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <h1 className="text-xl font-bold text-foreground">{sp.titleOverride ?? sp.slug}</h1>
+        {sp.variant && (
+          <span className="px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-medium">
+            Variant {sp.variant}
+          </span>
+        )}
         <StatusBadge status={sp.status} />
 
         <div className="ml-auto flex items-center gap-2">
@@ -674,6 +682,24 @@ export default function SellpageDetailPage() {
               className={inputCls}
               placeholder="my-product-page"
             />
+          </div>
+          <div>
+            <label htmlFor="edit-variant" className="block text-sm text-muted-foreground mb-1.5">
+              Sellpage Version
+            </label>
+            <select
+              id="edit-variant"
+              value={editVariant}
+              onChange={(e) => setEditVariant(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">No variant</option>
+              <option value="A">Variant A</option>
+              <option value="B">Variant B</option>
+              <option value="C">Variant C</option>
+              <option value="D">Variant D</option>
+              <option value="E">Variant E</option>
+            </select>
           </div>
           <div>
             <label htmlFor="edit-title" className="block text-sm text-muted-foreground mb-1.5">

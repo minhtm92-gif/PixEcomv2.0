@@ -344,6 +344,7 @@ export class SellpagesService {
     // Check at least one field
     const hasFields =
       dto.slug !== undefined ||
+      dto.variant !== undefined ||
       dto.domainId !== undefined ||
       dto.titleOverride !== undefined ||
       dto.descriptionOverride !== undefined ||
@@ -421,6 +422,7 @@ export class SellpagesService {
       where: { id },
       data: {
         ...(dto.slug !== undefined && { slug: dto.slug }),
+        ...(dto.variant !== undefined && { variant: dto.variant }),
         ...(dto.domainId !== undefined && { domainId: dto.domainId }),
         ...(dto.titleOverride !== undefined && {
           titleOverride: dto.titleOverride,

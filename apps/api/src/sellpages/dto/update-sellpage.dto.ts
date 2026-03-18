@@ -32,6 +32,11 @@ export class UpdateSellpageDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(10)
+  variant?: string;
+
+  @IsOptional()
+  @IsString()
   @MaxLength(255)
   titleOverride?: string;
 

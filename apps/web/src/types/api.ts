@@ -173,6 +173,7 @@ export interface SellpageListItem {
   productId: string;
   domainId: string | null;
   slug: string;
+  variant: string | null;
   status: string;
   sellpageType: string;
   titleOverride: string | null;
@@ -330,6 +331,7 @@ export interface CreateSellpageDto {
 
 export interface UpdateSellpageDto {
   slug?: string;
+  variant?: string;
   domainId?: string;
   titleOverride?: string;
   descriptionOverride?: string;
