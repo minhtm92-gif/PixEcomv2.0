@@ -102,30 +102,11 @@ export default function ProductDetailPage() {
 
           <h2 className="text-lg font-bold text-foreground">{product.name}</h2>
 
-          {/* Sellpage variants (read-only, synced from PixCon) */}
+          {/* Sellpage count summary */}
           {product.sellpages && product.sellpages.length > 0 && (
-            <div className="pt-1">
-              <p className="text-xs text-muted-foreground font-medium mb-1">Sellpages</p>
-              <div className="space-y-1">
-                {product.sellpages.map((sp) => (
-                  <div key={sp.id} className="flex items-center gap-2 text-sm">
-                    <span className="font-medium text-foreground">
-                      {sp.variant ? `Variant ${sp.variant}` : sp.slug}:
-                    </span>
-                    <span className="text-muted-foreground truncate">
-                      {sp.titleOverride ?? `/${sp.slug}`}
-                    </span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${
-                      sp.status === 'PUBLISHED' ? 'bg-green-500/15 text-green-400' :
-                      sp.status === 'ARCHIVED' ? 'bg-red-500/15 text-red-400' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {sp.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              {product.sellpages.length} sellpage{product.sellpages.length !== 1 ? 's' : ''} from PixCon
+            </p>
           )}
 
           <div className="grid grid-cols-2 gap-4 pt-2">
@@ -174,6 +155,71 @@ export default function ProductDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Sellpage section (read-only, synced from PixCon) */}
+      {product.sellpages && product.sellpages.length > 0 && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+            <FileText size={16} className="text-muted-foreground" />
+            <h3 className="text-sm font-medium text-foreground">
+              Sellpage ({product.sellpages.length})
+            </h3>
+            <span className="ml-auto text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded">
+              Read-only — managed in PixCon
+            </span>
+          </div>
+          <div className="divide-y divide-border">
+            {product.sellpages.map((sp) => (
+              <div key={sp.id} className="p-4">
+                {/* Variant header */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-semibold text-foreground">
+                    {sp.variant ? `Variant ${sp.variant}` : `/${sp.slug}`}
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                    sp.status === 'PUBLISHED' ? 'bg-green-500/15 text-green-400' :
+                    sp.status === 'ARCHIVED' ? 'bg-red-500/15 text-red-400' :
+                    'bg-muted text-muted-foreground'
+                  }`}>
+                    {sp.status}
+                  </span>
+                </div>
+
+                {/* Headline */}
+                {sp.titleOverride && (
+                  <h4 className="text-base font-bold text-foreground mb-1">{sp.titleOverride}</h4>
+                )}
+
+                {/* Subheadline */}
+                {sp.descriptionOverride && (
+                  <p className="text-sm text-muted-foreground mb-3">{sp.descriptionOverride}</p>
+                )}
+
+                {/* Content sections */}
+                {sp.sections && sp.sections.length > 0 && (
+                  <div className="space-y-2">
+                    {sp.sections.map((section, idx) => (
+                      <div key={section.id || idx} className="text-sm text-foreground/80">
+                        {section.imageUrl && (
+                          <img src={section.imageUrl} alt="" className="rounded max-h-40 mb-2 object-contain" />
+                        )}
+                        {section.content && (
+                          <p className="whitespace-pre-line">{section.content}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {!sp.titleOverride && !sp.descriptionOverride && (!sp.sections || sp.sections.length === 0) && (
+                  <p className="text-xs text-muted-foreground italic">No content yet</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Variants table */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">

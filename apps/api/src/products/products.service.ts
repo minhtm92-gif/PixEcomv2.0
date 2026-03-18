@@ -248,6 +248,8 @@ export class ProductsService {
             variant: true,
             status: true,
             titleOverride: true,
+            descriptionOverride: true,
+            sections: true,
           },
         },
       },
@@ -279,6 +281,8 @@ export class ProductsService {
         variant: sp.variant,
         status: sp.status,
         titleOverride: sp.titleOverride,
+        descriptionOverride: sp.descriptionOverride,
+        sections: sp.sections as unknown[],
       })),
     };
   }

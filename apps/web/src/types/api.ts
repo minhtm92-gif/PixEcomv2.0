@@ -384,12 +384,21 @@ export interface ProductVariant {
   position: number;
 }
 
+export interface SellpageSection {
+  id: string;
+  type: string;
+  content: string;
+  imageUrl?: string;
+}
+
 export interface ProductSellpageInfo {
   id: string;
   slug: string;
   variant: string | null;
   status: string;
   titleOverride: string | null;
+  descriptionOverride: string | null;
+  sections: SellpageSection[];
 }
 
 export interface ProductDetail extends ProductCardItem {

@@ -28,6 +28,8 @@ export interface ProductSellpageDto {
   variant: string | null;
   status: string;
   titleOverride: string | null;
+  descriptionOverride: string | null;
+  sections: unknown[];
 }
 
 export interface ProductDetailDto extends ProductCardDto {
