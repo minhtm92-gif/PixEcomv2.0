@@ -15,6 +15,7 @@ import {
   LogOut,
   Activity,
   Rocket,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -88,6 +89,16 @@ export function Sidebar() {
             <p className="text-sm font-medium text-foreground truncate">{user.displayName}</p>
             <p className="text-xs text-muted-foreground truncate">{seller?.name ?? user.email}</p>
           </div>
+        )}
+        {user?.isSuperadmin && (
+          <Link
+            href="/admin/dashboard"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-amber-400
+                       hover:bg-amber-500/10 transition-colors mb-0.5"
+          >
+            <ArrowRightLeft size={16} />
+            Admin Dashboard
+          </Link>
         )}
         <button
           onClick={handleLogout}

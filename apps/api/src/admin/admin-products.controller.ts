@@ -138,4 +138,27 @@ export class AdminProductsController {
   ) {
     return this.adminService.deletePricingRule(id, ruleId);
   }
+
+  // ─── SELLER ASSIGNMENT ──────────────────────────────────────────────
+
+  @Get(':id/sellers')
+  getProductSellers(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.getProductSellers(id);
+  }
+
+  @Post(':id/assign-seller')
+  assignSeller(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { sellerId: string },
+  ) {
+    return this.adminService.assignSellerToProduct(id, body.sellerId);
+  }
+
+  @Delete(':id/unassign-seller/:sellerId')
+  unassignSeller(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('sellerId', ParseUUIDPipe) sellerId: string,
+  ) {
+    return this.adminService.unassignSellerFromProduct(id, sellerId);
+  }
 }

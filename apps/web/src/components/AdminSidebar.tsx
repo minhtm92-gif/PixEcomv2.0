@@ -18,6 +18,7 @@ import {
   FileText,
   Palette,
   TrendingUp,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -141,14 +142,24 @@ export function AdminSidebar() {
           )
         )}
         {!IS_PREVIEW && (
-          <button
-            onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground
-                       hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <LogOut size={16} />
-            Sign out
-          </button>
+          <>
+            <Link
+              href="/orders"
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-amber-400
+                         hover:bg-amber-500/10 transition-colors mb-0.5"
+            >
+              <ArrowRightLeft size={16} />
+              Seller Portal
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground
+                         hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <LogOut size={16} />
+              Sign out
+            </button>
+          </>
         )}
       </div>
     </aside>

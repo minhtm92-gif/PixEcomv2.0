@@ -835,6 +835,79 @@ export class AdminService {
     return this.prisma.pricingRule.delete({ where: { id: ruleId } });
   }
 
+  // ─── SELLER ASSIGNMENT ─────────────────────────────────────────────────────
+
+  async getProductSellers(productId: string): Promise<any> {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException('Product not found');
+
+    const sellpages = await this.prisma.sellpage.findMany({
+      where: { productId },
+      select: {
+        id: true,
+        slug: true,
+        status: true,
+        createdAt: true,
+        seller: { select: { id: true, name: true, slug: true, status: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const allSellers = await this.prisma.seller.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, slug: true },
+      orderBy: { name: 'asc' },
+    });
+
+    return { sellpages, allSellers };
+  }
+
+  async assignSellerToProduct(productId: string, sellerId: string): Promise<any> {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new NotFoundException('Product not found');
+
+    const seller = await this.prisma.seller.findUnique({ where: { id: sellerId } });
+    if (!seller) throw new NotFoundException('Seller not found');
+
+    // Check if sellpage already exists for this seller + product
+    const existing = await this.prisma.sellpage.findFirst({
+      where: { productId, sellerId },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    // Auto-generate slug from product name + random suffix
+    const baseSlug = product.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 60);
+    const suffix = Math.random().toString(36).slice(2, 8);
+    const slug = `${baseSlug}-${suffix}`;
+
+    return this.prisma.sellpage.create({
+      data: {
+        sellerId,
+        productId,
+        slug,
+        status: 'DRAFT',
+      },
+      include: {
+        seller: { select: { id: true, name: true, slug: true, status: true } },
+      },
+    });
+  }
+
+  async unassignSellerFromProduct(productId: string, sellerId: string): Promise<any> {
+    const sellpage = await this.prisma.sellpage.findFirst({
+      where: { productId, sellerId },
+    });
+    if (!sellpage) throw new NotFoundException('Sellpage not found');
+
+    return this.prisma.sellpage.delete({ where: { id: sellpage.id } });
+  }
+
   // ─── STORES (SELLER DOMAINS) ───────────────────────────────────────────────
 
   async listStores(query: AdminQueryDto): Promise<any> {

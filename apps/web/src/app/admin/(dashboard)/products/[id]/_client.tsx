@@ -15,6 +15,9 @@ import {
   Edit3,
   ImageIcon,
   Check,
+  Users,
+  UserPlus,
+  ExternalLink,
 } from 'lucide-react';
 import {
   DndContext,
@@ -221,6 +224,7 @@ const TABS = [
   { label: 'Videos', value: 'videos' },
   { label: 'Labels', value: 'labels' },
   { label: 'Pricing Rules', value: 'pricing' },
+  { label: 'Sellers', value: 'sellers' },
   { label: 'Stats', value: 'stats' },
 ];
 
@@ -341,6 +345,7 @@ export default function ProductDetailClient() {
       {tab === 'pricing' && (
         <PricingRulesTab product={product} refetch={refetch} />
       )}
+      {tab === 'sellers' && <SellersTab productId={product.id} />}
       {tab === 'stats' && <StatsTab product={product} />}
     </div>
   );
@@ -1508,6 +1513,158 @@ function StatsTab({ product }: { product: ProductDetail }) {
       <KpiCard label="Labels" value={num(product.labels.length)} />
       <KpiCard label="Pricing Rules" value={num(product.pricingRules.length)} />
       <KpiCard label="Images" value={num(((product.images as string[]) ?? []).length)} />
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// VIDEOS TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SELLERS TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface SellerInfo {
+  id: string;
+  name: string;
+  slug: string;
+  status?: string;
+}
+
+interface SellpageInfo {
+  id: string;
+  slug: string;
+  status: string;
+  createdAt: string;
+  seller: SellerInfo;
+}
+
+function SellersTab({ productId }: { productId: string }) {
+  const toast = useToastStore((s) => s.add);
+  const { data, loading, refetch } = useAdminApi<{
+    sellpages: SellpageInfo[];
+    allSellers: SellerInfo[];
+  }>(`/admin/products/${productId}/sellers`);
+
+  const [assigning, setAssigning] = useState(false);
+  const [selectedSellerId, setSelectedSellerId] = useState('');
+
+  const assignedSellerIds = new Set(data?.sellpages.map((sp) => sp.seller.id) ?? []);
+  const availableSellers = (data?.allSellers ?? []).filter((s) => !assignedSellerIds.has(s.id));
+
+  async function handleAssign() {
+    if (!selectedSellerId) return;
+    setAssigning(true);
+    try {
+      await apiPost(`/admin/products/${productId}/assign-seller`, { sellerId: selectedSellerId });
+      toast('Seller assigned', 'success');
+      setSelectedSellerId('');
+      refetch();
+    } catch {
+      toast('Failed to assign seller', 'error');
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  async function handleUnassign(sellerId: string, sellerName: string) {
+    if (!confirm(`Remove ${sellerName} from this product? This will delete their sellpage.`)) return;
+    try {
+      await apiDelete(`/admin/products/${productId}/unassign-seller/${sellerId}`);
+      toast('Seller removed', 'success');
+      refetch();
+    } catch {
+      toast('Failed to remove seller', 'error');
+    }
+  }
+
+  if (loading) {
+    return <div className="animate-pulse h-32 bg-muted rounded-xl" />;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Assign new seller */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+          <UserPlus size={16} className="text-amber-400" />
+          Assign Seller
+        </h2>
+        <div className="flex gap-3 items-end">
+          <div className="flex-1">
+            <label className="block text-xs text-muted-foreground mb-1">Select a seller</label>
+            <select
+              value={selectedSellerId}
+              onChange={(e) => setSelectedSellerId(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Choose seller...</option>
+              {availableSellers.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={handleAssign}
+            disabled={!selectedSellerId || assigning}
+            className="px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {assigning ? 'Assigning...' : 'Assign'}
+          </button>
+        </div>
+        {availableSellers.length === 0 && (data?.sellpages.length ?? 0) > 0 && (
+          <p className="text-xs text-muted-foreground mt-2">All sellers are already assigned to this product.</p>
+        )}
+      </div>
+
+      {/* Assigned sellers */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+          <Users size={16} className="text-amber-400" />
+          Assigned Sellers ({data?.sellpages.length ?? 0})
+        </h2>
+        {(data?.sellpages.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">
+            No sellers assigned yet. Assign a seller above to create a sellpage for them.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {data?.sellpages.map((sp) => (
+              <div
+                key={sp.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 font-semibold text-xs">
+                    {sp.seller.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{sp.seller.name}</p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span>Sellpage: /{sp.slug}</span>
+                      <span className={cn(
+                        'px-1.5 py-0.5 rounded text-[10px] font-medium',
+                        sp.status === 'PUBLISHED' ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground',
+                      )}>
+                        {sp.status}
+                      </span>
+                      <span>{fmtDate(sp.createdAt)}</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleUnassign(sp.seller.id, sp.seller.name)}
+                  className="p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                  title="Remove seller"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

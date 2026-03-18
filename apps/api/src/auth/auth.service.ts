@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { UserRole } from '@pixecom/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Response } from 'express';
@@ -308,10 +309,14 @@ export class AuthService {
     displayName: string;
     avatarUrl?: string | null;
   }): Promise<TokenPair> {
-    // Find or create user by email
+    // Map PixHub appRole to PixEcom UserRole
+    const pixecomRole = this.mapSsoRole(ssoUser.role);
+    const isSuperadmin = pixecomRole === 'SUPERADMIN';
+
+    // Find or create user by email, sync role from PixHub
     let user = await this.prisma.user.findUnique({
       where: { email: ssoUser.email.toLowerCase() },
-      select: { id: true, isSuperadmin: true },
+      select: { id: true, isSuperadmin: true, role: true },
     });
 
     if (!user) {
@@ -322,22 +327,79 @@ export class AuthService {
           avatarUrl: ssoUser.avatarUrl,
           passwordHash: '', // SSO user — no local password
           isActive: true,
-          isSuperadmin: ssoUser.role === 'SUPERADMIN',
+          isSuperadmin,
+          role: pixecomRole,
         },
-        select: { id: true, isSuperadmin: true },
+        select: { id: true, isSuperadmin: true, role: true },
+      });
+    } else if (user.role !== pixecomRole || user.isSuperadmin !== isSuperadmin) {
+      // Sync role from PixHub on every SSO login
+      user = await this.prisma.user.update({
+        where: { email: ssoUser.email.toLowerCase() },
+        data: {
+          role: pixecomRole,
+          isSuperadmin,
+          displayName: ssoUser.displayName,
+          avatarUrl: ssoUser.avatarUrl,
+        },
+        select: { id: true, isSuperadmin: true, role: true },
       });
     }
 
-    // Find seller context
-    const sellerUser = await this.prisma.sellerUser.findFirst({
+    // Find seller context — auto-link SUPERADMIN users to platform seller
+    let sellerUser = await this.prisma.sellerUser.findFirst({
       where: { userId: user.id, isActive: true },
       orderBy: { createdAt: 'asc' },
     });
+
+    if (!sellerUser && isSuperadmin) {
+      // Auto-link C-level / superadmin users to the first active seller
+      const platformSeller = await this.prisma.seller.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      if (platformSeller) {
+        sellerUser = await this.prisma.sellerUser.create({
+          data: {
+            sellerId: platformSeller.id,
+            userId: user.id,
+            role: 'ADMIN',
+            isActive: true,
+          },
+        });
+      }
+    }
 
     const sellerId = sellerUser?.sellerId ?? 'ADMIN';
     const role = sellerUser?.role ?? 'ADMIN';
 
     return this.generateTokens(user.id, sellerId, role, user.isSuperadmin);
+  }
+
+  /**
+   * Map PixHub appRole → PixEcom UserRole enum.
+   * ADMIN/SUPERADMIN → SUPERADMIN (full platform access)
+   * EDITOR → CONTENT
+   * VIEWER → SELLER (read-only, needs seller association)
+   */
+  private mapSsoRole(ssoRole: string): UserRole {
+    switch (ssoRole) {
+      case 'SUPERADMIN':
+      case 'ADMIN':
+      case 'C_LEVEL':
+      case 'MANAGER':
+        return UserRole.SUPERADMIN;
+      case 'SUPPORT':
+        return UserRole.SUPPORT;
+      case 'FINANCE':
+        return UserRole.FINANCE;
+      case 'EDITOR':
+      case 'CONTENT_CREATOR':
+        return UserRole.CONTENT;
+      default:
+        return UserRole.SELLER;
+    }
   }
 
   // ─── Token Helpers ────────────────────────────────────────────────────────

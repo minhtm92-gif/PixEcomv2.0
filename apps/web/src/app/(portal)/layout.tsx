@@ -26,8 +26,6 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     if (!initializing) {
       if (!user) {
         router.replace('/login');
-      } else if (user.isSuperadmin) {
-        router.replace('/admin/dashboard');
       }
     }
   }, [initializing, user, router]);
