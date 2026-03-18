@@ -455,11 +455,14 @@ export class CampaignsService {
     const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
     const cursorData = query.cursor ? decodeCursor(query.cursor) : null;
 
-    // Scope to user's own ad accounts
+    // Scope to user's own ad accounts (+ legacy unassigned for backward compat)
     const userAdAccounts = await this.prisma.fbConnection.findMany({
       where: {
         sellerId,
-        connectedByUserId: userId,
+        OR: [
+          { connectedByUserId: userId },
+          { connectedByUserId: null },
+        ],
         connectionType: 'AD_ACCOUNT',
         isActive: true,
       },

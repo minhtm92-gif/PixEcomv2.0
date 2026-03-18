@@ -121,7 +121,11 @@ export class FbConnectionsService {
     const connections = await this.prisma.fbConnection.findMany({
       where: {
         sellerId,
-        connectedByUserId: userId,
+        // User-scoped: show own connections + legacy unassigned ones
+        OR: [
+          { connectedByUserId: userId },
+          { connectedByUserId: null },
+        ],
         // Task 3: default to active-only; includeInactive bypasses this
         ...(query.includeInactive ? {} : { isActive: true }),
         ...(query.connectionType

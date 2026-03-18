@@ -81,10 +81,14 @@ export class AdsManagerReadService {
     const dateRange = buildDateRange(query.dateFrom, query.dateTo);
 
     // Get this user's connected ad account IDs to scope campaigns
+    // Include legacy unassigned connections (connectedByUserId=null) for backward compat
     const userAdAccounts = await this.prisma.fbConnection.findMany({
       where: {
         sellerId,
-        connectedByUserId: userId,
+        OR: [
+          { connectedByUserId: userId },
+          { connectedByUserId: null },
+        ],
         connectionType: 'AD_ACCOUNT',
         isActive: true,
       },
