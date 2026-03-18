@@ -145,6 +145,7 @@ function CheckoutForm() {
   });
   const [shipping, setShipping] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'paypal'>('card');
+  const [checkoutFormMode, setCheckoutFormMode] = useState<string>('PAYPAL_AND_CARD');
   const [selectedDiscount, setSelectedDiscount] = useState<string | null>(null);
   const [qty] = useState(() => getUrlParams().qty);
 
@@ -203,6 +204,12 @@ function CheckoutForm() {
         setStoreInfo({ name: data.store.name, slug: data.store.slug, logoUrl: data.store.logoUrl ?? null });
         setDiscounts(mapApiDiscounts(data.discounts));
         setThemeColor((data.sellpage.headerConfig?.primaryColor as string) ?? null);
+        // Checkout form mode from sellpage (PAYPAL_ONLY or PAYPAL_AND_CARD)
+        const cfMode = (data.sellpage.headerConfig?.checkoutForm as string) ?? 'PAYPAL_AND_CARD';
+        setCheckoutFormMode(cfMode);
+        if (cfMode === 'PAYPAL_ONLY') {
+          setPaymentMethod('paypal');
+        }
         // Shipping config from sellpage
         const hdrShipping = data.sellpage.headerConfig?.shipping as ShippingConfig | undefined;
         if (hdrShipping?.label && hdrShipping?.price != null) {
@@ -629,7 +636,7 @@ function CheckoutForm() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-gray-900 mb-4">Payment Method</h2>
               <div className="space-y-2">
-                {PAYMENT_METHODS.map(pm => (
+                {PAYMENT_METHODS.filter(pm => checkoutFormMode !== 'PAYPAL_ONLY' || pm.id === 'paypal').map(pm => (
                   <button
                     key={pm.id}
                     type="button"
