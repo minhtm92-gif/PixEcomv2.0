@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { apiGet, apiPatch, apiPost, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
+import type { FbConnection } from '@/types/api';
 import { PageShell } from '@/components/PageShell';
 import { AdsMetricsTable, SummaryBar } from '@/components/AdsMetricsTable';
 import { today, daysAgo } from '@/lib/format';
@@ -68,6 +69,9 @@ export default function AdsManagerPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Ad accounts from FB connections
+  const [adAccounts, setAdAccounts] = useState<FbConnection[]>([]);
+
   // Multi-select
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -80,6 +84,18 @@ export default function AdsManagerPage() {
   // Sync
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncCooldown, setSyncCooldown] = useState(0);
+
+  // Fetch connected ad accounts
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await apiGet<FbConnection[]>('/fb/connections?connectionType=AD_ACCOUNT');
+        setAdAccounts(res.filter((c) => c.isActive));
+      } catch {
+        // Silently fail — dropdown will just show "All Ad Accounts"
+      }
+    })();
+  }, []);
 
   // Sync cooldown countdown
   useEffect(() => {
@@ -319,8 +335,11 @@ export default function AdsManagerPage() {
           className="bg-input border border-border rounded-lg px-3 py-2 text-sm text-foreground"
         >
           <option value="">All Ad Accounts</option>
-          <option value="act_123456">act_123456 (Main)</option>
-          <option value="act_789012">act_789012 (Test)</option>
+          {adAccounts.map((acc) => (
+            <option key={acc.id} value={acc.id}>
+              {acc.externalId} ({acc.name})
+            </option>
+          ))}
         </select>
 
         {/* Date presets */}

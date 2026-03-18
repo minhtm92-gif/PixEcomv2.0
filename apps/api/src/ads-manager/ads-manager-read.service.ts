@@ -77,14 +77,28 @@ export class AdsManagerReadService {
 
   // ── Campaigns ──────────────────────────────────────────────────────────────
 
-  async getCampaigns(sellerId: string, query: CampaignsQueryDto) {
+  async getCampaigns(sellerId: string, userId: string, query: CampaignsQueryDto) {
     const dateRange = buildDateRange(query.dateFrom, query.dateTo);
 
-    // 1. Fetch campaigns
+    // Get this user's connected ad account IDs to scope campaigns
+    const userAdAccounts = await this.prisma.fbConnection.findMany({
+      where: {
+        sellerId,
+        connectedByUserId: userId,
+        connectionType: 'AD_ACCOUNT',
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    const userAdAccountIds = userAdAccounts.map((a) => a.id);
+
+    // 1. Fetch campaigns — only those linked to user's own ad accounts
     const campaigns = await this.prisma.campaign.findMany({
       where: {
         sellerId,
+        ...(userAdAccountIds.length > 0 ? { adAccountId: { in: userAdAccountIds } } : {}),
         ...(query.status ? { status: query.status as any } : {}),
+        ...(query.adAccountId ? { adAccountId: query.adAccountId } : {}),
       },
       select: {
         id: true,

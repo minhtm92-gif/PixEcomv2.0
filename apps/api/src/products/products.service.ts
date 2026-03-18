@@ -240,6 +240,16 @@ export class ProductsService {
             position: true,
           },
         },
+        sellpages: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            slug: true,
+            variant: true,
+            status: true,
+            titleOverride: true,
+          },
+        },
       },
     });
 
@@ -263,6 +273,13 @@ export class ProductsService {
       variants: product.variants.map((v) =>
         this.mapToVariant(v, product.basePrice),
       ),
+      sellpages: product.sellpages.map((sp) => ({
+        id: sp.id,
+        slug: sp.slug,
+        variant: sp.variant,
+        status: sp.status,
+        titleOverride: sp.titleOverride,
+      })),
     };
   }
 

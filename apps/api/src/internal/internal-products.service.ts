@@ -104,6 +104,7 @@ export class InternalProductsService {
     sellerId: string,
     sellpages: Array<{
       slug: string;
+      variant?: string;
       titleOverride?: string;
       descriptionOverride?: string;
       seoTitle?: string;
@@ -146,6 +147,7 @@ export class InternalProductsService {
           sellerId,
           productId,
           slug,
+          variant: sp.variant ?? null,
           titleOverride: sp.titleOverride ?? null,
           descriptionOverride: sp.descriptionOverride ?? null,
           seoTitle: sp.seoTitle ?? null,

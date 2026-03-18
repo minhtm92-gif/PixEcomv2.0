@@ -55,7 +55,7 @@ export class CampaignsController {
 
   @Get()
   list(@CurrentUser() user: AuthUser, @Query() query: ListCampaignsDto) {
-    return this.service.listCampaigns(user.sellerId, query);
+    return this.service.listCampaigns(user.sellerId, user.userId, query);
   }
 
   // ─── GET /campaigns/:id ───────────────────────────────────────────────────

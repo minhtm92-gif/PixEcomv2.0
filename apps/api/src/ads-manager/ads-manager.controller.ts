@@ -20,7 +20,7 @@ export class AdsManagerController {
 
   @Get('campaigns')
   getCampaigns(@Req() req: any, @Query() query: CampaignsQueryDto) {
-    return this.service.getCampaigns(req.user.sellerId, query);
+    return this.service.getCampaigns(req.user.sellerId, req.user.userId, query);
   }
 
   @Get('adsets')

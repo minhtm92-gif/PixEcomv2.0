@@ -43,7 +43,7 @@ export class FbConnectionsController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateFbConnectionDto,
   ) {
-    return this.service.createConnection(user.sellerId, dto);
+    return this.service.createConnection(user.sellerId, user.userId, dto);
   }
 
   /**
@@ -56,7 +56,7 @@ export class FbConnectionsController {
     @CurrentUser() user: AuthUser,
     @Query() query: ListFbConnectionsDto,
   ) {
-    return this.service.listConnections(user.sellerId, query);
+    return this.service.listConnections(user.sellerId, user.userId, query);
   }
 
   /**

@@ -100,6 +100,7 @@ const SELLPAGE_CARD_SELECT = {
   domainId: true,
   slug: true,
   status: true,
+  variant: true,
   sellpageType: true,
   titleOverride: true,
   descriptionOverride: true,
@@ -228,6 +229,7 @@ export class SellpagesService {
         productId: dto.productId,
         slug: dto.slug,
         ...(dto.domainId !== undefined && { domainId: dto.domainId }),
+        ...(dto.variant !== undefined && { variant: dto.variant }),
         ...(dto.titleOverride !== undefined && {
           titleOverride: dto.titleOverride,
         }),

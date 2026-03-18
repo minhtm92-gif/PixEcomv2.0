@@ -16,6 +16,7 @@ import { UpdateFbConnectionDto } from './dto/update-fb-connection.dto';
 const FB_CONNECTION_SELECT = {
   id: true,
   sellerId: true,
+  connectedByUserId: true,
   connectionType: true,
   externalId: true,
   name: true,
@@ -77,7 +78,7 @@ export class FbConnectionsService {
 
   // ─── CREATE ────────────────────────────────────────────────────────────────
 
-  async createConnection(sellerId: string, dto: CreateFbConnectionDto) {
+  async createConnection(sellerId: string, userId: string, dto: CreateFbConnectionDto) {
     await this.validateHierarchy(sellerId, dto.connectionType, dto.parentId);
 
     // Enforce unique (sellerId, connectionType, externalId)
@@ -98,6 +99,7 @@ export class FbConnectionsService {
     const connection = await this.prisma.fbConnection.create({
       data: {
         sellerId,
+        connectedByUserId: userId,
         connectionType: dto.connectionType as any,
         externalId: dto.externalId,
         name: dto.name,
@@ -115,10 +117,11 @@ export class FbConnectionsService {
 
   // ─── LIST ──────────────────────────────────────────────────────────────────
 
-  async listConnections(sellerId: string, query: ListFbConnectionsDto) {
+  async listConnections(sellerId: string, userId: string, query: ListFbConnectionsDto) {
     const connections = await this.prisma.fbConnection.findMany({
       where: {
         sellerId,
+        connectedByUserId: userId,
         // Task 3: default to active-only; includeInactive bypasses this
         ...(query.includeInactive ? {} : { isActive: true }),
         ...(query.connectionType

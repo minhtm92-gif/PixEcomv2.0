@@ -44,6 +44,7 @@ model User {
 
   refreshTokens RefreshToken[]
   sellerUsers   SellerUser[]
+  fbConnections FbConnection[]
 
   @@index([email, isActive])
   @@map("users")
@@ -434,6 +435,7 @@ model Sellpage {
   customDomain        String?        @map("custom_domain") @db.VarChar(255)
   sellpageType        SellpageType   @default(SINGLE) @map("sellpage_type")
   status              SellpageStatus @default(DRAFT)
+  variant             String?        @db.VarChar(10)
   titleOverride       String?        @map("title_override") @db.VarChar(255)
   descriptionOverride String?        @map("description_override")
   seoTitle            String?        @map("seo_title") @db.VarChar(255)
@@ -473,28 +475,31 @@ enum FbConnectionType {
 }
 
 model FbConnection {
-  id             String           @id @default(uuid()) @db.Uuid
-  sellerId       String           @map("seller_id") @db.Uuid
-  connectionType FbConnectionType @map("connection_type")
-  externalId     String           @map("external_id") @db.VarChar(255)
-  name           String           @db.VarChar(255)
-  accessTokenEnc String?          @map("access_token_enc")
-  parentId       String?          @map("parent_id") @db.Uuid
-  isPrimary      Boolean          @default(false) @map("is_primary")
-  isActive       Boolean          @default(true) @map("is_active")
-  metadata       Json             @default("{}") @db.JsonB
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id                String           @id @default(uuid()) @db.Uuid
+  sellerId          String           @map("seller_id") @db.Uuid
+  connectedByUserId String?          @map("connected_by_user_id") @db.Uuid
+  connectionType    FbConnectionType @map("connection_type")
+  externalId        String           @map("external_id") @db.VarChar(255)
+  name              String           @db.VarChar(255)
+  accessTokenEnc    String?          @map("access_token_enc")
+  parentId          String?          @map("parent_id") @db.Uuid
+  isPrimary         Boolean          @default(false) @map("is_primary")
+  isActive          Boolean          @default(true) @map("is_active")
+  metadata          Json             @default("{}") @db.JsonB
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller    Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  parent    FbConnection?  @relation("FbConnectionParent", fields: [parentId], references: [id], onDelete: SetNull)
-  children  FbConnection[] @relation("FbConnectionParent")
-  campaigns Campaign[]
-  adPosts   AdPost[]
+  seller         Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  connectedByUser User?         @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  parent         FbConnection?  @relation("FbConnectionParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children       FbConnection[] @relation("FbConnectionParent")
+  campaigns      Campaign[]
+  adPosts        AdPost[]
 
   @@unique([sellerId, connectionType, externalId], name: "uq_fb_connection")
   @@index([sellerId, connectionType])
   @@index([sellerId, isActive])
+  @@index([connectedByUserId])
   @@map("fb_connections")
 }
 

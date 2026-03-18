@@ -451,11 +451,26 @@ export class CampaignsService {
 
   // ─── LIST ──────────────────────────────────────────────────────────────────
 
-  async listCampaigns(sellerId: string, query: ListCampaignsDto) {
+  async listCampaigns(sellerId: string, userId: string, query: ListCampaignsDto) {
     const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
     const cursorData = query.cursor ? decodeCursor(query.cursor) : null;
 
+    // Scope to user's own ad accounts
+    const userAdAccounts = await this.prisma.fbConnection.findMany({
+      where: {
+        sellerId,
+        connectedByUserId: userId,
+        connectionType: 'AD_ACCOUNT',
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    const userAdAccountIds = userAdAccounts.map((a) => a.id);
+
     const andClauses: Record<string, unknown>[] = [{ sellerId }];
+    if (userAdAccountIds.length > 0) {
+      andClauses.push({ adAccountId: { in: userAdAccountIds } });
+    }
 
     if (query.sellpageId) {
       andClauses.push({ sellpageId: query.sellpageId });

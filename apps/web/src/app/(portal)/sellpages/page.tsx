@@ -45,6 +45,7 @@ export default function SellpagesPage() {
   const [creating, setCreating] = useState(false);
   const [newProductId, setNewProductId] = useState('');
   const [newSlug, setNewSlug] = useState('');
+  const [newVariant, setNewVariant] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [modalError, setModalError] = useState<string | null>(null);
@@ -106,6 +107,7 @@ export default function SellpagesPage() {
     setModalError(null);
     setNewProductId('');
     setNewSlug('');
+    setNewVariant('');
     setNewTitle('');
     setNewDesc('');
 
@@ -134,6 +136,7 @@ export default function SellpagesPage() {
         productId: newProductId,
         slug: newSlug.trim(),
       };
+      if (newVariant) body.variant = newVariant;
       if (newTitle.trim()) body.titleOverride = newTitle.trim();
       if (newDesc.trim()) body.descriptionOverride = newDesc.trim();
 
@@ -348,6 +351,26 @@ export default function SellpagesPage() {
                     ))}
                   </select>
                 )}
+              </div>
+
+              {/* Variant */}
+              <div>
+                <label htmlFor="sp-variant" className="block text-sm text-muted-foreground mb-1.5">
+                  Sellpage Version
+                </label>
+                <select
+                  id="sp-variant"
+                  value={newVariant}
+                  onChange={(e) => setNewVariant(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">Select variant...</option>
+                  <option value="A">Variant A</option>
+                  <option value="B">Variant B</option>
+                  <option value="C">Variant C</option>
+                  <option value="D">Variant D</option>
+                  <option value="E">Variant E</option>
+                </select>
               </div>
 
               {/* Slug */}

@@ -323,6 +323,7 @@ export interface CreateSellpageDto {
   productId: string;
   slug: string;
   domainId?: string;
+  variant?: string;
   titleOverride?: string;
   descriptionOverride?: string;
 }
@@ -383,6 +384,14 @@ export interface ProductVariant {
   position: number;
 }
 
+export interface ProductSellpageInfo {
+  id: string;
+  slug: string;
+  variant: string | null;
+  status: string;
+  titleOverride: string | null;
+}
+
 export interface ProductDetail extends ProductCardItem {
   productCode: string;
   description: string | null;
@@ -394,6 +403,7 @@ export interface ProductDetail extends ProductCardItem {
   createdAt: string;
   updatedAt: string;
   variants: ProductVariant[];
+  sellpages: ProductSellpageInfo[];
 }
 
 // ── Seller Settings ──

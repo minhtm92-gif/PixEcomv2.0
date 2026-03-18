@@ -1,4 +1,4 @@
-import { IsDateString, IsIn, IsOptional } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
 import { CAMPAIGN_STATUSES } from '../ads-manager.constants';
 
 export class CampaignsQueryDto {
@@ -13,4 +13,8 @@ export class CampaignsQueryDto {
   @IsOptional()
   @IsIn(CAMPAIGN_STATUSES)
   status?: string;
+
+  @IsOptional()
+  @IsString()
+  adAccountId?: string;
 }

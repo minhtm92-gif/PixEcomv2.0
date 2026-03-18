@@ -7,7 +7,7 @@ import { toastApiError } from '@/stores/toastStore';
 import { moneyDecimal, safeFmtDate } from '@/lib/format';
 import { PageShell } from '@/components/PageShell';
 import { StatusBadge } from '@/components/StatusBadge';
-import { ShoppingBag, ArrowLeft, Package } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, Package, FileText } from 'lucide-react';
 import type { ProductDetail } from '@/types/api';
 
 export default function ProductDetailPage() {
@@ -102,8 +102,30 @@ export default function ProductDetailPage() {
 
           <h2 className="text-lg font-bold text-foreground">{product.name}</h2>
 
-          {product.description && (
-            <p className="text-sm text-muted-foreground">{product.description}</p>
+          {/* Sellpage variants (read-only, synced from PixCon) */}
+          {product.sellpages && product.sellpages.length > 0 && (
+            <div className="pt-1">
+              <p className="text-xs text-muted-foreground font-medium mb-1">Sellpages</p>
+              <div className="space-y-1">
+                {product.sellpages.map((sp) => (
+                  <div key={sp.id} className="flex items-center gap-2 text-sm">
+                    <span className="font-medium text-foreground">
+                      {sp.variant ? `Variant ${sp.variant}` : sp.slug}:
+                    </span>
+                    <span className="text-muted-foreground truncate">
+                      {sp.titleOverride ?? `/${sp.slug}`}
+                    </span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      sp.status === 'PUBLISHED' ? 'bg-green-500/15 text-green-400' :
+                      sp.status === 'ARCHIVED' ? 'bg-red-500/15 text-red-400' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {sp.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-4 pt-2">
