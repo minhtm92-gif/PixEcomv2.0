@@ -87,7 +87,7 @@ export interface MetaPage {
   id: string;
   name: string;
   category: string;
-  access_token: string;
+  access_token: string; // May be empty for business-only pages
 }
 
 // ─── Pixel / Dataset ─────────────────────────────────────────────────────────

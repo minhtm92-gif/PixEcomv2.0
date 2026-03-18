@@ -25,6 +25,8 @@ const OAUTH_SCOPES = [
   'ads_management',
   'ads_read',
   'pages_read_engagement',
+  'pages_show_list',
+  'business_management',
 ].join(',');
 
 /** State token TTL: 10 minutes. */
@@ -198,11 +200,13 @@ export class MetaController {
         });
       }
 
-      // 6. Upsert FbConnections for Facebook Pages
-      const pages = await this.fetchPages(accessToken);
+      // 6. Upsert FbConnections for Facebook Pages (personal + business)
+      const pages = await this.fetchAllPages(accessToken);
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
-        const encPageToken = this.tokenService.encrypt(page.access_token);
+        const encPageToken = page.access_token
+          ? this.tokenService.encrypt(page.access_token)
+          : null;
         await this.prisma.fbConnection.upsert({
           where: {
             uq_fb_connection: {
@@ -465,26 +469,90 @@ export class MetaController {
   }
 
   /**
-   * Fetch Facebook Pages managed by the user.
+   * Fetch ALL Facebook Pages: personal + business-owned.
+   * Deduplicates by page ID (personal pages take priority since they have access_token).
    */
-  private async fetchPages(accessToken: string): Promise<MetaPage[]> {
+  private async fetchAllPages(accessToken: string): Promise<MetaPage[]> {
+    const pageMap = new Map<string, MetaPage>();
+
+    // 1. Personal pages via /me/accounts (these come WITH page access tokens)
     try {
-      const response = await fetch(
-        `${META_GRAPH_BASE}/me/accounts?fields=id,name,category,access_token&access_token=${accessToken}`,
+      let url: string | null =
+        `${META_GRAPH_BASE}/me/accounts?fields=id,name,category,access_token&limit=100&access_token=${accessToken}`;
+
+      while (url) {
+        const response = await fetch(url);
+        if (!response.ok) {
+          this.logger.warn(`FB /me/accounts failed: ${response.status}`);
+          break;
+        }
+        const data = (await response.json()) as {
+          data: MetaPage[];
+          paging?: { next?: string };
+        };
+        for (const page of data.data ?? []) {
+          pageMap.set(page.id, page);
+        }
+        url = data.paging?.next ?? null;
+      }
+    } catch (err) {
+      this.logger.warn('Failed to fetch personal pages', err);
+    }
+
+    // 2. Business pages via /me/businesses -> /{biz-id}/owned_pages
+    try {
+      const bizResponse = await fetch(
+        `${META_GRAPH_BASE}/me/businesses?fields=id,name&access_token=${accessToken}`,
       );
 
-      if (!response.ok) {
-        this.logger.warn(
-          `FB /me/accounts failed: ${response.status} — proceeding without pages`,
-        );
-        return [];
-      }
+      if (bizResponse.ok) {
+        const bizData = (await bizResponse.json()) as {
+          data: Array<{ id: string; name: string }>;
+        };
 
-      const data = (await response.json()) as { data: MetaPage[] };
-      return data.data ?? [];
+        for (const biz of bizData.data ?? []) {
+          // Fetch owned pages for this business
+          try {
+            const ownedResponse = await fetch(
+              `${META_GRAPH_BASE}/${biz.id}/owned_pages?fields=id,name,category,access_token&limit=100&access_token=${accessToken}`,
+            );
+            if (ownedResponse.ok) {
+              const ownedData = (await ownedResponse.json()) as { data: MetaPage[] };
+              for (const page of ownedData.data ?? []) {
+                if (!pageMap.has(page.id)) {
+                  pageMap.set(page.id, page);
+                }
+              }
+            }
+          } catch (err) {
+            this.logger.warn(`Failed to fetch owned_pages for business ${biz.id}`, err);
+          }
+
+          // Fetch client pages (agency model)
+          try {
+            const clientResponse = await fetch(
+              `${META_GRAPH_BASE}/${biz.id}/client_pages?fields=id,name,category&limit=100&access_token=${accessToken}`,
+            );
+            if (clientResponse.ok) {
+              const clientData = (await clientResponse.json()) as { data: MetaPage[] };
+              for (const page of clientData.data ?? []) {
+                if (!pageMap.has(page.id)) {
+                  pageMap.set(page.id, { ...page, access_token: '' });
+                }
+              }
+            }
+          } catch (err) {
+            this.logger.warn(`Failed to fetch client_pages for business ${biz.id}`, err);
+          }
+        }
+      }
     } catch (err) {
-      this.logger.warn('Failed to fetch pages, proceeding without', err);
-      return [];
+      this.logger.warn('Failed to fetch businesses, proceeding with personal pages only', err);
     }
+
+    this.logger.log(
+      `Fetched ${pageMap.size} total pages (personal + business)`,
+    );
+    return Array.from(pageMap.values());
   }
 }
