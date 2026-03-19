@@ -10,6 +10,7 @@ import {
   RefreshCw,
   DollarSign,
   TrendingUp,
+  Users,
 } from 'lucide-react';
 import { apiGet, type ApiError } from '@/lib/apiClient';
 import { toastApiError } from '@/stores/toastStore';
@@ -83,10 +84,10 @@ export default function LivePreviewPage() {
     }
   }, [sellpageId]);
 
-  // Auto-refresh every 60s
+  // Auto-refresh every 10s (real-time sliding window)
   useEffect(() => {
     fetchData();
-    const interval = setInterval(() => fetchData(true), 60_000);
+    const interval = setInterval(() => fetchData(true), 10_000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -166,7 +167,7 @@ export default function LivePreviewPage() {
   return (
     <PageShell
       title="Live Preview"
-      subtitle="Real-time campaign performance for today"
+      subtitle="Last 10 minutes — live visitor activity"
       icon={<Activity size={22} />}
       actions={
         <div className="flex items-center gap-3">
@@ -217,6 +218,23 @@ export default function LivePreviewPage() {
         </div>
       )}
 
+      {/* Active Visitors Hero Card */}
+      <div className="flex justify-center mb-6">
+        <div className="bg-card border border-border rounded-xl px-8 py-5 text-center min-w-[200px]">
+          {loading ? (
+            <div className="h-12 bg-muted rounded w-20 mx-auto animate-pulse mb-2" />
+          ) : (
+            <p className="text-5xl font-bold text-foreground tabular-nums">
+              {num(data?.activeVisitors ?? 0)}
+            </p>
+          )}
+          <div className="flex items-center justify-center gap-2 mt-2">
+            <Users size={14} className="text-green-500" />
+            <p className="text-sm text-muted-foreground">visitors right now</p>
+          </div>
+        </div>
+      </div>
+
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <KpiCard
@@ -256,14 +274,14 @@ export default function LivePreviewPage() {
           value={loading ? '' : moneyWhole(t?.spend ?? 0)}
           icon={<TrendingUp size={16} />}
           loading={loading}
-          sub="Total spend today"
+          sub="Today's total (daily)"
         />
         <KpiCard
           label="Revenue"
           value={loading ? '' : moneyWhole(t?.revenue ?? 0)}
           icon={<DollarSign size={16} />}
           loading={loading}
-          sub="Purchase value today"
+          sub="Last 10 minutes"
         />
       </div>
 
@@ -338,8 +356,8 @@ export default function LivePreviewPage() {
           columns={campaignCols}
           data={data?.byCampaign ?? []}
           loading={loading}
-          rowKey={(r) => r.campaignId}
-          emptyMessage="No campaign data for today."
+          rowKey={(r) => r.campaignName}
+          emptyMessage="No activity in the last 10 minutes."
           skeletonRows={4}
         />
       </div>

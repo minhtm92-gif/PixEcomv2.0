@@ -192,7 +192,7 @@ export class AdsManagerActionService {
 
   // ─── MANUAL SYNC FROM META ────────────────────────────────────────────────
 
-  async syncFromMeta(sellerId: string) {
+  async syncFromMeta(sellerId: string, adAccountId?: string) {
     // Rate limit: 1 sync per seller per 60s
     const now = Date.now();
     const lastSync = lastSyncMap.get(sellerId) ?? 0;
@@ -210,9 +210,14 @@ export class AdsManagerActionService {
       lastSyncAt: new Date().toISOString(),
     };
 
-    // Load active AD_ACCOUNT FbConnections
+    // Load active AD_ACCOUNT FbConnections — filter to single account if specified
     const adAccounts = await this.prisma.fbConnection.findMany({
-      where: { sellerId, connectionType: 'AD_ACCOUNT', isActive: true },
+      where: {
+        sellerId,
+        connectionType: 'AD_ACCOUNT',
+        isActive: true,
+        ...(adAccountId ? { id: adAccountId } : {}),
+      },
       select: { id: true, externalId: true, name: true },
     });
 

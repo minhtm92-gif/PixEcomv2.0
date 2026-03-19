@@ -327,18 +327,17 @@ export class AdsManagerReadService {
 
   // ── Live Preview ─────────────────────────────────────────────────────────
 
-  async getLivePreview(sellerId: string, sellpageId?: string, date?: string) {
-    const targetDate = date || new Date().toISOString().split('T')[0];
-    const dayStart = new Date(`${targetDate}T00:00:00.000Z`);
-    const dayEnd = new Date(`${targetDate}T23:59:59.999Z`);
+  async getLivePreview(sellerId: string, sellpageId?: string) {
+    // 10-minute sliding window (Shopify Live View style)
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-    // 1. PixelxLab events (CV, ATC, CO) from StorefrontEvent table
+    // 1. PixelxLab events (CV, ATC, CO) in last 10 minutes
     const eventCounts = await this.prisma.storefrontEvent.groupBy({
       by: ['eventType'],
       where: {
         sellerId,
         ...(sellpageId ? { sellpageId } : {}),
-        createdAt: { gte: dayStart, lte: dayEnd },
+        createdAt: { gte: tenMinAgo },
       },
       _count: true,
     });
@@ -348,12 +347,24 @@ export class AdsManagerReadService {
     const addToCart = evMap['add_to_cart'] || 0;
     const checkout = evMap['checkout'] || 0;
 
-    // 2. Purchase count + revenue from confirmed orders (most accurate)
+    // 2. Active visitors = unique sessions in last 10 minutes
+    const activeSessions = await this.prisma.storefrontEvent.findMany({
+      where: {
+        sellerId,
+        ...(sellpageId ? { sellpageId } : {}),
+        createdAt: { gte: tenMinAgo },
+      },
+      select: { sessionId: true },
+      distinct: ['sessionId'],
+    });
+    const activeVisitors = activeSessions.filter(s => s.sessionId).length;
+
+    // 3. Purchases in last 10 minutes from Orders
     const purchaseData = await this.prisma.order.aggregate({
       where: {
         sellerId,
         status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
-        createdAt: { gte: dayStart, lte: dayEnd },
+        createdAt: { gte: tenMinAgo },
         ...(sellpageId ? { sellpageId } : {}),
       },
       _count: true,
@@ -362,12 +373,13 @@ export class AdsManagerReadService {
     const purchases = purchaseData._count;
     const revenue = Number(purchaseData._sum.total || 0);
 
-    // 3. Facebook metrics (Spend, Impressions, Clicks) from AdStatsDaily
+    // 4. Facebook metrics — daily totals (Meta has no 10-min granularity)
+    const today = new Date().toISOString().split('T')[0];
     const adStats = await this.prisma.adStatsDaily.findMany({
       where: {
         sellerId,
         entityType: 'CAMPAIGN',
-        statDate: dayStart,
+        statDate: new Date(`${today}T00:00:00.000Z`),
       },
       select: {
         entityId: true,
@@ -381,19 +393,19 @@ export class AdsManagerReadService {
     const impressions = adStats.reduce((sum, s) => sum + (s.impressions || 0), 0);
     const clicks = adStats.reduce((sum, s) => sum + (s.linkClicks || 0), 0);
 
-    // 4. Compute metrics (NEVER average ratios — SUM raw then divide)
+    // 5. Compute metrics (NEVER average ratios — SUM raw then divide)
     const cr1 = safeDivide(checkout, contentViews) * 100;
     const cr2 = safeDivide(purchases, checkout) * 100;
     const cr = safeDivide(purchases, contentViews) * 100;
     const roas = safeDivide(revenue, spend);
 
-    // 5. Campaign breakdown — group storefront events by utm_campaign
+    // 6. Campaign breakdown — group storefront events by utm_campaign in 10-min window
     const campaignEvents = await this.prisma.storefrontEvent.groupBy({
       by: ['utmCampaign', 'eventType'],
       where: {
         sellerId,
         ...(sellpageId ? { sellpageId } : {}),
-        createdAt: { gte: dayStart, lte: dayEnd },
+        createdAt: { gte: tenMinAgo },
         utmCampaign: { not: null },
       },
       _count: true,
@@ -445,6 +457,7 @@ export class AdsManagerReadService {
     }).sort((a, b) => b.contentViews - a.contentViews);
 
     return {
+      activeVisitors,
       totals: {
         contentViews, addToCart, checkout, purchases, revenue,
         spend, impressions, clicks,
@@ -452,6 +465,7 @@ export class AdsManagerReadService {
       },
       byCampaign,
       updatedAt: new Date().toISOString(),
+      windowMinutes: 10,
     };
   }
 

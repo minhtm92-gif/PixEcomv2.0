@@ -187,7 +187,9 @@ export default function AdsManagerPage() {
     if (syncCooldown > 0 || syncLoading) return;
     setSyncLoading(true);
     try {
-      const res = await apiPost<SyncResult>('/ads-manager/sync');
+      const res = await apiPost<SyncResult>('/ads-manager/sync', {
+        ...(adAccountId ? { adAccountId } : {}),
+      });
       const { synced } = res;
       addToast(
         `Synced: ${synced.campaigns} campaigns, ${synced.adsets} adsets, ${synced.ads} ads`,

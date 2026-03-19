@@ -760,12 +760,15 @@ export interface LivePreviewTotals {
   cr1: number;
   cr2: number;
   cr: number;
+  roas: number;
 }
 
 export interface LivePreviewResponse {
+  activeVisitors: number;
   totals: LivePreviewTotals;
   byCampaign: LivePreviewCampaign[];
   updatedAt: string;
+  windowMinutes: number;
 }
 
 // ── Health ──

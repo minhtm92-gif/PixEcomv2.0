@@ -22,9 +22,8 @@ export class AdsManagerController {
   getLivePreview(
     @Req() req: any,
     @Query('sellpageId') sellpageId?: string,
-    @Query('date') date?: string,
   ) {
-    return this.service.getLivePreview(req.user.sellerId, sellpageId, date);
+    return this.service.getLivePreview(req.user.sellerId, sellpageId);
   }
 
   @Get('campaigns')
@@ -86,7 +85,7 @@ export class AdsManagerController {
    */
   @Post('sync')
   @HttpCode(200)
-  sync(@Req() req: any) {
-    return this.actionService.syncFromMeta(req.user.sellerId);
+  sync(@Req() req: any, @Body('adAccountId') adAccountId?: string) {
+    return this.actionService.syncFromMeta(req.user.sellerId, adAccountId);
   }
 }
