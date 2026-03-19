@@ -89,12 +89,18 @@ interface WizardState {
   pixelId: string;
   strategyKey: string;
   targeting: TargetingState;
+  advancedMode: boolean;
+  performanceGoal: string;
+  clickWindowDays: number;
+  viewWindowDays: number;
   // Step 3
   nameTemplate: string;
   campaignCount: number;
   budget: string;
   budgetType: BudgetType;
   initialStatus: 'ACTIVE' | 'PAUSED';
+  startTime: string;
+  endTime: string;
   // Step 4
   adCreatives: AdCreativeConfig[];
 }
@@ -108,11 +114,17 @@ const INITIAL_WIZARD: WizardState = {
   pixelId: '',
   strategyKey: 'CBO_1_5_3',
   targeting: { ...DEFAULT_TARGETING },
+  advancedMode: false,
+  performanceGoal: 'OFFSITE_CONVERSIONS',
+  clickWindowDays: 1,
+  viewWindowDays: 0,
   nameTemplate: '',
   campaignCount: 1,
   budget: '',
   budgetType: 'DAILY',
   initialStatus: 'PAUSED',
+  startTime: '',
+  endTime: '',
   adCreatives: [{ ...DEFAULT_CREATIVE }],
 };
 
@@ -231,7 +243,12 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
   function canNext(): boolean {
     if (step === 1) return !!state.sellpageId;
     if (step === 2) return !!state.adAccountId && !!state.strategyKey;
-    if (step === 3) return !!state.nameTemplate.trim() && !!state.budget && Number(state.budget) > 0 && state.campaignCount >= 1;
+    if (step === 3) {
+      const baseValid = !!state.nameTemplate.trim() && !!state.budget && Number(state.budget) > 0 && state.campaignCount >= 1;
+      if (!baseValid) return false;
+      if (state.budgetType === 'LIFETIME' && !state.endTime) return false;
+      return true;
+    }
     if (step === 4) return true; // creatives are optional
     return true;
   }
@@ -261,6 +278,22 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
           : c.thumbnailId || c.adtextId || c.headlineId || c.descriptionId,
       );
       if (validCreatives.length > 0) body.adCreatives = validCreatives;
+
+      if (state.advancedMode) {
+        (body as any).advancedMode = true;
+        (body as any).performanceGoal = state.performanceGoal;
+        (body as any).attributionModel = {
+          clickWindowDays: state.clickWindowDays,
+          viewWindowDays: state.viewWindowDays,
+        };
+      }
+
+      if (state.startTime) {
+        (body as any).startTime = `${state.startTime}:00+07:00`;
+      }
+      if (state.endTime) {
+        (body as any).endTime = `${state.endTime}:00+07:00`;
+      }
 
       const result = await apiPost<BatchCreateResponse>('/campaigns/batch', body);
       addToast(`${result.totalCampaigns} campaign(s) created`, 'success');
@@ -313,7 +346,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
               ) : (
                 <select
                   value={state.sellpageId}
-                  onChange={(e) => update({ sellpageId: e.target.value })}
+                  onChange={(e) => update({ sellpageId: e.target.value, adCreatives: [{ ...DEFAULT_CREATIVE }] })}
                   className={inputCls}
                 >
                   <option value="">Select a sellpage...</option>
@@ -461,6 +494,73 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                   />
                 </div>
               </div>
+
+              {/* Advanced Settings */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-medium text-foreground">Advanced Settings</h3>
+                    <p className="text-xs text-muted-foreground">Customize performance goal and attribution</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => update({ advancedMode: !state.advancedMode })}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${state.advancedMode ? 'bg-primary' : 'bg-muted'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${state.advancedMode ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+
+                {state.advancedMode && (
+                  <div className="space-y-4 bg-muted/20 border border-border rounded-lg p-4">
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1.5">Performance Goal</label>
+                      <select
+                        value={state.performanceGoal}
+                        onChange={(e) => update({ performanceGoal: e.target.value })}
+                        className={inputCls}
+                      >
+                        <option value="OFFSITE_CONVERSIONS">Maximize Conversions (Purchase)</option>
+                        <option value="VALUE">Maximize Conversion Value</option>
+                        <option value="LINK_CLICKS">Maximize Link Clicks</option>
+                        <option value="LANDING_PAGE_VIEWS">Maximize Landing Page Views</option>
+                        <option value="IMPRESSIONS">Maximize Impressions</option>
+                        <option value="REACH">Maximize Reach</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-muted-foreground mb-1.5">Attribution Window</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] text-muted-foreground mb-1">Click-Through</label>
+                          <select
+                            value={state.clickWindowDays}
+                            onChange={(e) => update({ clickWindowDays: Number(e.target.value) })}
+                            className={inputCls}
+                          >
+                            <option value={1}>1 Day Click (Default)</option>
+                            <option value={7}>7 Day Click</option>
+                            <option value={28}>28 Day Click</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-muted-foreground mb-1">View-Through</label>
+                          <select
+                            value={state.viewWindowDays}
+                            onChange={(e) => update({ viewWindowDays: Number(e.target.value) })}
+                            className={inputCls}
+                          >
+                            <option value={0}>Disabled</option>
+                            <option value={1}>1 Day View</option>
+                            <option value={7}>7 Day View</option>
+                            <option value={28}>28 Day View</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -557,6 +657,35 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                 </div>
               </div>
 
+              {/* Schedule */}
+              <div>
+                <label className="block text-sm text-muted-foreground mb-2">Schedule (GMT+7)</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">Start Time</label>
+                    <input
+                      type="datetime-local"
+                      value={state.startTime}
+                      onChange={(e) => update({ startTime: e.target.value })}
+                      className={inputCls}
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Leave empty to start immediately</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1">End Time</label>
+                    <input
+                      type="datetime-local"
+                      value={state.endTime}
+                      onChange={(e) => update({ endTime: e.target.value })}
+                      className={inputCls}
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {state.budgetType === 'LIFETIME' ? 'Required for Lifetime Budget' : 'Optional'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Summary box */}
               <div className="bg-muted/30 border border-border rounded-lg px-4 py-3 text-xs text-muted-foreground">
                 <span className="text-foreground font-medium">{state.campaignCount}</span> campaign{state.campaignCount > 1 ? 's' : ''} ×{' '}
@@ -585,6 +714,7 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                 next[index] = config;
                 update({ adCreatives: next });
               }}
+              productId={selectedSellpage?.productId}
             />
           )}
 
@@ -650,6 +780,32 @@ function CampaignWizard({ onClose, onCreated }: WizardProps) {
                     {state.initialStatus === 'ACTIVE' ? 'Active' : 'Paused (Draft)'}
                   </span>
                 </div>
+                {state.startTime && (
+                  <div className="flex justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground">Start Time</span>
+                    <span className="text-foreground">{state.startTime} (GMT+7)</span>
+                  </div>
+                )}
+                {state.endTime && (
+                  <div className="flex justify-between px-4 py-2.5">
+                    <span className="text-muted-foreground">End Time</span>
+                    <span className="text-foreground">{state.endTime} (GMT+7)</span>
+                  </div>
+                )}
+                {state.advancedMode && (
+                  <>
+                    <div className="flex justify-between px-4 py-2.5">
+                      <span className="text-muted-foreground">Performance Goal</span>
+                      <span className="text-foreground">{state.performanceGoal}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-2.5">
+                      <span className="text-muted-foreground">Attribution</span>
+                      <span className="text-foreground">
+                        {state.clickWindowDays}d Click{state.viewWindowDays > 0 ? ` + ${state.viewWindowDays}d View` : ''}
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between px-4 py-2.5">
                   <span className="text-muted-foreground">Total Ads</span>
                   <span className="text-primary font-semibold">{state.campaignCount * selectedPreset.totalAds}</span>

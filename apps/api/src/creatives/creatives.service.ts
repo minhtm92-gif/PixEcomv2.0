@@ -210,6 +210,7 @@ export class CreativesService {
       status?: string;
       creativeType?: string;
       q?: string;
+      productId?: string;
     } = {},
   ) {
     const page = Math.max(1, opts.page ?? 1);
@@ -225,6 +226,9 @@ export class CreativesService {
     }
     if (opts.q?.trim()) {
       where.name = { contains: opts.q.trim(), mode: 'insensitive' };
+    }
+    if (opts.productId) {
+      where.productId = opts.productId;
     }
 
     const [creatives, total] = await Promise.all([

@@ -829,8 +829,8 @@ export default function CampaignDetailPage() {
     try {
       let updated: CampaignDetail;
       if (action === 'launch') {
-        updated = await apiPost<CampaignDetail>(`/campaigns/${campaign.id}/launch`, {});
-        addToast('Campaign launched', 'success');
+        updated = await apiPost<CampaignDetail>(`/campaigns/${campaign.id}/launch`, {}, { timeout: 120_000 });
+        addToast('Campaign launched! Ads are being pushed to Meta in the background.', 'success');
       } else if (action === 'pause') {
         updated = await apiPatch<CampaignDetail>(`/campaigns/${campaign.id}/pause`, {});
         addToast('Campaign paused', 'success');

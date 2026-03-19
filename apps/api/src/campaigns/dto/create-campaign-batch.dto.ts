@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsIn,
   IsInt,
   IsNumber,
@@ -39,6 +40,24 @@ export class AdCreativeInput {
   @IsOptional()
   @IsUUID()
   descriptionId?: string;
+}
+
+// ─── Attribution model (Advanced Mode) ───────────────────────────────────────
+
+export class AttributionModelDto {
+  @IsOptional()
+  @IsIn(['CLICK_THROUGH', 'VIEW_THROUGH', 'ENGAGED_VIEW'])
+  eventType?: string;
+
+  @IsOptional()
+  @IsInt()
+  @IsIn([1, 7, 28])
+  clickWindowDays?: number;
+
+  @IsOptional()
+  @IsInt()
+  @IsIn([0, 1, 7, 28])
+  viewWindowDays?: number;
 }
 
 // ─── Batch create DTO ────────────────────────────────────────────────────────
@@ -101,4 +120,30 @@ export class CreateCampaignBatchDto {
   @ValidateNested({ each: true })
   @Type(() => AdCreativeInput)
   adCreatives?: AdCreativeInput[];
+
+  @IsOptional()
+  @IsString()
+  startTime?: string; // ISO8601 with timezone, e.g. "2026-03-20T09:00:00+07:00"
+
+  @IsOptional()
+  @IsString()
+  endTime?: string; // ISO8601 with timezone
+
+  @IsOptional()
+  @IsString()
+  scheduleTimezone?: string; // IANA timezone, default: 'Asia/Ho_Chi_Minh'
+
+  @IsOptional()
+  @IsBoolean()
+  advancedMode?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['OFFSITE_CONVERSIONS', 'LINK_CLICKS', 'IMPRESSIONS', 'REACH', 'LANDING_PAGE_VIEWS', 'VALUE'])
+  performanceGoal?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AttributionModelDto)
+  attributionModel?: AttributionModelDto;
 }

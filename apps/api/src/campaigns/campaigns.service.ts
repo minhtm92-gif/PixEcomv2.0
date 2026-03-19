@@ -14,6 +14,19 @@ import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { ListCampaignsDto } from './dto/list-campaigns.dto';
 import { InlineBudgetDto } from '../ads-manager/dto/bulk-action.dto';
 
+// ─── Attribution spec builder (Advanced Mode) ────────────────────────────────
+
+function buildAttributionSpec(model: { clickWindowDays?: number; viewWindowDays?: number }): object[] | undefined {
+  const specs: object[] = [];
+  if (model.clickWindowDays && model.clickWindowDays > 0) {
+    specs.push({ event_type: 'CLICK_THROUGH', window_days: model.clickWindowDays });
+  }
+  if (model.viewWindowDays && model.viewWindowDays > 0) {
+    specs.push({ event_type: 'VIEW_THROUGH', window_days: model.viewWindowDays });
+  }
+  return specs.length > 0 ? specs : undefined;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_LIMIT = 20;
@@ -351,9 +364,13 @@ export class CampaignsService {
           // Adset targeting: Conversion objective, Purchase event, Advantage+ targeting
           const targeting: Record<string, unknown> = {
             conversionEvent: 'PURCHASE',
-            optimizationGoal: 'OFFSITE_CONVERSIONS',
+            optimizationGoal: dto.advancedMode && dto.performanceGoal
+              ? dto.performanceGoal
+              : 'OFFSITE_CONVERSIONS',
             billingEvent: 'IMPRESSIONS',
-            attributionSpec: [{ event_type: 'CLICK_THROUGH', window_days: 1 }],
+            attributionSpec: dto.advancedMode && dto.attributionModel
+              ? buildAttributionSpec(dto.attributionModel)
+              : [{ event_type: 'CLICK_THROUGH', window_days: 1 }],
             destinationUrl,
           };
           if (pixelExternalId) {
@@ -368,13 +385,20 @@ export class CampaignsService {
             Object.assign(targeting, dto.targeting);
           }
 
+          // Schedule: pass through ISO8601 times for Meta API
+          if (dto.startTime) targeting.startTime = dto.startTime;
+          if (dto.endTime) targeting.endTime = dto.endTime;
+          if (dto.scheduleTimezone) targeting.scheduleTimezone = dto.scheduleTimezone;
+
           const adset = await tx.adset.create({
             data: {
               campaignId: campaign.id,
               sellerId,
               name: `Adset ${si + 1}`,
               status: 'PAUSED' as any,
-              optimizationGoal: 'OFFSITE_CONVERSIONS',
+              optimizationGoal: dto.advancedMode && dto.performanceGoal
+                ? dto.performanceGoal
+                : 'OFFSITE_CONVERSIONS',
               targeting: targeting as any,
             },
             select: { id: true },
@@ -606,7 +630,7 @@ export class CampaignsService {
     const metaPayload = {
       name: campaign.name,
       objective: 'OUTCOME_SALES',
-      status: 'ACTIVE',
+      status: campaign.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE',
       special_ad_categories: [] as string[],
       bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
       ...budgetField,
@@ -627,7 +651,7 @@ export class CampaignsService {
       where: { id: campaignId },
       data: {
         externalCampaignId: metaCampaign.id,
-        status: 'ACTIVE' as any,
+        status: campaign.status as any,
       },
     });
 
@@ -671,7 +695,62 @@ export class CampaignsService {
       `Found ${adsets.length} adsets to push to Meta for campaign ${campaignId}`,
     );
 
-    // ── Step 3: Create each adset on Meta ──────────────────────────────────
+    // ── Step 3+4: Create adsets + ads on Meta in background ───────────────
+    // Fire-and-forget: process adsets/ads asynchronously so the HTTP
+    // response returns quickly. Prevents frontend 30s timeout.
+    this.pushAdsetsAndAds(
+      campaign.adAccountId,
+      campaignId,
+      actId,
+      metaCampaign.id,
+      adsets,
+      campaign.status,
+    ).catch((err) =>
+      this.logger.error(
+        `Background pushAdsetsAndAds failed for campaign ${campaignId}: ${(err as Error).message}`,
+      ),
+    );
+
+    // Return immediately — campaign is created on Meta, adsets/ads are processing
+    const updated = await this.prisma.campaign.findFirst({
+      where: { id: campaignId },
+      select: CAMPAIGN_DETAIL_SELECT,
+    });
+
+    return toCampaignDetail(updated!);
+  }
+
+  /**
+   * Background worker: push adsets + ads to Meta.
+   * Called fire-and-forget from launchCampaign() to avoid HTTP timeout.
+   */
+  private async pushAdsetsAndAds(
+    adAccountId: string,
+    campaignId: string,
+    actId: string,
+    metaCampaignId: string,
+    adsets: Array<{
+      id: string;
+      name: string;
+      targeting: unknown;
+      optimizationGoal: string | null;
+      ads: Array<{
+        id: string;
+        name: string;
+        adPosts: Array<{
+          id: string;
+          postSource: string;
+          externalPostId: string | null;
+          creativeConfig: unknown;
+          page: { externalId: string } | null;
+          assetMedia: { url: string; mediaType: string } | null;
+          assetThumbnail: { url: string } | null;
+          assetAdtext: { primaryText: string | null; headline: string | null; description: string | null } | null;
+        }>;
+      }>;
+    }>,
+    campaignStatus: string,
+  ): Promise<void> {
     let adsetsPushed = 0;
     let adsPushed = 0;
 
@@ -691,15 +770,23 @@ export class CampaignsService {
 
         // Build adset payload
         const adsetPayload: Record<string, unknown> = {
-          campaign_id: metaCampaign.id,
+          campaign_id: metaCampaignId,
           name: adset.name,
           optimization_goal:
             (targeting.optimizationGoal as string) || 'OFFSITE_CONVERSIONS',
           billing_event:
             (targeting.billingEvent as string) || 'IMPRESSIONS',
-          status: 'ACTIVE',
+          status: campaignStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE',
           targeting: JSON.stringify(metaTargeting),
         };
+
+        // Schedule: start_time / end_time for the adset
+        if (targeting.startTime) {
+          adsetPayload.start_time = targeting.startTime;
+        }
+        if (targeting.endTime) {
+          adsetPayload.end_time = targeting.endTime;
+        }
 
         // promoted_object required for conversion campaigns
         if (targeting.promotedObject) {
@@ -720,7 +807,7 @@ export class CampaignsService {
         );
 
         const metaAdset = await this.metaService.post<{ id: string }>(
-          campaign.adAccountId,
+          adAccountId,
           `${actId}/adsets`,
           adsetPayload,
         );
@@ -730,206 +817,31 @@ export class CampaignsService {
           where: { id: adset.id },
           data: {
             externalAdsetId: metaAdset.id,
-            status: 'ACTIVE' as any,
+            status: campaignStatus as any,
           },
         });
 
         this.logger.log(`Adset "${adset.name}" → Meta ID: ${metaAdset.id}`);
         adsetsPushed++;
 
-        // ── Step 4: Create each ad on Meta ──────────────────────────────────
-        for (const ad of adset.ads) {
-          try {
-            const adPost = ad.adPosts?.[0];
+        // ── Create ads in parallel within this adset ──────────────────────
+        const adResults = await Promise.allSettled(
+          adset.ads.map((ad) =>
+            this.pushSingleAd(
+              adAccountId,
+              campaignId,
+              adset.id,
+              actId,
+              metaAdset.id,
+              ad,
+              targeting,
+              campaignStatus,
+            ),
+          ),
+        );
 
-            if (!adPost?.page?.externalId) {
-              this.logger.warn(
-                `Ad "${ad.name}" (${ad.id}) has no page connection — skipping Meta push`,
-              );
-              await this.prisma.ad.update({
-                where: { id: ad.id },
-                data: { status: 'ACTIVE' as any },
-              });
-              continue;
-            }
-
-            const pageExternalId = adPost.page.externalId;
-            const baseDestUrl =
-              (targeting.destinationUrl as string) || '';
-
-            // Build per-ad destination URL with full UTM tracking
-            const utmParams = new URLSearchParams({
-              utm_source: 'facebook',
-              utm_medium: 'paid',
-              utm_campaign: campaignId,
-              utm_term: adset.id,
-              utm_content: ad.id,
-            });
-            const separator = baseDestUrl.includes('?') ? '&' : '?';
-            const destinationUrl = baseDestUrl
-              ? `${baseDestUrl}${separator}${utmParams.toString()}`
-              : '';
-
-            // ── Resolve creative data ──
-            // Priority: creativeConfig (new system) > old product assets (fallback)
-            const cc = (adPost.creativeConfig ?? {}) as Record<string, unknown>;
-            const hasCreativeConfig = Object.keys(cc).length > 0;
-
-            // Text fields: prefer creativeConfig, fallback to old assetAdtext
-            const primaryText =
-              (cc.primaryText as string) ||
-              adPost.assetAdtext?.primaryText ||
-              '';
-            const headline =
-              (cc.headline as string) ||
-              adPost.assetAdtext?.headline ||
-              '';
-            const description =
-              (cc.description as string) ||
-              adPost.assetAdtext?.description ||
-              '';
-
-            // Media: prefer creativeConfig, fallback to old assetMedia
-            const videoUrl = (cc.videoUrl as string) || null;
-            const thumbnailUrl =
-              (cc.thumbnailUrl as string) ||
-              adPost.assetThumbnail?.url ||
-              null;
-            const isVideoAd =
-              cc.adFormat === 'VIDEO_AD' ||
-              (videoUrl !== null) ||
-              adPost.assetMedia?.mediaType === 'VIDEO';
-            const imageUrl =
-              adPost.assetMedia?.mediaType === 'IMAGE'
-                ? adPost.assetMedia.url
-                : null;
-
-            // Build ad creative
-            const creativePayload: Record<string, unknown> = {
-              name: `Creative - ${ad.name}`,
-            };
-
-            if (
-              adPost.postSource === 'EXISTING' &&
-              adPost.externalPostId
-            ) {
-              // Use existing Facebook post
-              creativePayload.object_story_id = `${pageExternalId}_${adPost.externalPostId}`;
-            } else if (isVideoAd && (videoUrl || adPost.assetMedia?.url)) {
-              // ── VIDEO AD: Upload video to Meta first ──
-              const videoSrc = videoUrl || adPost.assetMedia?.url;
-              this.logger.log(
-                `Uploading video for ad "${ad.name}": ${videoSrc}`,
-              );
-
-              const videoUpload = await this.metaService.post<{
-                id: string;
-              }>(campaign.adAccountId, `${actId}/advideos`, {
-                file_url: videoSrc,
-              });
-
-              this.logger.log(
-                `Video uploaded → Meta video ID: ${videoUpload.id}`,
-              );
-
-              // Build video_data creative (per PDF guide spec)
-              const videoData: Record<string, unknown> = {
-                video_id: videoUpload.id,
-                message: primaryText,
-                title: headline,
-                link_description: description,
-                call_to_action: {
-                  type: 'SHOP_NOW',
-                  value: { link: destinationUrl },
-                },
-              };
-
-              // Thumbnail as video poster image
-              if (thumbnailUrl) {
-                videoData.image_url = thumbnailUrl;
-              }
-
-              creativePayload.object_story_spec = JSON.stringify({
-                page_id: pageExternalId,
-                video_data: videoData,
-              });
-            } else {
-              // ── IMAGE / LINK AD ──
-              const linkData: Record<string, unknown> = {
-                link: destinationUrl,
-                message: primaryText,
-                call_to_action: {
-                  type: 'SHOP_NOW',
-                  value: { link: destinationUrl },
-                },
-              };
-              if (headline) linkData.name = headline;
-              if (description) linkData.description = description;
-
-              // Image from old assetMedia or thumbnail
-              if (imageUrl) {
-                linkData.picture = imageUrl;
-              } else if (thumbnailUrl) {
-                linkData.picture = thumbnailUrl;
-              }
-
-              creativePayload.object_story_spec = JSON.stringify({
-                page_id: pageExternalId,
-                link_data: linkData,
-              });
-            }
-
-            this.logger.log(
-              `Creating creative for ad "${ad.name}": ${JSON.stringify(creativePayload)}`,
-            );
-
-            const metaCreative = await this.metaService.post<{
-              id: string;
-            }>(
-              campaign.adAccountId,
-              `${actId}/adcreatives`,
-              creativePayload,
-            );
-
-            // Create ad on Meta
-            const adPayload: Record<string, unknown> = {
-              adset_id: metaAdset.id,
-              creative: JSON.stringify({
-                creative_id: metaCreative.id,
-              }),
-              name: ad.name,
-              status: 'ACTIVE',
-            };
-
-            this.logger.log(
-              `Creating ad "${ad.name}" on Meta: ${JSON.stringify(adPayload)}`,
-            );
-
-            const metaAd = await this.metaService.post<{ id: string }>(
-              campaign.adAccountId,
-              `${actId}/ads`,
-              adPayload,
-            );
-
-            // Update local ad
-            await this.prisma.ad.update({
-              where: { id: ad.id },
-              data: {
-                externalAdId: metaAd.id,
-                status: 'ACTIVE' as any,
-              },
-            });
-
-            this.logger.log(
-              `Ad "${ad.name}" → Meta ID: ${metaAd.id}`,
-            );
-            adsPushed++;
-          } catch (err) {
-            this.logger.error(
-              `Failed to create ad "${ad.name}" (${ad.id}) on Meta: ${(err as Error).message}`,
-            );
-            // Continue with remaining ads
-          }
+        for (const result of adResults) {
+          if (result.status === 'fulfilled' && result.value) adsPushed++;
         }
       } catch (err) {
         this.logger.error(
@@ -940,19 +852,223 @@ export class CampaignsService {
     }
 
     this.logger.log(
-      `Campaign "${campaign.name}" launched: ` +
-        `meta_campaign=${metaCampaign.id}, ` +
+      `Campaign launched (background): ` +
+        `meta_campaign=${metaCampaignId}, ` +
         `adsets_pushed=${adsetsPushed}/${adsets.length}, ` +
         `ads_pushed=${adsPushed}`,
     );
+  }
 
-    // Return full campaign detail
-    const updated = await this.prisma.campaign.findFirst({
-      where: { id: campaignId },
-      select: CAMPAIGN_DETAIL_SELECT,
-    });
+  /**
+   * Push a single ad (video upload + creative + ad) to Meta.
+   * Returns true if successful, false otherwise.
+   */
+  private async pushSingleAd(
+    adAccountId: string,
+    campaignId: string,
+    adsetId: string,
+    actId: string,
+    metaAdsetId: string,
+    ad: {
+      id: string;
+      name: string;
+      adPosts: Array<{
+        id: string;
+        postSource: string;
+        externalPostId: string | null;
+        creativeConfig: unknown;
+        page: { externalId: string } | null;
+        assetMedia: { url: string; mediaType: string } | null;
+        assetThumbnail: { url: string } | null;
+        assetAdtext: { primaryText: string | null; headline: string | null; description: string | null } | null;
+      }>;
+    },
+    targeting: Record<string, unknown>,
+    campaignStatus: string,
+  ): Promise<boolean> {
+    try {
+      const adPost = ad.adPosts?.[0];
 
-    return toCampaignDetail(updated!);
+      if (!adPost?.page?.externalId) {
+        this.logger.warn(
+          `Ad "${ad.name}" (${ad.id}) has no page connection — skipping Meta push`,
+        );
+        await this.prisma.ad.update({
+          where: { id: ad.id },
+          data: { status: campaignStatus as any },
+        });
+        return false;
+      }
+
+      const pageExternalId = adPost.page.externalId;
+      const baseDestUrl =
+        (targeting.destinationUrl as string) || '';
+
+      // Build per-ad destination URL with full UTM tracking
+      const utmParams = new URLSearchParams({
+        utm_source: 'facebook',
+        utm_medium: 'paid',
+        utm_campaign: campaignId,
+        utm_term: adsetId,
+        utm_content: ad.id,
+      });
+      const separator = baseDestUrl.includes('?') ? '&' : '?';
+      const destinationUrl = baseDestUrl
+        ? `${baseDestUrl}${separator}${utmParams.toString()}`
+        : '';
+
+      // ── Resolve creative data ──
+      const cc = (adPost.creativeConfig ?? {}) as Record<string, unknown>;
+
+      // Text fields: prefer creativeConfig, fallback to old assetAdtext
+      const primaryText =
+        (cc.primaryText as string) ||
+        adPost.assetAdtext?.primaryText ||
+        '';
+      const headline =
+        (cc.headline as string) ||
+        adPost.assetAdtext?.headline ||
+        '';
+      const description =
+        (cc.description as string) ||
+        adPost.assetAdtext?.description ||
+        '';
+
+      // Media: prefer creativeConfig, fallback to old assetMedia
+      const videoUrl = (cc.videoUrl as string) || null;
+      const thumbnailUrl =
+        (cc.thumbnailUrl as string) ||
+        adPost.assetThumbnail?.url ||
+        null;
+      const isVideoAd =
+        cc.adFormat === 'VIDEO_AD' ||
+        (videoUrl !== null) ||
+        adPost.assetMedia?.mediaType === 'VIDEO';
+      const imageUrl =
+        adPost.assetMedia?.mediaType === 'IMAGE'
+          ? adPost.assetMedia.url
+          : null;
+
+      // Build ad creative
+      const creativePayload: Record<string, unknown> = {
+        name: `Creative - ${ad.name}`,
+      };
+
+      if (
+        adPost.postSource === 'EXISTING' &&
+        adPost.externalPostId
+      ) {
+        creativePayload.object_story_id = `${pageExternalId}_${adPost.externalPostId}`;
+      } else if (isVideoAd && (videoUrl || adPost.assetMedia?.url)) {
+        const videoSrc = videoUrl || adPost.assetMedia?.url;
+        this.logger.log(
+          `Uploading video for ad "${ad.name}": ${videoSrc}`,
+        );
+
+        const videoUpload = await this.metaService.post<{
+          id: string;
+        }>(adAccountId, `${actId}/advideos`, {
+          file_url: videoSrc,
+        });
+
+        this.logger.log(
+          `Video uploaded → Meta video ID: ${videoUpload.id}`,
+        );
+
+        const videoData: Record<string, unknown> = {
+          video_id: videoUpload.id,
+          message: primaryText,
+          title: headline,
+          link_description: description,
+          call_to_action: {
+            type: 'SHOP_NOW',
+            value: { link: destinationUrl },
+          },
+        };
+
+        if (thumbnailUrl) {
+          videoData.image_url = thumbnailUrl;
+        }
+
+        creativePayload.object_story_spec = JSON.stringify({
+          page_id: pageExternalId,
+          video_data: videoData,
+        });
+      } else {
+        const linkData: Record<string, unknown> = {
+          link: destinationUrl,
+          message: primaryText,
+          call_to_action: {
+            type: 'SHOP_NOW',
+            value: { link: destinationUrl },
+          },
+        };
+        if (headline) linkData.name = headline;
+        if (description) linkData.description = description;
+
+        if (imageUrl) {
+          linkData.picture = imageUrl;
+        } else if (thumbnailUrl) {
+          linkData.picture = thumbnailUrl;
+        }
+
+        creativePayload.object_story_spec = JSON.stringify({
+          page_id: pageExternalId,
+          link_data: linkData,
+        });
+      }
+
+      this.logger.log(
+        `Creating creative for ad "${ad.name}": ${JSON.stringify(creativePayload)}`,
+      );
+
+      const metaCreative = await this.metaService.post<{
+        id: string;
+      }>(
+        adAccountId,
+        `${actId}/adcreatives`,
+        creativePayload,
+      );
+
+      // Create ad on Meta
+      const adPayload: Record<string, unknown> = {
+        adset_id: metaAdsetId,
+        creative: JSON.stringify({
+          creative_id: metaCreative.id,
+        }),
+        name: ad.name,
+        status: campaignStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE',
+      };
+
+      this.logger.log(
+        `Creating ad "${ad.name}" on Meta: ${JSON.stringify(adPayload)}`,
+      );
+
+      const metaAd = await this.metaService.post<{ id: string }>(
+        adAccountId,
+        `${actId}/ads`,
+        adPayload,
+      );
+
+      // Update local ad
+      await this.prisma.ad.update({
+        where: { id: ad.id },
+        data: {
+          externalAdId: metaAd.id,
+          status: campaignStatus as any,
+        },
+      });
+
+      this.logger.log(
+        `Ad "${ad.name}" → Meta ID: ${metaAd.id}`,
+      );
+      return true;
+    } catch (err) {
+      this.logger.error(
+        `Failed to create ad "${ad.name}" (${ad.id}) on Meta: ${(err as Error).message}`,
+      );
+      return false;
+    }
   }
 
   // ─── PAUSE ─────────────────────────────────────────────────────────────────

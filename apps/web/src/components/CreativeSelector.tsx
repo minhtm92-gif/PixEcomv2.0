@@ -41,6 +41,7 @@ interface CreativeSelectorProps {
   adsPerAdset: number;
   adCreatives: AdCreativeConfig[];
   onAdCreativeChange: (index: number, config: AdCreativeConfig) => void;
+  productId?: string;
 }
 
 // ── Component ───────────────────────────────────────────────────────────
@@ -49,19 +50,22 @@ export function CreativeSelector({
   adsPerAdset,
   adCreatives,
   onAdCreativeChange,
+  productId,
 }: CreativeSelectorProps) {
   const [activeTab, setActiveTab] = useState(0);
   const [creatives, setCreatives] = useState<CreativeListItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch all READY creatives
+  // Fetch READY creatives, filtered by productId when available
   useEffect(() => {
     setLoading(true);
-    apiGet<CreativesListResponse>('/creatives?status=READY&limit=100')
+    let url = '/creatives?status=READY&limit=100';
+    if (productId) url += `&productId=${productId}`;
+    apiGet<CreativesListResponse>(url)
       .then((res) => setCreatives(res.data ?? []))
       .catch((err) => toastApiError(err as ApiError))
       .finally(() => setLoading(false));
-  }, []);
+  }, [productId]);
 
   const currentAd = adCreatives[activeTab] ?? { adFormat: 'VIDEO_AD' as AdFormat };
   const currentFormat = currentAd.adFormat;
@@ -276,7 +280,7 @@ function SlotPicker({ slot, available, selectedId, selectedCreative, onSelect }:
           <div className="absolute top-full left-0 right-0 z-20 mt-1 bg-card border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto">
             {available.length === 0 ? (
               <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                No READY {slot.label.toLowerCase()} creatives.{' '}
+                No READY {slot.label.toLowerCase()} creatives for this product.{' '}
                 <a href="/creatives" target="_blank" className="text-primary underline">
                   Create one
                 </a>

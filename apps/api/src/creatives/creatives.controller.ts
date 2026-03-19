@@ -41,6 +41,7 @@ export class CreativesController {
     @Query('status') status?: string,
     @Query('creativeType') creativeType?: string,
     @Query('q') q?: string,
+    @Query('productId') productId?: string,
   ) {
     return this.service.listCreatives(user.sellerId, {
       page: page ? parseInt(page, 10) : undefined,
@@ -48,6 +49,7 @@ export class CreativesController {
       status,
       creativeType,
       q,
+      productId,
     });
   }
 

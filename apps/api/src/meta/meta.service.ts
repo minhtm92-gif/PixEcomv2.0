@@ -18,6 +18,9 @@ const META_GRAPH_BASE = 'https://graph.facebook.com/v22.0';
 /** Retry configuration for transient 5xx errors */
 const RETRY_DELAYS_MS = [1_000, 2_000, 4_000]; // 3 attempts: 1s, 2s, 4s backoff
 
+/** Per-request timeout (ms) to prevent indefinite hangs */
+const DEFAULT_TIMEOUT_MS = 60_000; // 60 seconds
+
 /** Meta API error codes → NestJS exception mapping */
 const META_ERROR_CODE_MAP: Record<number, (msg: string) => never> = {
   190: (msg) => {
@@ -162,14 +165,18 @@ export class MetaService {
 
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
       try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+
         const response = await fetch(url, {
           method,
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
           },
+          signal: controller.signal,
           ...(body !== undefined && { body: JSON.stringify(body) }),
-        });
+        }).finally(() => clearTimeout(timer));
 
         // Retry on transient server errors (5xx)
         if (response.status >= 500 && response.status < 600) {

@@ -627,6 +627,14 @@ export interface CreateCampaignBatchDto {
   pageId?: string;
   targeting?: Record<string, unknown>;
   adCreatives?: AdCreativeConfig[];
+  startTime?: string;
+  endTime?: string;
+  advancedMode?: boolean;
+  performanceGoal?: string;
+  attributionModel?: {
+    clickWindowDays?: number;
+    viewWindowDays?: number;
+  };
 }
 
 export interface BatchCreateResponse {
