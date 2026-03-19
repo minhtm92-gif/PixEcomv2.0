@@ -876,15 +876,35 @@ export class StorefrontService {
   // STOREFRONT EVENT TRACKING
   // ─────────────────────────────────────────────────────────────────────────
 
-  async trackEvent(sellerSlug: string, dto: TrackEventDto) {
-    // 1. Resolve seller
+  // Known bot user-agent patterns
+  private static readonly BOT_PATTERNS = [
+    'meta-externalads', 'facebookexternalhit', 'facebot',
+    'googlebot', 'bingbot', 'bytespider', 'petalbot',
+    'yandexbot', 'ahrefsbot', 'semrushbot', 'dotbot',
+    'headlesschrome', 'phantomjs', 'prerender', 'crawler',
+    'spider', 'slurp', 'mediapartners',
+  ];
+
+  private isBot(userAgent?: string): boolean {
+    if (!userAgent) return false;
+    const ua = userAgent.toLowerCase();
+    return StorefrontService.BOT_PATTERNS.some(p => ua.includes(p));
+  }
+
+  async trackEvent(sellerSlug: string, dto: TrackEventDto, userAgent?: string, ip?: string) {
+    // 1. Filter bots
+    if (this.isBot(userAgent)) {
+      return { ok: false, reason: 'bot' };
+    }
+
+    // 2. Resolve seller
     const seller = await this.prisma.seller.findUnique({
       where: { slug: sellerSlug },
       select: { id: true },
     });
     if (!seller) return { ok: false };
 
-    // 2. Resolve sellpage
+    // 3. Resolve sellpage
     let sellpageId: string | null = null;
     if (dto.sellpageSlug) {
       const sp = await this.prisma.sellpage.findFirst({
@@ -894,7 +914,14 @@ export class StorefrontService {
       sellpageId = sp?.id || null;
     }
 
-    // 3. Insert event
+    // 4. Hash IP for analytics (not PII)
+    let ipHash: string | null = null;
+    if (ip) {
+      const crypto = require('crypto');
+      ipHash = crypto.createHash('sha256').update(ip).digest('hex').substring(0, 16);
+    }
+
+    // 5. Insert event
     await this.prisma.storefrontEvent.create({
       data: {
         sellerId: seller.id,
@@ -907,6 +934,8 @@ export class StorefrontService {
         sessionId: dto.sessionId || null,
         utmSource: dto.utmSource || null,
         utmCampaign: dto.utmCampaign || null,
+        userAgent: userAgent?.substring(0, 500) || null,
+        ipHash,
       },
     });
 

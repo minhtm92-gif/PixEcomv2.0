@@ -2,9 +2,11 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { StorefrontService } from './storefront.service';
@@ -110,8 +112,10 @@ export class StorefrontController {
   trackEvent(
     @Param('sellerSlug') sellerSlug: string,
     @Body() dto: TrackEventDto,
+    @Headers('user-agent') userAgent?: string,
+    @Req() req?: any,
   ) {
-    return this.storefront.trackEvent(sellerSlug, dto);
+    return this.storefront.trackEvent(sellerSlug, dto, userAgent, req?.ip);
   }
 
   /**
