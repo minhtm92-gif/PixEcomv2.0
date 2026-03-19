@@ -110,6 +110,9 @@ export interface SellpageData {
   discounts: SellpageDiscount[];
   reviews: SellpageReview[];
   socialProof: { viewers: number; purchased: number };
+  tracking?: {
+    pixelId: string | null;
+  };
 }
 
 export interface SellpageReview {
@@ -147,6 +150,8 @@ export interface CheckoutRequest {
   utmSource?: string;
   utmMedium?: string;
   utmCampaign?: string;
+  utmTerm?: string;
+  utmContent?: string;
 }
 
 export interface CheckoutResponse {

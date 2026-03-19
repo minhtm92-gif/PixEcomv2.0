@@ -18,6 +18,15 @@ export class AdsManagerController {
 
   // ─── READ ENDPOINTS (unchanged) ──────────────────────────────────────────
 
+  @Get('live-preview')
+  getLivePreview(
+    @Req() req: any,
+    @Query('sellpageId') sellpageId?: string,
+    @Query('date') date?: string,
+  ) {
+    return this.service.getLivePreview(req.user.sellerId, sellpageId, date);
+  }
+
   @Get('campaigns')
   getCampaigns(@Req() req: any, @Query() query: CampaignsQueryDto) {
     return this.service.getCampaigns(req.user.sellerId, req.user.userId, query);

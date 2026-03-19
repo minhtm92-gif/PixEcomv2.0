@@ -43,6 +43,10 @@ import {
 import { storeHref } from '@/lib/storefrontLinks';
 import { resolveColor, themeVars } from '@/lib/storeTheme';
 
+declare global {
+  interface Window { fbq: any; _fbq: any; }
+}
+
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
 // ─── Shared types ───────────────────────────────────────────────────────────
@@ -115,7 +119,7 @@ function CheckoutForm() {
 
   // Read URL params reliably from window.location (avoids React closure/Suspense timing issues)
   function getUrlParams() {
-    if (typeof window === 'undefined') return { qty: 1, variantId: null as string | null, price: 0, comparePrice: 0, upsellPct: 0, variantLabel: '' };
+    if (typeof window === 'undefined') return { qty: 1, variantId: null as string | null, price: 0, comparePrice: 0, upsellPct: 0, variantLabel: '', pixelId: '', utmSource: '', utmMedium: '', utmCampaign: '', utmTerm: '', utmContent: '' };
     const sp = new URLSearchParams(window.location.search);
     return {
       qty: Number(sp.get('qty')) || 1,
@@ -124,6 +128,12 @@ function CheckoutForm() {
       comparePrice: Number(sp.get('comparePrice')) || 0,
       upsellPct: Number(sp.get('upsellPct')) || 0,
       variantLabel: sp.get('variant') || '',
+      pixelId: sp.get('pixelId') || '',
+      utmSource: sp.get('utm_source') || '',
+      utmMedium: sp.get('utm_medium') || '',
+      utmCampaign: sp.get('utm_campaign') || '',
+      utmTerm: sp.get('utm_term') || '',
+      utmContent: sp.get('utm_content') || '',
     };
   }
 
@@ -168,6 +178,44 @@ function CheckoutForm() {
 
   // SellpageData for building checkout request (need product.id, variant info)
   const [sellpageData, setSellpageData] = useState<SellpageData | null>(null);
+
+  // Meta Pixel + UTM state (read from URL params passed by product page)
+  const [pixelId] = useState(() => getUrlParams().pixelId);
+  const [utmParams] = useState(() => {
+    const up = getUrlParams();
+    return { utmSource: up.utmSource, utmMedium: up.utmMedium, utmCampaign: up.utmCampaign, utmTerm: up.utmTerm, utmContent: up.utmContent };
+  });
+
+  // Meta Pixel: inject fbq script when pixelId is available
+  useEffect(() => {
+    if (!pixelId || typeof window === 'undefined') return;
+    if (window.fbq) return; // Already loaded
+
+    !function(f: any,b: any,e: any,v: any,n?: any,t?: any,s?: any){
+      if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)
+    }(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+
+    window.fbq('init', pixelId);
+    window.fbq('track', 'PageView');
+  }, [pixelId]);
+
+  // Meta Pixel: fire InitiateCheckout when page loads with product data
+  useEffect(() => {
+    if (!pixelId || !product) return;
+    window.fbq?.('track', 'InitiateCheckout', {
+      content_ids: [product.id],
+      content_name: product.name,
+      content_type: 'product',
+      value: product.price * qty,
+      currency: 'USD',
+      num_items: qty,
+    });
+  }, [product?.id, pixelId]);
 
   // ── Fetch data ──
   useEffect(() => {
@@ -325,6 +373,11 @@ function CheckoutForm() {
       discountId: selectedDiscount ?? undefined,
       paymentMethod: payMethod,
       sellpageSlug: slug,
+      utmSource: utmParams.utmSource || undefined,
+      utmMedium: utmParams.utmMedium || undefined,
+      utmCampaign: utmParams.utmCampaign || undefined,
+      utmTerm: utmParams.utmTerm || undefined,
+      utmContent: utmParams.utmContent || undefined,
     };
   }
 
@@ -361,6 +414,16 @@ function CheckoutForm() {
 
       setOrderNumber(res.orderNumber);
       setPlaced(true);
+
+      // Meta Pixel: Purchase event
+      window.fbq?.('track', 'Purchase', {
+        content_ids: [product!.id],
+        content_name: product!.name,
+        content_type: 'product',
+        value: total,
+        currency: 'USD',
+        num_items: qty,
+      });
     } catch (err: any) {
       setError(err.message ?? 'Payment failed. Please try again.');
     } finally {
@@ -387,6 +450,16 @@ function CheckoutForm() {
       setSubmitting(true);
       await confirmPayment(storeSlug, orderId, { paypalOrderId: data.orderID });
       setPlaced(true);
+
+      // Meta Pixel: Purchase event
+      window.fbq?.('track', 'Purchase', {
+        content_ids: [product?.id],
+        content_name: product?.name,
+        content_type: 'product',
+        value: total,
+        currency: 'USD',
+        num_items: qty,
+      });
     } catch (err: any) {
       setError(err.message ?? 'PayPal payment confirmation failed.');
     } finally {

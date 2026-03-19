@@ -27,6 +27,10 @@ import { storeHref } from '@/lib/storefrontLinks';
 import { resolveColor, themeVars } from '@/lib/storeTheme';
 import type { GuaranteeConfig } from '@/types/storefront';
 
+declare global {
+  interface Window { fbq: any; _fbq: any; }
+}
+
 const IS_PREVIEW = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true';
 
 function isHtml(text: string): boolean {
@@ -207,6 +211,9 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
   const [rawVariants, setRawVariants] = useState<SellpageVariant[]>(
     hasServerData ? initialData!.product.variants : [],
   );
+  const [trackingPixelId, setTrackingPixelId] = useState<string | null>(
+    hasServerData ? (initialData!.tracking?.pixelId ?? null) : null,
+  );
   const [loading, setLoading] = useState(!IS_PREVIEW && !hasServerData);
   const [error, setError] = useState<string | null>(null);
 
@@ -229,6 +236,7 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
       .then((data) => {
         if (cancelled) return;
         applyData(data, setProduct, setRawVariants, setReviews, setStoreName, setLogoUrl, setThemeColor, setGuaranteeConfig);
+        setTrackingPixelId(data.tracking?.pixelId ?? null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -250,6 +258,37 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
     }
     setSelectedVariants(init);
   }, [product]);
+
+  // Meta Pixel: inject fbq script when pixelId is available
+  useEffect(() => {
+    const pixelId = trackingPixelId;
+    if (!pixelId || typeof window === 'undefined') return;
+    if (window.fbq) return; // Already loaded
+
+    !function(f: any,b: any,e: any,v: any,n?: any,t?: any,s?: any){
+      if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)
+    }(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+
+    window.fbq('init', pixelId);
+    window.fbq('track', 'PageView');
+  }, [trackingPixelId]);
+
+  // Meta Pixel: fire ViewContent when product loads
+  useEffect(() => {
+    if (!trackingPixelId || !product) return;
+    window.fbq?.('track', 'ViewContent', {
+      content_ids: [product.id],
+      content_name: product.name,
+      content_type: 'product',
+      value: product.price,
+      currency: 'USD',
+    });
+  }, [product?.id, trackingPixelId]);
 
   if (error) {
     return (
@@ -307,6 +346,15 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
     .map(([k, v]) => `${k}: ${v.charAt(0).toUpperCase() + v.slice(1)}`)
     .join('  ');
   if (varLabel) checkoutParams.set('variant', varLabel);
+  // UTM passthrough + pixelId for checkout
+  if (typeof window !== 'undefined') {
+    const urlParams = new URLSearchParams(window.location.search);
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].forEach(key => {
+      const val = urlParams.get(key);
+      if (val) checkoutParams.set(key, val);
+    });
+  }
+  if (trackingPixelId) checkoutParams.set('pixelId', trackingPixelId);
   const checkoutUrl = storeHref(storeSlug, `/${slug}/checkout?${checkoutParams.toString()}`);
 
   function handleVariantChange(name: string, value: string) {
@@ -348,6 +396,16 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
     setAddedToCart(true);
     setCartOpen(true);
     setTimeout(() => setAddedToCart(false), 2000);
+
+    // Meta Pixel: AddToCart event
+    window.fbq?.('track', 'AddToCart', {
+      content_ids: [product!.id],
+      content_name: product!.name,
+      content_type: 'product',
+      value: effectivePrice * qty,
+      currency: 'USD',
+      num_items: qty,
+    });
   }
 
   return (
@@ -418,14 +476,15 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
               {product.comparePrice > effectivePrice && (
                 <span className="text-lg text-gray-400 line-through">${product.comparePrice.toFixed(2)}</span>
               )}
-              {off > 0 && (
-                <span className="bg-red-100 text-red-600 text-sm font-bold px-2.5 py-1 rounded-full">{off}% OFF</span>
-              )}
-              {upsellResult && (
-                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-0.5 rounded-full animate-pulse">
-                  Upsell {upsellResult.discountPct}% applied!
+              {upsellResult ? (
+                <span className="bg-green-100 text-green-700 text-sm font-bold px-2.5 py-1 rounded-full">
+                  {off}% OFF
                 </span>
-              )}
+              ) : off > 0 ? (
+                <span className="bg-red-100 text-red-600 text-sm font-bold px-2.5 py-1 rounded-full">
+                  {off}% OFF
+                </span>
+              ) : null}
             </div>
 
             {product.variants.length > 0 && (
@@ -445,8 +504,8 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
               }
               if (stock === 0 && product.allowOutOfStockPurchase) {
                 return (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full">
-                    Made to order — ships in 3-5 days
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-3 py-1.5 rounded-full">
+                    In stock — ready to ship
                   </span>
                 );
               }

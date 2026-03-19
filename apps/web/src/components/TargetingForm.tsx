@@ -168,7 +168,7 @@ export function TargetingForm({ value, onChange, compact = false }: TargetingFor
               {/* Backdrop to close dropdown */}
               <div className="fixed inset-0 z-40" onClick={() => setCountryDropdownOpen(false)} />
 
-              <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-popover border border-border rounded-lg shadow-lg">
+              <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto bg-card border border-border rounded-lg shadow-lg">
                 {filteredCountries.map((c) => (
                   <button
                     key={c.code}

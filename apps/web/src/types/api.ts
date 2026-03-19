@@ -735,6 +735,39 @@ export function isDraftAdUnit(c: { status: AdUnitStatus; externalAdsetId?: strin
   return c.status === 'PAUSED' && !extId;
 }
 
+// ── Live Preview ──
+export interface LivePreviewCampaign {
+  campaignId: string;
+  campaignName: string;
+  contentViews: number;
+  addToCart: number;
+  checkout: number;
+  purchases: number;
+  spend: number;
+  revenue: number;
+  cr1: number;
+  cr2: number;
+  cr: number;
+}
+
+export interface LivePreviewTotals {
+  contentViews: number;
+  addToCart: number;
+  checkout: number;
+  purchases: number;
+  spend: number;
+  revenue: number;
+  cr1: number;
+  cr2: number;
+  cr: number;
+}
+
+export interface LivePreviewResponse {
+  totals: LivePreviewTotals;
+  byCampaign: LivePreviewCampaign[];
+  updatedAt: string;
+}
+
 // ── Health ──
 export interface HealthResponse {
   status: string;

@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   Activity,
+  HeartPulse,
   Rocket,
   ArrowRightLeft,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import { cn } from '@/lib/cn';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 export const NAV = [
+  { label: 'Live Preview', href: '/live-preview', icon: Activity },
   { label: 'Orders', href: '/orders', icon: ClipboardList },
   { label: 'Ads Manager', href: '/ads-manager', icon: Megaphone },
   { label: 'Campaigns', href: '/campaigns', icon: Rocket },
@@ -29,7 +31,7 @@ export const NAV = [
   { label: 'Creatives', href: '/creatives', icon: Palette },
   { label: 'Products', href: '/products', icon: ShoppingBag },
   { label: 'Settings', href: '/settings', icon: Settings },
-  { label: 'Health', href: '/debug/health', icon: Activity },
+  { label: 'Health', href: '/debug/health', icon: HeartPulse },
 ];
 
 export function Sidebar() {

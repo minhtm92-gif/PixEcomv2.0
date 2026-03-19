@@ -288,6 +288,29 @@ export class StorefrontService {
       this.reviewsSvc.getProductReviews(sellpage.product.id),
     ]);
 
+    // Resolve Meta Pixel ID: first try SellerSettings, fallback to FbConnection(PIXEL)
+    let pixelId: string | null = null;
+    const sellerSettings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: seller.id },
+      select: { metaPixelId: true },
+    });
+    if (sellerSettings?.metaPixelId) {
+      pixelId = sellerSettings.metaPixelId;
+    } else {
+      const fbPixel = await this.prisma.fbConnection.findFirst({
+        where: {
+          sellerId: seller.id,
+          connectionType: 'PIXEL',
+          isActive: true,
+        },
+        select: { externalId: true },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (fbPixel) {
+        pixelId = fbPixel.externalId;
+      }
+    }
+
     return {
       sellpage: {
         id: sellpage.id,
@@ -353,6 +376,9 @@ export class StorefrontService {
       })),
       reviews,
       socialProof,
+      tracking: {
+        pixelId,
+      },
     };
   }
 

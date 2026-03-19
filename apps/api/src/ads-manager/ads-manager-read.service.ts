@@ -5,6 +5,7 @@ import {
   computeMetrics,
   DEFAULT_PLATFORM,
   RawAdStats,
+  safeDivide,
   zeroRaw,
 } from './ads-manager.constants';
 import { CampaignsQueryDto } from './dto/campaigns-query.dto';
@@ -322,6 +323,96 @@ export class AdsManagerReadService {
     const summary = computeMetrics(summaryRaw);
 
     return { ads: rows, summary };
+  }
+
+  // ── Live Preview ─────────────────────────────────────────────────────────
+
+  async getLivePreview(sellerId: string, sellpageId?: string, date?: string) {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+
+    // 1. Get campaign-level stats for the target date
+    //    If sellpageId provided, only include campaigns linked to that sellpage
+    let scopedCampaignIds: string[] | undefined;
+
+    if (sellpageId) {
+      const scopedCampaigns = await this.prisma.campaign.findMany({
+        where: { sellerId, sellpageId },
+        select: { id: true },
+      });
+      scopedCampaignIds = scopedCampaigns.map((c) => c.id);
+    }
+
+    const campaignStats = await this.prisma.adStatsDaily.findMany({
+      where: {
+        sellerId,
+        entityType: 'CAMPAIGN',
+        statDate: new Date(`${targetDate}T00:00:00.000Z`),
+        ...(scopedCampaignIds ? { entityId: { in: scopedCampaignIds } } : {}),
+      },
+      select: {
+        entityId: true,
+        contentViews: true,
+        addToCart: true,
+        checkoutInitiated: true,
+        purchases: true,
+        purchaseValue: true,
+        spend: true,
+      },
+    });
+
+    // 2. Aggregate totals — sum raw counts, NEVER average ratios
+    const totals = campaignStats.reduce(
+      (acc, s) => ({
+        contentViews: acc.contentViews + (s.contentViews || 0),
+        addToCart: acc.addToCart + (s.addToCart || 0),
+        checkout: acc.checkout + (s.checkoutInitiated || 0),
+        purchases: acc.purchases + (s.purchases || 0),
+        spend: acc.spend + Number(s.spend || 0),
+        revenue: acc.revenue + Number(s.purchaseValue || 0),
+      }),
+      { contentViews: 0, addToCart: 0, checkout: 0, purchases: 0, spend: 0, revenue: 0 },
+    );
+
+    // 3. Compute CRs from aggregated raw totals
+    const cr1 = safeDivide(totals.checkout, totals.contentViews) * 100;
+    const cr2 = safeDivide(totals.purchases, totals.checkout) * 100;
+    const cr = safeDivide(totals.purchases, totals.contentViews) * 100;
+
+    // 4. Campaign breakdown with names
+    const campaignIds = campaignStats.map((s) => s.entityId);
+    const campaigns = await this.prisma.campaign.findMany({
+      where: { id: { in: campaignIds } },
+      select: { id: true, name: true },
+    });
+    const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
+
+    const byCampaign = campaignStats
+      .map((s) => {
+        const cv = s.contentViews || 0;
+        const atc = s.addToCart || 0;
+        const co = s.checkoutInitiated || 0;
+        const po = s.purchases || 0;
+        return {
+          campaignId: s.entityId,
+          campaignName: campaignMap.get(s.entityId) || s.entityId,
+          contentViews: cv,
+          addToCart: atc,
+          checkout: co,
+          purchases: po,
+          spend: Number(s.spend || 0),
+          revenue: Number(s.purchaseValue || 0),
+          cr1: safeDivide(co, cv) * 100,
+          cr2: safeDivide(po, co) * 100,
+          cr: safeDivide(po, cv) * 100,
+        };
+      })
+      .sort((a, b) => b.contentViews - a.contentViews);
+
+    return {
+      totals: { ...totals, cr1, cr2, cr },
+      byCampaign,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   // ── Filters ────────────────────────────────────────────────────────────────
