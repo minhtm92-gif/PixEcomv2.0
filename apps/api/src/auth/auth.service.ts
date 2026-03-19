@@ -473,7 +473,7 @@ export class AuthService {
           email: params.email,
           ipAddress: params.ipAddress,
           userAgent: params.userAgent,
-          metadata: params.metadata ?? undefined,
+          metadata: (params.metadata ?? undefined) as any,
         },
       })
       .catch(() => {});
