@@ -42,6 +42,7 @@ import {
 } from '@/mock/storefront';
 import { storeHref } from '@/lib/storefrontLinks';
 import { resolveColor, themeVars } from '@/lib/storeTheme';
+import { trackEvent } from '@/lib/trackEvent';
 
 declare global {
   interface Window { fbq: any; _fbq: any; }
@@ -216,6 +217,18 @@ function CheckoutForm() {
       num_items: qty,
     });
   }, [product?.id, pixelId]);
+
+  // Server-side event: checkout
+  useEffect(() => {
+    if (!product) return;
+    trackEvent(storeSlug, 'checkout', {
+      sellpageSlug: slug,
+      productId: product.id,
+      variantId: getUrlParams().variantId ?? undefined,
+      value: product.price * qty,
+      quantity: qty,
+    });
+  }, [product?.id]);
 
   // ── Fetch data ──
   useEffect(() => {
@@ -424,6 +437,14 @@ function CheckoutForm() {
         currency: 'USD',
         num_items: qty,
       });
+
+      // Server-side event: purchase (Stripe)
+      trackEvent(storeSlug, 'purchase', {
+        sellpageSlug: slug,
+        productId: product!.id,
+        value: total,
+        quantity: qty,
+      });
     } catch (err: any) {
       setError(err.message ?? 'Payment failed. Please try again.');
     } finally {
@@ -459,6 +480,14 @@ function CheckoutForm() {
         value: total,
         currency: 'USD',
         num_items: qty,
+      });
+
+      // Server-side event: purchase (PayPal)
+      trackEvent(storeSlug, 'purchase', {
+        sellpageSlug: slug,
+        productId: product?.id,
+        value: total,
+        quantity: qty,
       });
     } catch (err: any) {
       setError(err.message ?? 'PayPal payment confirmation failed.');

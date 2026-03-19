@@ -25,6 +25,7 @@ import { StickyDesktopCTA } from '@/components/storefront/StickyDesktopCTA';
 import { fetchSellpage, type SellpageData, type SellpageVariant } from '@/lib/storefrontApi';
 import { storeHref } from '@/lib/storefrontLinks';
 import { resolveColor, themeVars } from '@/lib/storeTheme';
+import { trackEvent } from '@/lib/trackEvent';
 import type { GuaranteeConfig } from '@/types/storefront';
 
 declare global {
@@ -290,6 +291,15 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
     });
   }, [product?.id, trackingPixelId]);
 
+  // Server-side event: content_view
+  useEffect(() => {
+    if (!product) return;
+    trackEvent(storeSlug, 'content_view', {
+      sellpageSlug: slug,
+      productId: product.id,
+    });
+  }, [product?.id]);
+
   if (error) {
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center px-4">
@@ -373,6 +383,15 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
   }
 
   function addToCart() {
+    // Server-side event: add_to_cart
+    trackEvent(storeSlug, 'add_to_cart', {
+      sellpageSlug: slug,
+      productId: product!.id,
+      variantId: matchedVariant?.id,
+      value: effectivePrice * qty,
+      quantity: qty,
+    });
+
     const newItem: MockCartItem = {
       id: `cart_${Date.now()}`,
       productId: product!.id,

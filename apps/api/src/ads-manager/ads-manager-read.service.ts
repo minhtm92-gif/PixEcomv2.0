@@ -329,87 +329,127 @@ export class AdsManagerReadService {
 
   async getLivePreview(sellerId: string, sellpageId?: string, date?: string) {
     const targetDate = date || new Date().toISOString().split('T')[0];
+    const dayStart = new Date(`${targetDate}T00:00:00.000Z`);
+    const dayEnd = new Date(`${targetDate}T23:59:59.999Z`);
 
-    // 1. Get campaign-level stats for the target date
-    //    If sellpageId provided, only include campaigns linked to that sellpage
-    let scopedCampaignIds: string[] | undefined;
+    // 1. PixelxLab events (CV, ATC, CO) from StorefrontEvent table
+    const eventCounts = await this.prisma.storefrontEvent.groupBy({
+      by: ['eventType'],
+      where: {
+        sellerId,
+        ...(sellpageId ? { sellpageId } : {}),
+        createdAt: { gte: dayStart, lte: dayEnd },
+      },
+      _count: true,
+    });
 
-    if (sellpageId) {
-      const scopedCampaigns = await this.prisma.campaign.findMany({
-        where: { sellerId, sellpageId },
-        select: { id: true },
-      });
-      scopedCampaignIds = scopedCampaigns.map((c) => c.id);
-    }
+    const evMap = Object.fromEntries(eventCounts.map(e => [e.eventType, e._count]));
+    const contentViews = evMap['content_view'] || 0;
+    const addToCart = evMap['add_to_cart'] || 0;
+    const checkout = evMap['checkout'] || 0;
 
-    const campaignStats = await this.prisma.adStatsDaily.findMany({
+    // 2. Purchase count + revenue from confirmed orders (most accurate)
+    const purchaseData = await this.prisma.order.aggregate({
+      where: {
+        sellerId,
+        status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+        createdAt: { gte: dayStart, lte: dayEnd },
+        ...(sellpageId ? { sellpageId } : {}),
+      },
+      _count: true,
+      _sum: { total: true },
+    });
+    const purchases = purchaseData._count;
+    const revenue = Number(purchaseData._sum.total || 0);
+
+    // 3. Facebook metrics (Spend, Impressions, Clicks) from AdStatsDaily
+    const adStats = await this.prisma.adStatsDaily.findMany({
       where: {
         sellerId,
         entityType: 'CAMPAIGN',
-        statDate: new Date(`${targetDate}T00:00:00.000Z`),
-        ...(scopedCampaignIds ? { entityId: { in: scopedCampaignIds } } : {}),
+        statDate: dayStart,
       },
       select: {
         entityId: true,
-        contentViews: true,
-        addToCart: true,
-        checkoutInitiated: true,
-        purchases: true,
-        purchaseValue: true,
         spend: true,
+        impressions: true,
+        linkClicks: true,
       },
     });
 
-    // 2. Aggregate totals — sum raw counts, NEVER average ratios
-    const totals = campaignStats.reduce(
-      (acc, s) => ({
-        contentViews: acc.contentViews + (s.contentViews || 0),
-        addToCart: acc.addToCart + (s.addToCart || 0),
-        checkout: acc.checkout + (s.checkoutInitiated || 0),
-        purchases: acc.purchases + (s.purchases || 0),
-        spend: acc.spend + Number(s.spend || 0),
-        revenue: acc.revenue + Number(s.purchaseValue || 0),
-      }),
-      { contentViews: 0, addToCart: 0, checkout: 0, purchases: 0, spend: 0, revenue: 0 },
-    );
+    const spend = adStats.reduce((sum, s) => sum + Number(s.spend || 0), 0);
+    const impressions = adStats.reduce((sum, s) => sum + (s.impressions || 0), 0);
+    const clicks = adStats.reduce((sum, s) => sum + (s.linkClicks || 0), 0);
 
-    // 3. Compute CRs from aggregated raw totals
-    const cr1 = safeDivide(totals.checkout, totals.contentViews) * 100;
-    const cr2 = safeDivide(totals.purchases, totals.checkout) * 100;
-    const cr = safeDivide(totals.purchases, totals.contentViews) * 100;
+    // 4. Compute metrics (NEVER average ratios — SUM raw then divide)
+    const cr1 = safeDivide(checkout, contentViews) * 100;
+    const cr2 = safeDivide(purchases, checkout) * 100;
+    const cr = safeDivide(purchases, contentViews) * 100;
+    const roas = safeDivide(revenue, spend);
 
-    // 4. Campaign breakdown with names
-    const campaignIds = campaignStats.map((s) => s.entityId);
-    const campaigns = await this.prisma.campaign.findMany({
+    // 5. Campaign breakdown — group storefront events by utm_campaign
+    const campaignEvents = await this.prisma.storefrontEvent.groupBy({
+      by: ['utmCampaign', 'eventType'],
+      where: {
+        sellerId,
+        ...(sellpageId ? { sellpageId } : {}),
+        createdAt: { gte: dayStart, lte: dayEnd },
+        utmCampaign: { not: null },
+      },
+      _count: true,
+    });
+
+    // Build campaign breakdown map
+    const campaignMap = new Map<string, { cv: number; atc: number; co: number; po: number }>();
+    for (const ce of campaignEvents) {
+      const name = ce.utmCampaign || 'Unknown';
+      if (name === '') continue; // skip empty strings
+      if (!campaignMap.has(name)) campaignMap.set(name, { cv: 0, atc: 0, co: 0, po: 0 });
+      const entry = campaignMap.get(name)!;
+      if (ce.eventType === 'content_view') entry.cv = ce._count;
+      else if (ce.eventType === 'add_to_cart') entry.atc = ce._count;
+      else if (ce.eventType === 'checkout') entry.co = ce._count;
+      else if (ce.eventType === 'purchase') entry.po = ce._count;
+    }
+
+    // Merge with FB ad spend data
+    const campaignIds = adStats.map(s => s.entityId);
+    const campaigns = campaignIds.length > 0 ? await this.prisma.campaign.findMany({
       where: { id: { in: campaignIds } },
       select: { id: true, name: true },
-    });
-    const campaignMap = new Map(campaigns.map((c) => [c.id, c.name]));
+    }) : [];
+    const fbCampaignMap = new Map(campaigns.map(c => [c.id, c.name]));
 
-    const byCampaign = campaignStats
-      .map((s) => {
-        const cv = s.contentViews || 0;
-        const atc = s.addToCart || 0;
-        const co = s.checkoutInitiated || 0;
-        const po = s.purchases || 0;
-        return {
-          campaignId: s.entityId,
-          campaignName: campaignMap.get(s.entityId) || s.entityId,
-          contentViews: cv,
-          addToCart: atc,
-          checkout: co,
-          purchases: po,
-          spend: Number(s.spend || 0),
-          revenue: Number(s.purchaseValue || 0),
-          cr1: safeDivide(co, cv) * 100,
-          cr2: safeDivide(po, co) * 100,
-          cr: safeDivide(po, cv) * 100,
-        };
-      })
-      .sort((a, b) => b.contentViews - a.contentViews);
+    // Add FB spend to campaign breakdown
+    for (const stat of adStats) {
+      const name = fbCampaignMap.get(stat.entityId) || stat.entityId;
+      if (!campaignMap.has(name)) campaignMap.set(name, { cv: 0, atc: 0, co: 0, po: 0 });
+    }
+
+    const byCampaign = Array.from(campaignMap.entries()).map(([name, stats]) => {
+      // Find matching FB spend
+      const fbStat = adStats.find(s => fbCampaignMap.get(s.entityId) === name);
+      const campSpend = Number(fbStat?.spend || 0);
+      return {
+        campaignName: name,
+        contentViews: stats.cv,
+        addToCart: stats.atc,
+        checkout: stats.co,
+        purchases: stats.po,
+        spend: campSpend,
+        revenue: 0, // would need per-campaign order data
+        cr1: safeDivide(stats.co, stats.cv) * 100,
+        cr2: safeDivide(stats.po, stats.co) * 100,
+        cr: safeDivide(stats.po, stats.cv) * 100,
+      };
+    }).sort((a, b) => b.contentViews - a.contentViews);
 
     return {
-      totals: { ...totals, cr1, cr2, cr },
+      totals: {
+        contentViews, addToCart, checkout, purchases, revenue,
+        spend, impressions, clicks,
+        cr1, cr2, cr, roas,
+      },
       byCampaign,
       updatedAt: new Date().toISOString(),
     };

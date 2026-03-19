@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CheckoutDto, ConfirmPaymentDto } from './dto/checkout.dto';
+import { TrackEventDto } from './dto/track-event.dto';
 import { StripePaymentService } from './payments/stripe.service';
 import { PayPalPaymentService } from './payments/paypal.service';
 import { ReviewsService } from './reviews.service';
@@ -869,6 +870,47 @@ export class StorefrontService {
       success: true,
       orderNumber: order.orderNumber,
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STOREFRONT EVENT TRACKING
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async trackEvent(sellerSlug: string, dto: TrackEventDto) {
+    // 1. Resolve seller
+    const seller = await this.prisma.seller.findUnique({
+      where: { slug: sellerSlug },
+      select: { id: true },
+    });
+    if (!seller) return { ok: false };
+
+    // 2. Resolve sellpage
+    let sellpageId: string | null = null;
+    if (dto.sellpageSlug) {
+      const sp = await this.prisma.sellpage.findFirst({
+        where: { slug: dto.sellpageSlug, sellerId: seller.id },
+        select: { id: true },
+      });
+      sellpageId = sp?.id || null;
+    }
+
+    // 3. Insert event
+    await this.prisma.storefrontEvent.create({
+      data: {
+        sellerId: seller.id,
+        sellpageId,
+        eventType: dto.event,
+        productId: dto.productId || null,
+        variantId: dto.variantId || null,
+        value: dto.value || null,
+        quantity: dto.quantity || null,
+        sessionId: dto.sessionId || null,
+        utmSource: dto.utmSource || null,
+        utmCampaign: dto.utmCampaign || null,
+      },
+    });
+
+    return { ok: true };
   }
 
   // ─────────────────────────────────────────────────────────────────────────

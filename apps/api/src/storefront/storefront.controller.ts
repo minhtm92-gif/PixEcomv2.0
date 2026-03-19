@@ -6,10 +6,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { StorefrontService } from './storefront.service';
 import { ReviewsService } from './reviews.service';
 import { CheckoutDto, ConfirmPaymentDto } from './dto/checkout.dto';
 import { SubmitReviewDto } from './dto/review.dto';
+import { TrackEventDto } from './dto/track-event.dto';
 
 @Controller('storefront')
 export class StorefrontController {
@@ -97,6 +99,19 @@ export class StorefrontController {
     @Body() dto: SubmitReviewDto,
   ) {
     return this.reviews.submitReview(sellerSlug, dto);
+  }
+
+  /**
+   * POST /api/storefront/:sellerSlug/event
+   * Public — track storefront events (page_view, add_to_cart, etc.).
+   */
+  @Post(':sellerSlug/event')
+  @Throttle({ default: { limit: 100, ttl: 60000 } })
+  trackEvent(
+    @Param('sellerSlug') sellerSlug: string,
+    @Body() dto: TrackEventDto,
+  ) {
+    return this.storefront.trackEvent(sellerSlug, dto);
   }
 
   /**
