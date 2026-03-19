@@ -776,7 +776,7 @@ export class CampaignsService {
             (targeting.optimizationGoal as string) || 'OFFSITE_CONVERSIONS',
           billing_event:
             (targeting.billingEvent as string) || 'IMPRESSIONS',
-          status: campaignStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE',
+          status: 'ACTIVE', // Adsets always ACTIVE — campaign-level PAUSED controls delivery
           targeting: JSON.stringify(metaTargeting),
         };
 
@@ -1037,7 +1037,7 @@ export class CampaignsService {
           creative_id: metaCreative.id,
         }),
         name: ad.name,
-        status: campaignStatus === 'PAUSED' ? 'PAUSED' : 'ACTIVE',
+        status: 'ACTIVE', // Ads always ACTIVE — campaign-level PAUSED controls delivery
       };
 
       this.logger.log(
