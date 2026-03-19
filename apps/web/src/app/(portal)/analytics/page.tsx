@@ -68,9 +68,9 @@ export default function AnalyticsPage() {
     { key: 'name', label: 'Campaign', render: (r) => <span className="text-foreground font-medium truncate max-w-[200px] block">{r.name}</span> },
     { key: 'status', label: 'Status', render: (r) => <StatusBadge status={r.status} /> },
     { key: 'spend', label: 'Spend', className: 'text-right', render: (r) => <span className="font-mono text-foreground text-xs">{moneyWhole(r.spend)}</span> },
-    { key: 'roas', label: 'ROAS', className: 'text-right', render: (r) => <span className="font-mono text-foreground text-xs">{r.storeMetricsPending ? 'N/A' : r.roas.toFixed(2)}</span> },
-    { key: 'purchases', label: 'Conv.', className: 'text-right', render: (r) => <span className="font-mono text-foreground text-xs">{r.storeMetricsPending ? 'N/A' : num(r.purchases)}</span> },
-    { key: 'ctr', label: 'CTR', className: 'text-right', render: (r) => <span className="font-mono text-foreground text-xs">{r.storeMetricsPending ? 'N/A' : pct(r.ctr)}</span> },
+    { key: 'roas', label: 'ROAS', className: 'text-right', render: (r) => <span className="font-mono text-foreground text-xs">{r.roas.toFixed(2)}</span> },
+    { key: 'purchases', label: 'Conv.', className: 'text-right', render: (r) => <span className="font-mono text-foreground text-xs">{num(r.purchases)}</span> },
+    { key: 'ctr', label: 'CTR', className: 'text-right', render: (r) => <span className="font-mono text-foreground text-xs">{pct(r.ctr)}</span> },
   ];
 
   const sellpageCols: Column<SellpageListItem>[] = [

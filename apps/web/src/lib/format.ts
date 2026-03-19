@@ -95,8 +95,7 @@ export function safeFmtDate(iso: string | null | undefined): string {
   });
 }
 
-/** Render metric: if storeMetricsPending is true, show "N/A" */
-export function metricOrNA(value: number, pending: boolean, formatter: (n: number) => string = num): string {
-  if (pending) return 'N/A';
+/** Render metric: always show value (never N/A) */
+export function metricOrNA(value: number, _pending: boolean, formatter: (n: number) => string = num): string {
   return formatter(value);
 }
