@@ -84,6 +84,7 @@ export interface OrderDetail {
   trackingNumber: string | null;
   trackingUrl: string | null;
   shippingAddress: OrderShippingAddress | null;
+  billingAddress: OrderShippingAddress | null;
   paymentMethod: string | null;
   paymentId: string | null;
   attribution: OrderAttribution | null;

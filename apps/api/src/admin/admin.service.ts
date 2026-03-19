@@ -19,6 +19,7 @@ import { CreateDiscountDto } from './dto/create-discount.dto';
 import { CreatePaymentGatewayDto } from './dto/create-payment-gateway.dto';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
 import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
+import { AdminFbConnectionsQueryDto } from './dto/admin-fb-connections-query.dto';
 
 const BCRYPT_COST = 12;
 
@@ -267,6 +268,26 @@ export class AdminService {
         creditCardGateway: true,
         sellerUsers: {
           include: { user: { select: { id: true, email: true, displayName: true, role: true } } },
+        },
+        fbConnections: {
+          select: {
+            id: true,
+            sellerId: true,
+            connectedByUserId: true,
+            connectionType: true,
+            externalId: true,
+            name: true,
+            parentId: true,
+            isPrimary: true,
+            isActive: true,
+            metadata: true,
+            createdAt: true,
+            updatedAt: true,
+            connectedByUser: {
+              select: { id: true, email: true, displayName: true },
+            },
+          },
+          orderBy: [{ connectionType: 'asc' as const }, { createdAt: 'asc' as const }],
         },
         _count: {
           select: {
@@ -1470,6 +1491,114 @@ export class AdminService {
       token += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return token;
+  }
+
+  // ─── FB CONNECTIONS (Admin) ────────────────────────────────────────────────
+
+  /**
+   * All FB connections for a specific seller — no user-scoping.
+   * Includes seller name and connectedBy user info.
+   */
+  async getSellerFbConnections(sellerId: string): Promise<any> {
+    const seller = await this.prisma.seller.findUnique({
+      where: { id: sellerId },
+      select: { id: true, name: true },
+    });
+    if (!seller) {
+      throw new NotFoundException(`Seller ${sellerId} not found`);
+    }
+
+    const connections = await this.prisma.fbConnection.findMany({
+      where: { sellerId },
+      orderBy: [{ connectionType: 'asc' }, { createdAt: 'asc' }],
+      select: {
+        id: true,
+        sellerId: true,
+        connectedByUserId: true,
+        connectionType: true,
+        externalId: true,
+        name: true,
+        parentId: true,
+        isPrimary: true,
+        isActive: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+        connectedByUser: {
+          select: { id: true, email: true, displayName: true },
+        },
+      },
+    });
+
+    return {
+      seller: { id: seller.id, name: seller.name },
+      connections,
+    };
+  }
+
+  /**
+   * All FB connections across ALL sellers — paginated + filterable.
+   * Never returns accessTokenEnc.
+   */
+  async getAllFbConnections(query: AdminFbConnectionsQueryDto): Promise<any> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Record<string, unknown> = {};
+    if (query.connectionType) {
+      where.connectionType = query.connectionType;
+    }
+    if (query.sellerId) {
+      where.sellerId = query.sellerId;
+    }
+    if (query.isActive !== undefined) {
+      where.isActive = query.isActive;
+    }
+    if (query.search) {
+      where.OR = [
+        { name: { contains: query.search, mode: 'insensitive' } },
+        { externalId: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [connections, total] = await Promise.all([
+      this.prisma.fbConnection.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          sellerId: true,
+          connectedByUserId: true,
+          connectionType: true,
+          externalId: true,
+          name: true,
+          parentId: true,
+          isPrimary: true,
+          isActive: true,
+          metadata: true,
+          createdAt: true,
+          updatedAt: true,
+          seller: { select: { id: true, name: true } },
+          connectedByUser: {
+            select: { id: true, email: true, displayName: true },
+          },
+        },
+      }),
+      this.prisma.fbConnection.count({ where }),
+    ]);
+
+    return {
+      data: connections,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   private cartesianProduct(

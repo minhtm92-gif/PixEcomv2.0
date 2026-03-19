@@ -7,6 +7,7 @@ import { AdminProductsController } from './admin-products.controller';
 import { AdminStoresController } from './admin-stores.controller';
 import { AdminAnalyticsController } from './admin-analytics.controller';
 import { AdminSettingsController } from './admin-settings.controller';
+import { AdminFbConnectionsController } from './admin-fb-connections.controller';
 import { AdminService } from './admin.service';
 
 @Module({
@@ -19,6 +20,7 @@ import { AdminService } from './admin.service';
     AdminStoresController,
     AdminAnalyticsController,
     AdminSettingsController,
+    AdminFbConnectionsController,
   ],
   providers: [AdminService],
 })

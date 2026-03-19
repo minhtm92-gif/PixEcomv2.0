@@ -143,6 +143,10 @@ function CheckoutForm() {
     firstName: '', lastName: '', email: '', phone: '',
     address: '', city: '', state: '', zip: '', country: 'US',
   });
+  const [useDifferentBilling, setUseDifferentBilling] = useState(false);
+  const [billingForm, setBillingForm] = useState({
+    address: '', city: '', state: '', zip: '', country: 'US',
+  });
   const [shipping, setShipping] = useState('standard');
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'paypal'>('card');
   const [checkoutFormMode, setCheckoutFormMode] = useState<string>('PAYPAL_AND_CARD');
@@ -268,6 +272,10 @@ function CheckoutForm() {
     setForm(prev => ({ ...prev, [field]: value }));
   }
 
+  function updateBillingForm(field: keyof typeof billingForm, value: string) {
+    setBillingForm(prev => ({ ...prev, [field]: value }));
+  }
+
   function validateForm(): string | null {
     if (!form.firstName.trim()) return 'First name is required';
     if (!form.lastName.trim()) return 'Last name is required';
@@ -276,6 +284,12 @@ function CheckoutForm() {
     if (!form.city.trim()) return 'City is required';
     if (!form.state.trim()) return 'State is required';
     if (!form.zip.trim()) return 'ZIP code is required';
+    if (useDifferentBilling) {
+      if (!billingForm.address.trim()) return 'Billing street address is required';
+      if (!billingForm.city.trim()) return 'Billing city is required';
+      if (!billingForm.state.trim()) return 'Billing state is required';
+      if (!billingForm.zip.trim()) return 'Billing ZIP code is required';
+    }
     return null;
   }
 
@@ -287,12 +301,21 @@ function CheckoutForm() {
       postalCode: form.zip.trim(),
       country: form.country,
     };
+    const billingAddress = useDifferentBilling
+      ? {
+          line1: billingForm.address.trim(),
+          city: billingForm.city.trim(),
+          state: billingForm.state.trim(),
+          postalCode: billingForm.zip.trim(),
+          country: billingForm.country,
+        }
+      : { ...shippingAddress };
     return {
       customerEmail: form.email.trim(),
       customerName: `${form.firstName.trim()} ${form.lastName.trim()}`,
       customerPhone: form.phone.trim() || undefined,
       shippingAddress,
-      billingAddress: { ...shippingAddress },
+      billingAddress,
       shippingMethod: shipping as 'standard' | 'express' | 'overnight',
       items: [{
         productId: product!.id,
@@ -356,7 +379,7 @@ function CheckoutForm() {
 
     if (res.payment.type !== 'paypal') throw new Error('Expected PayPal payment');
     return res.payment.paypalOrderId;
-  }, [form, shipping, selectedDiscount, product, sellpageData, storeSlug, slug, qty]);
+  }, [form, shipping, selectedDiscount, product, sellpageData, storeSlug, slug, qty, useDifferentBilling, billingForm]);
 
   // ── PayPal onApprove callback ──
   const handlePayPalApprove = useCallback(async (data: { orderID: string }) => {
@@ -583,6 +606,43 @@ function CheckoutForm() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Billing address toggle + form */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={useDifferentBilling}
+                  onChange={e => setUseDifferentBilling(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-[var(--sp-primary)] focus:ring-[var(--sp-primary)]"
+                />
+                <span className="text-sm text-gray-700">My billing address is different from my shipping address</span>
+              </label>
+
+              {useDifferentBilling && (
+                <div className="mt-4 space-y-3">
+                  <h2 className="font-bold text-gray-900 mb-4">Billing Address</h2>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Street Address</label>
+                    <input type="text" value={billingForm.address} onChange={e => updateBillingForm('address', e.target.value)} placeholder="123 Main Street, Apt 4B" className={inputCls} />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">City</label>
+                      <input type="text" value={billingForm.city} onChange={e => updateBillingForm('city', e.target.value)} placeholder="New York" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">State</label>
+                      <input type="text" value={billingForm.state} onChange={e => updateBillingForm('state', e.target.value)} placeholder="NY" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">ZIP</label>
+                      <input type="text" value={billingForm.zip} onChange={e => updateBillingForm('zip', e.target.value)} placeholder="10001" className={inputCls} />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Shipping method — fixed if sellpage has config, selectable otherwise */}

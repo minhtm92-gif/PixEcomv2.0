@@ -58,6 +58,25 @@ interface SellerDetailApi {
       role: string;
     };
   }>;
+  fbConnections: Array<{
+    id: string;
+    sellerId: string;
+    connectedByUserId: string | null;
+    connectionType: string;
+    externalId: string;
+    name: string;
+    parentId: string | null;
+    isPrimary: boolean;
+    isActive: boolean;
+    metadata: unknown;
+    createdAt: string;
+    updatedAt: string;
+    connectedByUser: {
+      id: string;
+      email: string;
+      displayName: string | null;
+    } | null;
+  }>;
   _count: {
     orders: number;
     sellpages: number;
@@ -475,27 +494,74 @@ export default function SellerDetailPage() {
       )}
 
       {/* Tab: FB Connections */}
-      {tab === 'fb' && (
-        <div className="bg-card border border-border rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead><tr className="border-b border-border">
-              {['Name', 'Type', 'Status', 'External ID'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase">{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {MOCK_FB.map(fb => (
-                <tr key={fb.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-medium text-foreground">{fb.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs font-mono">{fb.type}</td>
-                  <td className="px-4 py-3"><StatusBadge status={fb.status} /></td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{fb.externalId}</td>
+      {tab === 'fb' && (() => {
+        const fbRows = IS_PREVIEW
+          ? MOCK_FB.map((fb) => ({
+              id: fb.id,
+              name: fb.name,
+              connectionType: fb.type,
+              externalId: fb.externalId,
+              isPrimary: false,
+              isActive: fb.status === 'ACTIVE',
+              connectedByUser: null as { id: string; email: string; displayName: string | null } | null,
+              createdAt: new Date().toISOString(),
+            }))
+          : (apiSeller?.fbConnections ?? []);
+
+        const typeIcons: Record<string, string> = {
+          AD_ACCOUNT: '\u{1F4B3}',
+          PAGE: '\u{1F4C4}',
+          PIXEL: '\u{1F4CA}',
+          CONVERSION: '\u{1F3AF}',
+        };
+
+        return fbRows.length > 0 ? (
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  {['Type', 'Name', 'External ID', 'Primary', 'Status', 'Connected By', 'Created'].map((h) => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground uppercase">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {fbRows.map((fb) => (
+                  <tr key={fb.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>{typeIcons[fb.connectionType] ?? ''}</span>
+                        <span className="text-xs font-mono text-muted-foreground">{fb.connectionType}</span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-medium text-foreground">{fb.name}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{fb.externalId}</td>
+                    <td className="px-4 py-3">
+                      {fb.isPrimary ? (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/15 text-amber-400">Primary</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">--</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={fb.isActive ? 'ACTIVE' : 'INACTIVE'} />
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {fb.connectedByUser
+                        ? (fb.connectedByUser.displayName || fb.connectedByUser.email)
+                        : <span className="italic">System</span>
+                      }
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(fb.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No Facebook connections for this seller.</p>
+        );
+      })()}
 
       {/* Tab: Stores */}
       {tab === 'stores' && (

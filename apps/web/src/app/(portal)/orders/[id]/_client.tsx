@@ -211,6 +211,22 @@ export default function OrderDetailPage() {
     postalCode: rawAddr.postalCode ?? rawAddr.zip,
   } : null;
   const hasAddress = addr && (addr.line1 || addr.city || addr.country);
+
+  const rawBillAddr = order.billingAddress;
+  const billAddr = rawBillAddr ? {
+    ...rawBillAddr,
+    line1: rawBillAddr.line1 ?? rawBillAddr.street,
+    postalCode: rawBillAddr.postalCode ?? rawBillAddr.zip,
+  } : null;
+  // Check if billing differs from shipping
+  const billingDiffers = billAddr && addr && (
+    billAddr.line1 !== addr.line1 ||
+    billAddr.line2 !== addr.line2 ||
+    billAddr.city !== addr.city ||
+    billAddr.state !== addr.state ||
+    billAddr.postalCode !== addr.postalCode ||
+    billAddr.country !== addr.country
+  );
   const hasPayment = order.paymentMethod || order.paymentId;
   const attr = order.attribution;
   const hasAttribution = attr && (attr.source || attr.utmSource);
@@ -350,6 +366,28 @@ export default function OrderDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Billing Address */}
+      {billAddr && (
+        <div className="bg-card border border-border rounded-xl p-4 mb-6">
+          <h2 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+            <MapPin size={14} /> Billing Address
+          </h2>
+          {billingDiffers ? (
+            <div className="text-sm text-foreground space-y-0.5">
+              {billAddr.name && <p className="font-medium">{billAddr.name}</p>}
+              {billAddr.line1 && <p>{billAddr.line1}</p>}
+              {billAddr.line2 && <p>{billAddr.line2}</p>}
+              <p>
+                {[billAddr.city, billAddr.state, billAddr.postalCode].filter(Boolean).join(', ')}
+              </p>
+              {billAddr.country && <p>{billAddr.country}</p>}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground italic">Same as shipping address</p>
+          )}
+        </div>
+      )}
 
       {/* Attribution */}
       {hasAttribution && (
