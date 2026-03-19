@@ -751,6 +751,57 @@ export class CampaignsService {
     }>,
     campaignStatus: string,
   ): Promise<void> {
+    // ── BUG-025 fix: deduplicate video uploads ──────────────────────────
+    // Collect all unique video URLs across every ad in every adset,
+    // upload each video ONCE, then pass the map to pushSingleAd().
+    const videoUrlMap = new Map<string, string>(); // videoUrl → metaVideoId
+
+    for (const adset of adsets) {
+      for (const ad of adset.ads) {
+        const adPost = ad.adPosts?.[0];
+        if (!adPost) continue;
+
+        const cc = (adPost.creativeConfig ?? {}) as Record<string, unknown>;
+        const videoUrl = (cc.videoUrl as string) || null;
+        const isVideoAd =
+          cc.adFormat === 'VIDEO_AD' ||
+          (videoUrl !== null) ||
+          adPost.assetMedia?.mediaType === 'VIDEO';
+
+        if (isVideoAd) {
+          const videoSrc = videoUrl || adPost.assetMedia?.url;
+          if (videoSrc && !videoUrlMap.has(videoSrc)) {
+            videoUrlMap.set(videoSrc, ''); // placeholder
+          }
+        }
+      }
+    }
+
+    // Upload each unique video once
+    for (const [url] of videoUrlMap) {
+      try {
+        this.logger.log(`Uploading unique video (dedup): ${url}`);
+        const videoUpload = await this.metaService.post<{ id: string }>(
+          adAccountId,
+          `${actId}/advideos`,
+          { file_url: url },
+        );
+        videoUrlMap.set(url, videoUpload.id);
+        this.logger.log(`Video uploaded → Meta video ID: ${videoUpload.id}`);
+      } catch (err) {
+        this.logger.error(
+          `Failed to upload video ${url}: ${(err as Error).message}`,
+        );
+        // Remove from map so pushSingleAd will skip it gracefully
+        videoUrlMap.delete(url);
+      }
+    }
+
+    this.logger.log(
+      `Video dedup: ${videoUrlMap.size} unique videos uploaded for campaign ${campaignId}`,
+    );
+    // ── End BUG-025 fix ─────────────────────────────────────────────────
+
     let adsetsPushed = 0;
     let adsPushed = 0;
 
@@ -836,6 +887,7 @@ export class CampaignsService {
               ad,
               targeting,
               campaignStatus,
+              videoUrlMap,
             ),
           ),
         );
@@ -860,7 +912,8 @@ export class CampaignsService {
   }
 
   /**
-   * Push a single ad (video upload + creative + ad) to Meta.
+   * Push a single ad (creative + ad) to Meta.
+   * Video uploads are deduplicated in pushAdsetsAndAds() and passed via videoUrlMap.
    * Returns true if successful, false otherwise.
    */
   private async pushSingleAd(
@@ -885,6 +938,7 @@ export class CampaignsService {
     },
     targeting: Record<string, unknown>,
     campaignStatus: string,
+    videoUrlMap: Map<string, string>,
   ): Promise<boolean> {
     try {
       const adPost = ad.adPosts?.[0];
@@ -961,22 +1015,22 @@ export class CampaignsService {
         creativePayload.object_story_id = `${pageExternalId}_${adPost.externalPostId}`;
       } else if (isVideoAd && (videoUrl || adPost.assetMedia?.url)) {
         const videoSrc = videoUrl || adPost.assetMedia?.url;
-        this.logger.log(
-          `Uploading video for ad "${ad.name}": ${videoSrc}`,
-        );
 
-        const videoUpload = await this.metaService.post<{
-          id: string;
-        }>(adAccountId, `${actId}/advideos`, {
-          file_url: videoSrc,
-        });
+        // BUG-025: lookup pre-uploaded video from dedup map instead of uploading per-ad
+        const metaVideoId = videoSrc ? videoUrlMap.get(videoSrc) : undefined;
+        if (!metaVideoId) {
+          this.logger.warn(
+            `Ad "${ad.name}" (${ad.id}) — video not found in dedup map (${videoSrc}), skipping`,
+          );
+          return false;
+        }
 
         this.logger.log(
-          `Video uploaded → Meta video ID: ${videoUpload.id}`,
+          `Using pre-uploaded video for ad "${ad.name}": ${videoSrc} → Meta video ID: ${metaVideoId}`,
         );
 
         const videoData: Record<string, unknown> = {
-          video_id: videoUpload.id,
+          video_id: metaVideoId,
           message: primaryText,
           title: headline,
           link_description: description,

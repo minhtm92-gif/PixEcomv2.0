@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Menu, Shield, LogOut, ExternalLink } from 'lucide-react';
+import { Menu, Shield, LogOut, ExternalLink, ArrowRightLeft } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/stores/authStore';
 import { useToastStore } from '@/stores/toastStore';
@@ -131,14 +131,25 @@ export function AdminMobileHeader() {
             )
           )}
           {!IS_PREVIEW && (
-            <button
-              onClick={() => { setOpen(false); handleLogout(); }}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground
-                         hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <LogOut size={16} />
-              Sign out
-            </button>
+            <>
+              <Link
+                href="/orders"
+                onClick={() => setOpen(false)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-amber-400
+                           hover:bg-amber-500/10 transition-colors mb-0.5"
+              >
+                <ArrowRightLeft size={16} />
+                Seller Portal
+              </Link>
+              <button
+                onClick={() => { setOpen(false); handleLogout(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground
+                           hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <LogOut size={16} />
+                Sign out
+              </button>
+            </>
           )}
         </div>
       </MobileDrawer>
