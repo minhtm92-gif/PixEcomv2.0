@@ -280,17 +280,19 @@ function CheckoutForm() {
   }
 
   function buildCheckoutRequest(payMethod: 'stripe' | 'paypal') {
+    const shippingAddress = {
+      line1: form.address.trim(),
+      city: form.city.trim(),
+      state: form.state.trim(),
+      postalCode: form.zip.trim(),
+      country: form.country,
+    };
     return {
       customerEmail: form.email.trim(),
       customerName: `${form.firstName.trim()} ${form.lastName.trim()}`,
       customerPhone: form.phone.trim() || undefined,
-      shippingAddress: {
-        street: form.address.trim(),
-        city: form.city.trim(),
-        state: form.state.trim(),
-        zip: form.zip.trim(),
-        country: form.country,
-      },
+      shippingAddress,
+      billingAddress: { ...shippingAddress },
       shippingMethod: shipping as 'standard' | 'express' | 'overnight',
       items: [{
         productId: product!.id,

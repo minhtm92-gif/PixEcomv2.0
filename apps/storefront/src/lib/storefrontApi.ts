@@ -128,10 +128,10 @@ export interface CheckoutRequest {
   customerName: string;
   customerPhone?: string;
   shippingAddress: {
-    street: string;
+    line1: string;
     city: string;
     state: string;
-    zip: string;
+    postalCode: string;
     country: string;
   };
   shippingMethod: 'standard' | 'express' | 'overnight';

@@ -397,11 +397,17 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
                   ({product.reviewCount} reviews)
                 </a>
               </div>
-              <div className="flex items-center gap-3 text-xs text-gray-500">
-                <span className="flex items-center gap-1"><Eye size={13} /> {product.socialProof.viewers} viewing</span>
-                <span>•</span>
-                <span>{product.socialProof.purchased.toLocaleString()} sold</span>
-              </div>
+              {(product.socialProof.viewers > 0 || product.socialProof.purchased > 0) && (
+                <div className="flex items-center gap-3 text-xs text-gray-500">
+                  {product.socialProof.viewers > 0 && (
+                    <span className="flex items-center gap-1"><Eye size={13} /> {product.socialProof.viewers} viewing</span>
+                  )}
+                  {product.socialProof.viewers > 0 && product.socialProof.purchased > 0 && <span>•</span>}
+                  {product.socialProof.purchased > 0 && (
+                    <span>{product.socialProof.purchased.toLocaleString()} sold</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
