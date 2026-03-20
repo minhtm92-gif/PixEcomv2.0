@@ -17,4 +17,8 @@ export class CampaignsQueryDto {
   @IsOptional()
   @IsString()
   adAccountId?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

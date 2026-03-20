@@ -1,4 +1,4 @@
-import { IsDateString, IsIn, IsOptional, Matches } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsString, Matches } from 'class-validator';
 import { CAMPAIGN_STATUSES } from '../ads-manager.constants';
 
 /** Matches any 8-4-4-4-12 hex string (UUID shape without version check) */
@@ -19,4 +19,8 @@ export class AdsQueryDto {
   @IsOptional()
   @IsIn(CAMPAIGN_STATUSES)
   status?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

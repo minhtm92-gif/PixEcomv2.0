@@ -716,8 +716,8 @@ function CheckoutForm() {
 
       <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
-          {/* LEFT: Form */}
-          <div className="space-y-6">
+          {/* LEFT: Form (order-2 on mobile so Order Summary shows first) */}
+          <div className="space-y-6 order-2 lg:order-1">
             {/* Contact */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-gray-900 mb-4">Contact Information</h2>
@@ -852,6 +852,13 @@ function CheckoutForm() {
               </div>
             )}
 
+            {/* Validation error (shown above payment so user notices) */}
+            {error && (
+              <div className="p-3.5 bg-red-50 border border-red-200 rounded-2xl">
+                <p className="text-sm text-red-600 font-medium">{error}</p>
+              </div>
+            )}
+
             {/* Payment method */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h2 className="font-bold text-gray-900 mb-4">Payment Method</h2>
@@ -903,14 +910,31 @@ function CheckoutForm() {
                 </div>
               )}
 
-              {/* PayPal Buttons (lazy-loaded) */}
+              {/* PayPal Buttons (lazy-loaded) — wrapped with validation gate */}
               {paymentMethod === 'paypal' && !IS_PREVIEW && (
-                <PayPalCheckout
-                  createOrder={handlePayPalCreateOrder}
-                  onApprove={handlePayPalApprove}
-                  onError={(err) => setError(String(err))}
-                  disabled={submitting}
-                />
+                <div
+                  className="relative"
+                  onClick={() => {
+                    const validationError = validateForm();
+                    if (validationError) {
+                      setError(validationError);
+                    }
+                  }}
+                >
+                  {/* Overlay blocks PayPal clicks when form is invalid */}
+                  {(() => {
+                    const v = validateForm();
+                    return v ? (
+                      <div className="absolute inset-0 z-10 cursor-pointer" onClick={() => setError(v)} />
+                    ) : null;
+                  })()}
+                  <PayPalCheckout
+                    createOrder={handlePayPalCreateOrder}
+                    onApprove={handlePayPalApprove}
+                    onError={(err) => setError(String(err))}
+                    disabled={submitting}
+                  />
+                </div>
               )}
 
               {paymentMethod === 'paypal' && IS_PREVIEW && (
@@ -922,8 +946,8 @@ function CheckoutForm() {
             </div>
           </div>
 
-          {/* RIGHT: Order summary */}
-          <div className="space-y-4">
+          {/* RIGHT: Order summary (order-1 on mobile so it shows first) */}
+          <div className="space-y-4 order-1 lg:order-2">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sticky top-6">
               <h2 className="font-bold text-gray-900 mb-4">Order Summary</h2>
 

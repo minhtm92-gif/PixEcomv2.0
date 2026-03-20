@@ -104,6 +104,7 @@ export class AdsManagerReadService {
         ...(userAdAccountIds.length > 0 ? { adAccountId: { in: userAdAccountIds } } : {}),
         ...(query.status ? { status: query.status as any } : {}),
         ...(query.adAccountId ? { adAccountId: query.adAccountId } : {}),
+        ...(query.search ? { name: { contains: query.search, mode: 'insensitive' as const } } : {}),
       },
       select: {
         id: true,
@@ -180,6 +181,7 @@ export class AdsManagerReadService {
         sellerId,
         campaignId: query.campaignId,
         ...(query.status ? { status: query.status as any } : {}),
+        ...(query.search ? { name: { contains: query.search, mode: 'insensitive' as const } } : {}),
       },
       select: {
         id: true,
@@ -257,6 +259,7 @@ export class AdsManagerReadService {
         sellerId,
         adsetId: query.adsetId,
         ...(query.status ? { status: query.status as any } : {}),
+        ...(query.search ? { name: { contains: query.search, mode: 'insensitive' as const } } : {}),
       },
       select: {
         id: true,

@@ -18,7 +18,6 @@ import { ImageGallery } from '@/components/storefront/ImageGallery';
 import { VariantSelector } from '@/components/storefront/VariantSelector';
 import { BoostModule, computeUpsellPrice } from '@/components/storefront/BoostModule';
 import { QuantitySelector } from '@/components/storefront/QuantitySelector';
-import { TrustBadges } from '@/components/storefront/TrustBadges';
 import { ReviewSection, type ReviewItem } from '@/components/storefront/ReviewSection';
 import { FloatingCheckoutButton } from '@/components/storefront/FloatingCheckoutButton';
 import { StickyDesktopCTA } from '@/components/storefront/StickyDesktopCTA';
@@ -224,7 +223,6 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
   const [userChangedVariant, setUserChangedVariant] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
-  const [activeTab, setActiveTab] = useState<'description' | 'shipping' | 'returns'>('description');
   const ctaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -586,46 +584,71 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
               </Link>
             </div>
 
-            <div className="flex flex-wrap gap-4 text-xs text-gray-500 pt-1">
-              <span>🚚 Free shipping on orders $50+</span>
-              <span>🔄 30-day returns</span>
-              <span>🔒 Secure checkout</span>
+          </div>
+        </div>
+
+        {/* Guaranteed Safe Checkout badges */}
+        <div className="mt-10 max-w-2xl">
+          <div className="flex items-center justify-center gap-2 mb-5">
+            <svg className="w-7 h-7 text-green-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+            <span className="text-xl font-semibold text-gray-800">Guaranteed Safe Checkout</span>
+          </div>
+          {/* Payment method logos */}
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mb-5">
+            {/* PayPal */}
+            <svg className="h-8" viewBox="0 0 101 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12.2 4.3h7.6c3.4 0 5.8 1.6 5.3 5.1-.7 4.9-3.8 7.6-8.3 7.6h-2c-.6 0-1 .4-1.1 1L12.8 24h-4.4l3.8-19.7z" fill="#003087"/>
+              <path d="M25 4.3c1.3 1.2 1.7 3 1.4 5.1-.8 4.9-3.8 7.6-8.3 7.6h-2c-.6 0-1 .4-1.1 1L14 24h-3.2l-.4 2.5c-.1.4.2.7.6.7h3.6c.5 0 .9-.4 1-.8l.8-4.3c.1-.5.5-.8 1-.8h.7c4 0 7.1-2.4 7.8-6.8.3-1.8.1-3.3-.9-4.2z" fill="#0070E0"/>
+              <text x="38" y="22" fill="#003087" fontWeight="bold" fontSize="16" fontFamily="Arial">Pay</text>
+              <text x="62" y="22" fill="#0070E0" fontWeight="bold" fontSize="16" fontFamily="Arial">Pal</text>
+            </svg>
+            {/* Visa */}
+            <svg className="h-6" viewBox="0 0 60 20" xmlns="http://www.w3.org/2000/svg">
+              <text x="0" y="16" fill="#1A1F71" fontWeight="bold" fontSize="18" fontFamily="Arial" fontStyle="italic">VISA</text>
+            </svg>
+            {/* Mastercard */}
+            <div className="flex items-center gap-0.5">
+              <div className="w-6 h-6 rounded-full bg-[#EB001B] opacity-90" />
+              <div className="w-6 h-6 rounded-full bg-[#F79E1B] opacity-90 -ml-3" />
+              <span className="text-[9px] text-gray-600 ml-1 font-medium">mastercard</span>
+            </div>
+            {/* Amex */}
+            <div className="bg-[#006FCF] text-white text-[9px] font-bold px-2 py-1.5 rounded leading-tight text-center">
+              AMERICAN<br/>EXPRESS
+            </div>
+            {/* Discover */}
+            <svg className="h-6" viewBox="0 0 80 20" xmlns="http://www.w3.org/2000/svg">
+              <text x="0" y="15" fill="#333" fontWeight="bold" fontSize="14" fontFamily="Arial">DISC</text>
+              <circle cx="42" cy="10" r="7" fill="#F48120"/>
+              <text x="48" y="15" fill="#333" fontWeight="bold" fontSize="14" fontFamily="Arial">VER</text>
+            </svg>
+          </div>
+          {/* Security badges */}
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-3 py-3 border-t border-gray-100">
+            <div className="flex items-center gap-1.5 border border-gray-200 rounded px-2.5 py-1.5">
+              <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>
+              <div className="leading-tight"><span className="text-xs font-semibold text-gray-700">TrustedSite</span><br/><span className="text-[9px] text-gray-400">CERTIFIED SECURE</span></div>
+            </div>
+            <div className="flex items-center gap-1.5 border border-gray-200 rounded px-2.5 py-1.5">
+              <div className="w-5 h-5 rounded-full bg-red-600 flex items-center justify-center"><span className="text-white text-[8px] font-bold">M</span></div>
+              <div className="leading-tight"><span className="text-xs font-bold text-gray-700">McAfee</span><br/><span className="text-[9px] text-gray-400">SECURE</span></div>
+            </div>
+            <div className="flex items-center gap-1.5 border border-gray-200 rounded px-2.5 py-1.5">
+              <svg className="w-4 h-4 text-green-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>
+              <div className="leading-tight"><span className="text-xs font-semibold text-gray-700">Norton</span><br/><span className="text-[9px] text-gray-400">SECURED</span></div>
+            </div>
+            <div className="flex items-center gap-1.5 border border-gray-200 rounded px-2.5 py-1.5">
+              <span className="text-[9px] font-bold text-blue-800 leading-tight">BBB<br/><span className="text-[8px] text-gray-500">Rating: A+</span></span>
             </div>
           </div>
         </div>
 
-        <div className="mt-12"><TrustBadges config={guaranteeConfig} /></div>
-
         <div className="mt-10 max-w-2xl">
-          <div className="flex gap-0 border-b border-gray-200 mb-1">
-            {([
-              { id: 'description', label: 'Description' },
-              { id: 'shipping', label: 'Shipping' },
-              { id: 'returns', label: 'Returns' },
-            ] as const).map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                  activeTab === tab.id ? 'border-[var(--sp-primary)] text-[var(--sp-primary-hover)]' : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
           <div className="py-5 text-sm text-gray-600 leading-relaxed">
-            {activeTab === 'description' && (
-              isHtml(product.description)
-                ? <div className="rich-description [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:my-3 [&_p]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_a]:text-[var(--sp-primary)] [&_a]:underline [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 [&_th]:border [&_th]:border-gray-200 [&_th]:p-2 [&_th]:bg-gray-50" dangerouslySetInnerHTML={{ __html: product.description }} />
-                : <div className="whitespace-pre-line">{product.description}</div>
-            )}
-            {activeTab === 'shipping' && (
-              typeof product.shippingInfo === 'string' && isHtml(product.shippingInfo)
-                ? <div className="rich-description [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:my-3 [&_p]:mb-3 [&_a]:text-[var(--sp-primary)] [&_a]:underline" dangerouslySetInnerHTML={{ __html: product.shippingInfo }} />
-                : <div className="whitespace-pre-line">{product.shippingInfo}</div>
-            )}
-            {activeTab === 'returns' && <div className="whitespace-pre-line">{product.returnPolicy}</div>}
+            {isHtml(product.description)
+              ? <div className="rich-description [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-lg [&_img]:my-3 [&_p]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h1]:mb-2 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:mb-2 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:mb-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:mb-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:mb-3 [&_a]:text-[var(--sp-primary)] [&_a]:underline [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-gray-200 [&_td]:p-2 [&_th]:border [&_th]:border-gray-200 [&_th]:p-2 [&_th]:bg-gray-50" dangerouslySetInnerHTML={{ __html: product.description }} />
+              : <div className="whitespace-pre-line">{product.description}</div>
+            }
           </div>
         </div>
 
