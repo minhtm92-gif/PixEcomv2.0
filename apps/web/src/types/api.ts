@@ -104,6 +104,8 @@ export interface AdsMetrics {
   cpc: number;
   contentViews: number;
   costPerContentView: number;
+  addToCart: number;
+  costPerAddToCart: number;
   checkout: number;
   costPerCheckout: number;
   purchases: number;

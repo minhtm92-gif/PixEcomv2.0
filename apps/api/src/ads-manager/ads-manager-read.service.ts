@@ -32,6 +32,7 @@ function buildStatsMap(
       impressions: unknown;
       linkClicks: unknown;
       contentViews: unknown;
+      addToCart: unknown;
       checkoutInitiated: unknown;
       purchases: unknown;
       purchaseValue: unknown;
@@ -45,6 +46,7 @@ function buildStatsMap(
       impressions: Number(row._sum.impressions ?? 0),
       linkClicks: Number(row._sum.linkClicks ?? 0),
       contentViews: Number(row._sum.contentViews ?? 0),
+      addToCart: Number(row._sum.addToCart ?? 0),
       checkoutInitiated: Number(row._sum.checkoutInitiated ?? 0),
       purchases: Number(row._sum.purchases ?? 0),
       purchaseValue: Number(row._sum.purchaseValue ?? 0),
@@ -63,6 +65,7 @@ function aggregateSummary(map: StatsMap): RawAdStats {
     total.impressions += raw.impressions;
     total.linkClicks += raw.linkClicks;
     total.contentViews += raw.contentViews;
+    total.addToCart += raw.addToCart;
     total.checkoutInitiated += raw.checkoutInitiated;
     total.purchases += raw.purchases;
     total.purchaseValue += raw.purchaseValue;
@@ -139,6 +142,7 @@ export class AdsManagerReadService {
         impressions: true,
         linkClicks: true,
         contentViews: true,
+        addToCart: true,
         checkoutInitiated: true,
         purchases: true,
         purchaseValue: true,
@@ -216,6 +220,7 @@ export class AdsManagerReadService {
         impressions: true,
         linkClicks: true,
         contentViews: true,
+        addToCart: true,
         checkoutInitiated: true,
         purchases: true,
         purchaseValue: true,
@@ -296,6 +301,7 @@ export class AdsManagerReadService {
         impressions: true,
         linkClicks: true,
         contentViews: true,
+        addToCart: true,
         checkoutInitiated: true,
         purchases: true,
         purchaseValue: true,

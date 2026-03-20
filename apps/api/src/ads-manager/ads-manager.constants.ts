@@ -46,6 +46,7 @@ export interface RawAdStats {
   impressions: number;
   linkClicks: number;
   contentViews: number;
+  addToCart: number;
   checkoutInitiated: number;
   purchases: number;
   purchaseValue: number;
@@ -59,6 +60,8 @@ export interface DerivedMetrics {
   cpc: number;           // spend / clicks
   contentViews: number;
   costPerContentView: number; // spend / contentViews
+  addToCart: number;
+  costPerAddToCart: number;   // spend / addToCart
   checkout: number;
   costPerCheckout: number;    // spend / checkout
   purchases: number;
@@ -90,6 +93,8 @@ export function computeMetrics(raw: RawAdStats): DerivedMetrics {
     cpc: safeDivide(raw.spend, raw.linkClicks),
     contentViews: raw.contentViews,
     costPerContentView: safeDivide(raw.spend, raw.contentViews),
+    addToCart: raw.addToCart,
+    costPerAddToCart: safeDivide(raw.spend, raw.addToCart),
     checkout: raw.checkoutInitiated,
     costPerCheckout: safeDivide(raw.spend, raw.checkoutInitiated),
     purchases: raw.purchases,
@@ -108,6 +113,7 @@ export function zeroRaw(): RawAdStats {
     impressions: 0,
     linkClicks: 0,
     contentViews: 0,
+    addToCart: 0,
     checkoutInitiated: 0,
     purchases: 0,
     purchaseValue: 0,
