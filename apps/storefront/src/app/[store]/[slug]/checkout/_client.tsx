@@ -156,18 +156,24 @@ function CheckoutForm() {
   const urlUpsellPct = Number(searchParams?.get('upsellPct')) || (typeof window !== 'undefined' ? Number(new URLSearchParams(window.location.search).get('upsellPct')) || 0 : 0);
 
   // Read cart items from sessionStorage (multi-item cart flow)
-  const [cartLineItems] = useState<CartLineItem[]>(() => {
-    if (typeof window === 'undefined') return [];
+  const [cartLineItems, setCartLineItems] = useState<CartLineItem[]>([]);
+  const isMultiItemCart = cartLineItems.length > 0;
+
+  // Read sessionStorage in useEffect — useState initializer can miss data
+  // on client-side navigation (Next.js Link)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
     const sp = new URLSearchParams(window.location.search);
-    if (sp.get('cart') !== '1') return []; // single-item "Buy Now" flow
+    if (sp.get('cart') !== '1') return; // single-item "Buy Now" flow
     try {
       const raw = sessionStorage.getItem('pixecom_cart');
-      if (!raw) return [];
+      if (!raw) return;
       const parsed = JSON.parse(raw) as CartLineItem[];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  });
-  const isMultiItemCart = cartLineItems.length > 0;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setCartLineItems(parsed);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // Data state
   const [product, setProduct] = useState<ProductInfo | null>(null);
@@ -190,7 +196,14 @@ function CheckoutForm() {
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'paypal'>('card');
   const [checkoutFormMode, setCheckoutFormMode] = useState<string>('PAYPAL_AND_CARD');
   const [selectedDiscount, setSelectedDiscount] = useState<string | null>(null);
-  const [qty] = useState(() => isMultiItemCart ? cartLineItems.reduce((s, i) => s + i.qty, 0) : getUrlParams().qty);
+  const [qty, setQty] = useState(() => getUrlParams().qty);
+
+  // Update qty when cart items load from sessionStorage
+  useEffect(() => {
+    if (cartLineItems.length > 0) {
+      setQty(cartLineItems.reduce((s, i) => s + i.qty, 0));
+    }
+  }, [cartLineItems]);
 
   // Payment state
   const [submitting, setSubmitting] = useState(false);

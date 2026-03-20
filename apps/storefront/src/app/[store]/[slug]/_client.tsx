@@ -393,25 +393,46 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
       quantity: qty,
     });
 
-    const newItem: MockCartItem = {
-      id: `cart_${Date.now()}`,
-      productId: product!.id,
-      slug: slug, // sellpage slug from URL (not product.slug)
-      name: product!.name,
-      image: product!.thumbnails[0] ?? product!.images[0],
-      price: effectivePrice,
-      comparePrice: product!.comparePrice,
-      qty,
-      variant: getVariantLabel(),
-      variantId: matchedVariant?.id,
-      upsellPct: upsellResult?.discountPct,
-    };
     setCartItems(prev => {
-      const existing = prev.find(i => i.productId === product!.id && i.variant === newItem.variant);
-      if (existing) {
-        return prev.map(i => (i.id === existing.id ? { ...i, qty: i.qty + qty, price: effectivePrice, comparePrice: product!.comparePrice, upsellPct: upsellResult?.discountPct } : i));
+      // Compute total cart qty AFTER adding the new item
+      const existingItem = prev.find(i => i.productId === product!.id && i.variant === getVariantLabel());
+      const currentCartQty = prev.reduce((sum, i) => sum + i.qty, 0);
+      const totalQtyAfterAdd = currentCartQty + qty;
+
+      // Re-compute upsell price based on total cart qty (not just this item's qty)
+      const cartUpsell = computeUpsellPrice(product!.boostModules, totalQtyAfterAdd, product!.comparePrice);
+      const cartEffectivePrice = cartUpsell ? cartUpsell.effectivePrice : product!.price;
+
+      const newItem: MockCartItem = {
+        id: `cart_${Date.now()}`,
+        productId: product!.id,
+        slug: slug,
+        name: product!.name,
+        image: product!.thumbnails[0] ?? product!.images[0],
+        price: cartEffectivePrice,
+        comparePrice: product!.comparePrice,
+        qty,
+        variant: getVariantLabel(),
+        variantId: matchedVariant?.id,
+        upsellPct: cartUpsell?.discountPct,
+      };
+
+      let updated: MockCartItem[];
+      if (existingItem) {
+        updated = prev.map(i => (i.id === existingItem.id ? { ...i, qty: i.qty + qty, price: cartEffectivePrice, comparePrice: product!.comparePrice, upsellPct: cartUpsell?.discountPct } : i));
+      } else {
+        updated = [...prev, newItem];
       }
-      return [...prev, newItem];
+
+      // Apply the upsell discount to ALL existing cart items (same product)
+      if (cartUpsell) {
+        updated = updated.map(i => i.productId === product!.id
+          ? { ...i, price: cartEffectivePrice, upsellPct: cartUpsell.discountPct }
+          : i
+        );
+      }
+
+      return updated;
     });
     setAddedToCart(true);
     setCartOpen(true);
