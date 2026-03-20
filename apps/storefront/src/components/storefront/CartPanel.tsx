@@ -46,6 +46,15 @@ export function CartPanel({ open, onClose, items, onUpdate, storeSlug, boostModu
     params.set('cart', '1'); // flag: read cart from sessionStorage
     if (item.upsellPct) params.set('upsellPct', String(item.upsellPct));
 
+    // UTM passthrough — preserve attribution through cart → checkout flow
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].forEach(key => {
+        const val = urlParams.get(key);
+        if (val) params.set(key, val);
+      });
+    }
+
     return storeHref(storeSlug, `/${item.slug}/checkout?${params.toString()}`);
   }
 
