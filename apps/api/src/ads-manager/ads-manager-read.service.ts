@@ -414,20 +414,7 @@ export class AdsManagerReadService {
       _count: true,
     });
 
-    // Build campaign breakdown map
-    const campaignMap = new Map<string, { cv: number; atc: number; co: number; po: number }>();
-    for (const ce of campaignEvents) {
-      const name = ce.utmCampaign || 'Unknown';
-      if (name === '') continue; // skip empty strings
-      if (!campaignMap.has(name)) campaignMap.set(name, { cv: 0, atc: 0, co: 0, po: 0 });
-      const entry = campaignMap.get(name)!;
-      if (ce.eventType === 'content_view') entry.cv = ce._count;
-      else if (ce.eventType === 'add_to_cart') entry.atc = ce._count;
-      else if (ce.eventType === 'checkout') entry.co = ce._count;
-      else if (ce.eventType === 'purchase') entry.po = ce._count;
-    }
-
-    // Merge with FB ad spend data
+    // Merge with FB ad spend data — load campaign names
     const campaignIds = adStats.map(s => s.entityId);
     const campaigns = campaignIds.length > 0 ? await this.prisma.campaign.findMany({
       where: { id: { in: campaignIds } },
@@ -435,15 +422,49 @@ export class AdsManagerReadService {
     }) : [];
     const fbCampaignMap = new Map(campaigns.map(c => [c.id, c.name]));
 
-    // Add FB spend to campaign breakdown
+    // UTM uses campaign UUID → resolve to campaign name for display.
+    // Collect all unique utm_campaign UUIDs from events to resolve names.
+    const utmCampaignIds = [...new Set(
+      campaignEvents.map(ce => ce.utmCampaign).filter((v): v is string => !!v && v !== ''),
+    )];
+    // Load campaign names for UTM IDs not already in fbCampaignMap
+    const missingIds = utmCampaignIds.filter(id => !fbCampaignMap.has(id));
+    if (missingIds.length > 0) {
+      const extraCampaigns = await this.prisma.campaign.findMany({
+        where: { id: { in: missingIds } },
+        select: { id: true, name: true },
+      });
+      for (const c of extraCampaigns) {
+        fbCampaignMap.set(c.id, c.name);
+      }
+    }
+
+    // Build campaign breakdown map — keyed by campaign NAME (resolved from UUID)
+    const campaignMap = new Map<string, { cv: number; atc: number; co: number; po: number; id: string }>();
+    for (const ce of campaignEvents) {
+      const utmVal = ce.utmCampaign || '';
+      if (utmVal === '') continue;
+      // Resolve: if utm_campaign is a UUID that maps to a campaign name, use the name
+      const displayName = fbCampaignMap.get(utmVal) || utmVal;
+      if (!campaignMap.has(displayName)) campaignMap.set(displayName, { cv: 0, atc: 0, co: 0, po: 0, id: utmVal });
+      const entry = campaignMap.get(displayName)!;
+      if (ce.eventType === 'content_view') entry.cv = ce._count;
+      else if (ce.eventType === 'add_to_cart') entry.atc = ce._count;
+      else if (ce.eventType === 'checkout') entry.co = ce._count;
+      else if (ce.eventType === 'purchase') entry.po = ce._count;
+    }
+
+    // Add FB campaigns with spend that have no storefront events yet
     for (const stat of adStats) {
       const name = fbCampaignMap.get(stat.entityId) || stat.entityId;
-      if (!campaignMap.has(name)) campaignMap.set(name, { cv: 0, atc: 0, co: 0, po: 0 });
+      if (!campaignMap.has(name)) campaignMap.set(name, { cv: 0, atc: 0, co: 0, po: 0, id: stat.entityId });
     }
 
     const byCampaign = Array.from(campaignMap.entries()).map(([name, stats]) => {
-      // Find matching FB spend
-      const fbStat = adStats.find(s => fbCampaignMap.get(s.entityId) === name);
+      // Find matching FB spend — match by campaign ID (stats.id) or by resolved name
+      const fbStat = adStats.find(s =>
+        s.entityId === stats.id || fbCampaignMap.get(s.entityId) === name,
+      );
       const campSpend = Number(fbStat?.spend || 0);
       return {
         campaignName: name,
