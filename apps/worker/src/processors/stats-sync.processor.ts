@@ -229,7 +229,7 @@ export async function statsSyncProcessor(
             cpc: s.cpc,
             linkClicks: s.linkClicks,
             contentViews: s.contentViews,
-            addToCart: 0, // not fetched from Meta currently
+            addToCart: s.addToCart ?? 0,
             checkoutInitiated: s.checkoutInitiated,
             purchases: s.purchases,
             purchaseValue: s.purchaseValue,
@@ -256,7 +256,7 @@ export async function statsSyncProcessor(
             cpc: s.cpc,
             linkClicks: s.linkClicks,
             contentViews: s.contentViews,
-            addToCart: 0,
+            addToCart: s.addToCart ?? 0,
             checkoutInitiated: s.checkoutInitiated,
             purchases: s.purchases,
             purchaseValue: s.purchaseValue,
@@ -275,7 +275,7 @@ export async function statsSyncProcessor(
             cpc: s.cpc,
             linkClicks: s.linkClicks,
             contentViews: s.contentViews,
-            addToCart: 0,
+            addToCart: s.addToCart ?? 0,
             checkoutInitiated: s.checkoutInitiated,
             purchases: s.purchases,
             purchaseValue: s.purchaseValue,
@@ -358,6 +358,7 @@ async function aggregateSellpageStats(
           cpc: true,
           linkClicks: true,
           contentViews: true,
+          addToCart: true,
           checkoutInitiated: true,
           purchases: true,
           purchaseValue: true,
@@ -389,13 +390,13 @@ async function aggregateSellpageStats(
           cpc: Number(r.cpc),
           linkClicks: Number(r.linkClicks),
           contentViews: Number(r.contentViews),
+          addToCart: Number(r.addToCart ?? 0),
           checkoutInitiated: Number(r.checkoutInitiated),
           purchases: Number(r.purchases),
           purchaseValue: Number(r.purchaseValue),
           costPerPurchase: Number(r.costPerPurchase),
           roas: Number(r.roas),
-          addToCart: 0,
-        } as MappedStats));
+        }));
 
         const agg = aggregateStats(mappedRows);
         const statDate = new Date(`${dateKey}T00:00:00.000Z`);
@@ -418,6 +419,7 @@ async function aggregateSellpageStats(
             ctr: agg.ctr,
             linkClicks: agg.linkClicks,
             contentViews: agg.contentViews,
+            addToCart: agg.addToCart,
             checkoutInitiated: agg.checkoutInitiated,
             purchases: agg.purchases,
             costPerPurchase: agg.costPerPurchase,
@@ -439,7 +441,7 @@ async function aggregateSellpageStats(
             ctr: agg.ctr,
             linkClicks: agg.linkClicks,
             contentViews: agg.contentViews,
-            addToCart: 0,
+            addToCart: agg.addToCart,
             checkoutInitiated: agg.checkoutInitiated,
             purchases: agg.purchases,
             costPerPurchase: agg.costPerPurchase,

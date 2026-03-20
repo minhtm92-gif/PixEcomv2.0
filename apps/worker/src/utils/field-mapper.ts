@@ -47,6 +47,7 @@ export interface MappedStats {
   impressions: number;
   linkClicks: number;
   contentViews: number;
+  addToCart: number;
   checkoutInitiated: number;
   purchases: number;
   purchaseValue: number;
@@ -102,6 +103,7 @@ export function mapInsightRow(row: MetaInsightRow): MappedStats {
   const impressions = num(row.impressions);
   const linkClicks = num(row.inline_link_clicks);
   const contentViews = findActionValue(row.actions, 'content_view');
+  const addToCart = findActionValue(row.actions, 'add_to_cart');
   const checkoutInitiated = findActionValue(row.actions, 'initiate_checkout');
   const purchases = findActionValue(row.actions, 'purchase');
   const purchaseValue = findActionValue(row.action_values, 'purchase');
@@ -120,6 +122,7 @@ export function mapInsightRow(row: MetaInsightRow): MappedStats {
     impressions,
     linkClicks,
     contentViews,
+    addToCart,
     checkoutInitiated,
     purchases,
     purchaseValue,
@@ -141,6 +144,7 @@ export function aggregateStats(rows: MappedStats[]): Omit<MappedStats, 'dateStar
   let impressions = 0;
   let linkClicks = 0;
   let contentViews = 0;
+  let addToCart = 0;
   let checkoutInitiated = 0;
   let purchases = 0;
   let purchaseValue = 0;
@@ -150,6 +154,7 @@ export function aggregateStats(rows: MappedStats[]): Omit<MappedStats, 'dateStar
     impressions += r.impressions;
     linkClicks += r.linkClicks;
     contentViews += r.contentViews;
+    addToCart += r.addToCart;
     checkoutInitiated += r.checkoutInitiated;
     purchases += r.purchases;
     purchaseValue += r.purchaseValue;
@@ -167,6 +172,7 @@ export function aggregateStats(rows: MappedStats[]): Omit<MappedStats, 'dateStar
     impressions,
     linkClicks,
     contentViews,
+    addToCart,
     checkoutInitiated,
     purchases,
     purchaseValue,

@@ -683,6 +683,7 @@ model Order {
   // ── Attribution (Task B3) ─────────────────────────────────────────────
   source          String?     @db.VarChar(50)
   transactionId   String?     @map("transaction_id") @db.VarChar(255)
+  paymentGatewayId String?    @map("payment_gateway_id") @db.Uuid
   utmSource       String?     @map("utm_source") @db.VarChar(255)
   utmMedium       String?     @map("utm_medium") @db.VarChar(255)
   utmCampaign     String?     @map("utm_campaign") @db.VarChar(255)
@@ -691,11 +692,12 @@ model Order {
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller   Seller       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  sellpage Sellpage?    @relation(fields: [sellpageId], references: [id], onDelete: SetNull)
-  items    OrderItem[]
-  events   OrderEvent[]
-  reviews  Review[]
+  seller         Seller          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellpage       Sellpage?       @relation(fields: [sellpageId], references: [id], onDelete: SetNull)
+  paymentGateway PaymentGateway? @relation(fields: [paymentGatewayId], references: [id], onDelete: SetNull)
+  items          OrderItem[]
+  events         OrderEvent[]
+  reviews        Review[]
 
   @@unique([sellerId, orderNumber], name: "uq_order_number")
   @@index([sellerId, status])
@@ -1007,6 +1009,7 @@ model PaymentGateway {
 
   sellersPaypal     Seller[] @relation("SellerPaypal")
   sellersCreditCard Seller[] @relation("SellerCreditCard")
+  orders            Order[]
 
   @@map("payment_gateways")
 }

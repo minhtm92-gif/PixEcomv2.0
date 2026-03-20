@@ -8,7 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CheckoutDto, ConfirmPaymentDto } from './dto/checkout.dto';
 import { TrackEventDto } from './dto/track-event.dto';
 import { StripePaymentService } from './payments/stripe.service';
-import { PayPalPaymentService } from './payments/paypal.service';
+import { PayPalPaymentService, PayPalGatewayConfig } from './payments/paypal.service';
 import { ReviewsService } from './reviews.service';
 import { EmailService } from '../email/email.service';
 import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
@@ -740,15 +740,25 @@ export class StorefrontService {
         payment: { type: 'stripe' as const, clientSecret },
       };
     } else {
+      // Resolve seller's PayPal gateway credentials
+      const paypalConfig = this.resolvePayPalConfig(seller.paypalGateway);
+      if (!paypalConfig) {
+        throw new BadRequestException('Seller has no PayPal gateway configured');
+      }
+
       const { paypalOrderId, approvalUrl } = await this.paypal.createOrder(
         total,
         currency,
         metadata,
+        paypalConfig,
       );
 
       await this.prisma.order.update({
         where: { id: order.id },
-        data: { paymentId: paypalOrderId },
+        data: {
+          paymentId: paypalOrderId,
+          paymentGatewayId: seller.paypalGateway?.id ?? null,
+        },
       });
 
       return {
@@ -778,6 +788,7 @@ export class StorefrontService {
         status: true,
         paymentMethod: true,
         paymentId: true,
+        paymentGatewayId: true,
         orderNumber: true,
         items: {
           select: {
@@ -815,7 +826,23 @@ export class StorefrontService {
       if (!ppId) {
         throw new BadRequestException('Missing PayPal order ID');
       }
-      const result = await this.paypal.captureOrder(ppId);
+
+      // Resolve gateway config: from order's paymentGatewayId, or fallback to .env
+      let captureGatewayConfig: PayPalGatewayConfig | undefined;
+      if (order.paymentGatewayId) {
+        const gateway = await this.prisma.paymentGateway.findUnique({
+          where: { id: order.paymentGatewayId },
+          select: { credentials: true, environment: true, status: true },
+        });
+        const resolved = this.resolvePayPalConfig(
+          gateway as { credentials: unknown; environment: string; status: string } | null,
+        );
+        if (resolved) {
+          captureGatewayConfig = resolved;
+        }
+      }
+
+      const result = await this.paypal.captureOrder(ppId, captureGatewayConfig);
       if (result.status !== 'COMPLETED') {
         throw new BadRequestException(
           `PayPal payment not completed. Status: ${result.status}`,
@@ -983,6 +1010,12 @@ export class StorefrontService {
             defaultCurrency: true,
           },
         },
+        paypalGateway: {
+          select: { id: true, credentials: true, environment: true, status: true },
+        },
+        creditCardGateway: {
+          select: { id: true, credentials: true, environment: true, status: true },
+        },
       },
     });
 
@@ -991,6 +1024,19 @@ export class StorefrontService {
     }
 
     return seller;
+  }
+
+  private resolvePayPalConfig(
+    gateway: { credentials: unknown; environment: string; status: string } | null,
+  ): PayPalGatewayConfig | null {
+    if (!gateway || gateway.status !== 'ACTIVE') return null;
+    const creds = gateway.credentials as { clientId?: string; clientSecret?: string } | null;
+    if (!creds?.clientId || !creds?.clientSecret) return null;
+    return {
+      clientId: creds.clientId,
+      clientSecret: creds.clientSecret,
+      mode: gateway.environment === 'live' ? 'live' : 'sandbox',
+    };
   }
 
   private async getSocialProof(

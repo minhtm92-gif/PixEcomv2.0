@@ -1,6 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+export interface PayPalGatewayConfig {
+  clientId: string;
+  clientSecret: string;
+  mode: 'sandbox' | 'live';
+}
+
 interface PayPalAccessToken {
   access_token: string;
   expires_in: number;
@@ -15,31 +21,39 @@ interface PayPalOrderResponse {
 @Injectable()
 export class PayPalPaymentService {
   private readonly logger = new Logger(PayPalPaymentService.name);
-  private readonly baseUrl: string;
-  private readonly clientId: string;
-  private readonly clientSecret: string;
 
-  private cachedToken: string | null = null;
-  private tokenExpiresAt = 0;
+  /** Fallback credentials from .env (backward compat for legacy orders) */
+  private readonly fallbackConfig: PayPalGatewayConfig;
+
+  /** Per-gateway token cache keyed by clientId */
+  private tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
   constructor(private readonly config: ConfigService) {
     const mode = this.config.get<string>('PAYPAL_MODE', 'sandbox');
-    this.baseUrl =
-      mode === 'live'
-        ? 'https://api-m.paypal.com'
-        : 'https://api-m.sandbox.paypal.com';
-    this.clientId = this.config.get<string>('PAYPAL_CLIENT_ID', '');
-    this.clientSecret = this.config.get<string>('PAYPAL_CLIENT_SECRET', '');
+    this.fallbackConfig = {
+      clientId: this.config.get<string>('PAYPAL_CLIENT_ID', ''),
+      clientSecret: this.config.get<string>('PAYPAL_CLIENT_SECRET', ''),
+      mode: mode === 'live' ? 'live' : 'sandbox',
+    };
+  }
+
+  private getBaseUrl(mode: 'sandbox' | 'live'): string {
+    return mode === 'live'
+      ? 'https://api-m.paypal.com'
+      : 'https://api-m.sandbox.paypal.com';
   }
 
   async createOrder(
     amount: number,
     currency: string,
     metadata: Record<string, string>,
+    gatewayConfig?: PayPalGatewayConfig,
   ): Promise<{ paypalOrderId: string; approvalUrl: string }> {
-    const token = await this.getAccessToken();
+    const cfg = gatewayConfig ?? this.fallbackConfig;
+    const baseUrl = this.getBaseUrl(cfg.mode);
+    const token = await this.getAccessToken(cfg);
 
-    const res = await fetch(`${this.baseUrl}/v2/checkout/orders`, {
+    const res = await fetch(`${baseUrl}/v2/checkout/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -74,7 +88,7 @@ export class PayPalPaymentService {
     const data = (await res.json()) as PayPalOrderResponse;
     const approvalLink = data.links.find((l) => l.rel === 'approve');
 
-    this.logger.log(`PayPal order created: ${data.id}`);
+    this.logger.log(`PayPal order created: ${data.id} (mode=${cfg.mode})`);
 
     return {
       paypalOrderId: data.id,
@@ -84,11 +98,14 @@ export class PayPalPaymentService {
 
   async captureOrder(
     paypalOrderId: string,
+    gatewayConfig?: PayPalGatewayConfig,
   ): Promise<{ status: string; transactionId: string }> {
-    const token = await this.getAccessToken();
+    const cfg = gatewayConfig ?? this.fallbackConfig;
+    const baseUrl = this.getBaseUrl(cfg.mode);
+    const token = await this.getAccessToken(cfg);
 
     const res = await fetch(
-      `${this.baseUrl}/v2/checkout/orders/${paypalOrderId}/capture`,
+      `${baseUrl}/v2/checkout/orders/${paypalOrderId}/capture`,
       {
         method: 'POST',
         headers: {
@@ -104,9 +121,11 @@ export class PayPalPaymentService {
       throw new Error(`PayPal capture error: ${res.status}`);
     }
 
-    const data = (await res.json()) as any;
-    const capture =
-      data.purchase_units?.[0]?.payments?.captures?.[0] ?? {};
+    const data = (await res.json()) as Record<string, unknown>;
+    const purchaseUnits = data.purchase_units as Array<Record<string, unknown>> | undefined;
+    const payments = purchaseUnits?.[0]?.payments as Record<string, unknown> | undefined;
+    const captures = payments?.captures as Array<Record<string, unknown>> | undefined;
+    const capture = captures?.[0] ?? {};
 
     return {
       status: data.status as string,
@@ -114,16 +133,21 @@ export class PayPalPaymentService {
     };
   }
 
-  private async getAccessToken(): Promise<string> {
-    if (this.cachedToken && Date.now() < this.tokenExpiresAt) {
-      return this.cachedToken;
+  private async getAccessToken(gatewayConfig?: PayPalGatewayConfig): Promise<string> {
+    const cfg = gatewayConfig ?? this.fallbackConfig;
+    const cacheKey = cfg.clientId;
+
+    const cached = this.tokenCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.token;
     }
 
+    const baseUrl = this.getBaseUrl(cfg.mode);
     const credentials = Buffer.from(
-      `${this.clientId}:${this.clientSecret}`,
+      `${cfg.clientId}:${cfg.clientSecret}`,
     ).toString('base64');
 
-    const res = await fetch(`${this.baseUrl}/v1/oauth2/token`, {
+    const res = await fetch(`${baseUrl}/v1/oauth2/token`, {
       method: 'POST',
       headers: {
         Authorization: `Basic ${credentials}`,
@@ -137,9 +161,11 @@ export class PayPalPaymentService {
     }
 
     const data = (await res.json()) as PayPalAccessToken;
-    this.cachedToken = data.access_token;
-    this.tokenExpiresAt = Date.now() + (data.expires_in - 60) * 1000;
+    const token = data.access_token;
+    const expiresAt = Date.now() + (data.expires_in - 60) * 1000;
 
-    return this.cachedToken;
+    this.tokenCache.set(cacheKey, { token, expiresAt });
+
+    return token;
   }
 }
