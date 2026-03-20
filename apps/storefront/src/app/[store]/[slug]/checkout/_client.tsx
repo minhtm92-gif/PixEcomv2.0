@@ -74,6 +74,20 @@ interface ProductInfo {
   variantLabel: string;
 }
 
+/** A single line item in a multi-item cart checkout */
+interface CartLineItem {
+  productId: string;
+  slug: string;
+  name: string;
+  image: string;
+  price: number;
+  comparePrice: number;
+  qty: number;
+  variant?: string;
+  variantId?: string;
+  upsellPct?: number;
+}
+
 interface StoreInfo {
   name: string;
   slug: string;
@@ -141,6 +155,20 @@ function CheckoutForm() {
   // Also read from React hook for reactive display (savings banner etc.)
   const urlUpsellPct = Number(searchParams?.get('upsellPct')) || (typeof window !== 'undefined' ? Number(new URLSearchParams(window.location.search).get('upsellPct')) || 0 : 0);
 
+  // Read cart items from sessionStorage (multi-item cart flow)
+  const [cartLineItems] = useState<CartLineItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get('cart') !== '1') return []; // single-item "Buy Now" flow
+    try {
+      const raw = sessionStorage.getItem('pixecom_cart');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as CartLineItem[];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
+  const isMultiItemCart = cartLineItems.length > 0;
+
   // Data state
   const [product, setProduct] = useState<ProductInfo | null>(null);
   const [storeInfo, setStoreInfo] = useState<StoreInfo>({ name: '', slug: storeSlug });
@@ -162,7 +190,7 @@ function CheckoutForm() {
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'paypal'>('card');
   const [checkoutFormMode, setCheckoutFormMode] = useState<string>('PAYPAL_AND_CARD');
   const [selectedDiscount, setSelectedDiscount] = useState<string | null>(null);
-  const [qty] = useState(() => getUrlParams().qty);
+  const [qty] = useState(() => isMultiItemCart ? cartLineItems.reduce((s, i) => s + i.qty, 0) : getUrlParams().qty);
 
   // Payment state
   const [submitting, setSubmitting] = useState(false);
@@ -192,7 +220,8 @@ function CheckoutForm() {
     if (!pixelId || typeof window === 'undefined') return;
     if (window.fbq) return; // Already loaded
 
-    !function(f: any,b: any,e: any,v: any,n?: any,t?: any,s?: any){
+    // eslint-disable-next-line no-void
+    void function(f: any,b: any,e: any,v: any,n?: any,t?: any,s?: any){
       if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
       if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
@@ -299,7 +328,9 @@ function CheckoutForm() {
   }, [storeSlug, slug]);
 
   // ── Pricing ──
-  const subtotal = (product?.price ?? 0) * qty;
+  const subtotal = isMultiItemCart
+    ? cartLineItems.reduce((sum, item) => sum + item.price * item.qty, 0)
+    : (product?.price ?? 0) * qty;
 
   // Shipping: use sellpage config if available, otherwise fallback to selected option
   let shippingLabel = '';
@@ -324,7 +355,9 @@ function CheckoutForm() {
   const total = Math.max(0, subtotal + shippingCost - discountAmount);
 
   // Compare price totals for savings display
-  const compareSubtotal = (product?.comparePrice ?? 0) * qty;
+  const compareSubtotal = isMultiItemCart
+    ? cartLineItems.reduce((sum, item) => sum + (item.comparePrice ?? item.price) * item.qty, 0)
+    : (product?.comparePrice ?? 0) * qty;
   const compareTotal = compareSubtotal + shippingCost;
   const savings = compareTotal - total;
   const hasSavings = savings > 0.01 && urlUpsellPct > 0;
@@ -371,6 +404,20 @@ function CheckoutForm() {
           country: billingForm.country,
         }
       : { ...shippingAddress };
+
+    // Multi-item cart: send each cart line as a separate item
+    const items = isMultiItemCart
+      ? cartLineItems.map(ci => ({
+          productId: ci.productId,
+          variantId: ci.variantId,
+          quantity: ci.qty,
+        }))
+      : [{
+          productId: product!.id,
+          variantId: getUrlParams().variantId ?? sellpageData?.product.variants[0]?.id,
+          quantity: qty,
+        }];
+
     return {
       customerEmail: form.email.trim(),
       customerName: `${form.firstName.trim()} ${form.lastName.trim()}`,
@@ -378,11 +425,7 @@ function CheckoutForm() {
       shippingAddress,
       billingAddress,
       shippingMethod: shipping as 'standard' | 'express' | 'overnight',
-      items: [{
-        productId: product!.id,
-        variantId: getUrlParams().variantId ?? sellpageData?.product.variants[0]?.id,
-        quantity: qty,
-      }],
+      items,
       discountId: selectedDiscount ?? undefined,
       paymentMethod: payMethod,
       sellpageSlug: slug,
@@ -880,33 +923,66 @@ function CheckoutForm() {
                 </div>
               )}
 
-              {/* Product */}
-              <div className="flex gap-3 mb-5 pb-4 border-b border-gray-100">
-                <div className="relative w-16 h-16 flex-shrink-0">
-                  {product.image && (
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className="w-full h-full object-cover rounded-xl bg-gray-100"
-                    />
-                  )}
+              {/* Product(s) */}
+              {isMultiItemCart ? (
+                <div className="mb-5 pb-4 border-b border-gray-100 space-y-3">
+                  {cartLineItems.map((item, idx) => (
+                    <div key={item.variantId ?? idx} className="flex gap-3">
+                      <div className="relative w-16 h-16 flex-shrink-0">
+                        {item.image && (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-full h-full object-cover rounded-xl bg-gray-100"
+                          />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 line-clamp-2">{item.name}</p>
+                        {item.variant && (
+                          <p className="text-xs text-gray-500 mt-0.5">{item.variant}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          <span className="font-semibold text-[var(--sp-primary)]">Qty: {item.qty}</span>
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        {item.comparePrice > item.price && (
+                          <span className="text-xs text-gray-400 line-through block">${item.comparePrice.toFixed(2)}</span>
+                        )}
+                        <span className="text-sm font-bold text-gray-900">${(item.price * item.qty).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 line-clamp-2">{product.name}</p>
-                  {product.variantLabel && (
-                    <p className="text-xs text-gray-500 mt-0.5">{product.variantLabel}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    <span className="font-semibold text-[var(--sp-primary)]">Quantity: {qty}</span>
-                  </p>
+              ) : (
+                <div className="flex gap-3 mb-5 pb-4 border-b border-gray-100">
+                  <div className="relative w-16 h-16 flex-shrink-0">
+                    {product.image && (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="w-full h-full object-cover rounded-xl bg-gray-100"
+                      />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 line-clamp-2">{product.name}</p>
+                    {product.variantLabel && (
+                      <p className="text-xs text-gray-500 mt-0.5">{product.variantLabel}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      <span className="font-semibold text-[var(--sp-primary)]">Quantity: {qty}</span>
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {product.comparePrice > product.price && (
+                      <span className="text-xs text-gray-400 line-through block">${product.comparePrice.toFixed(2)}</span>
+                    )}
+                    <span className="text-sm font-bold text-gray-900">${product.price.toFixed(2)}</span>
+                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  {product.comparePrice > product.price && (
-                    <span className="text-xs text-gray-400 line-through block">${product.comparePrice.toFixed(2)}</span>
-                  )}
-                  <span className="text-sm font-bold text-gray-900">${product.price.toFixed(2)}</span>
-                </div>
-              </div>
+              )}
 
               {/* Totals */}
               <div className="space-y-2 text-sm">

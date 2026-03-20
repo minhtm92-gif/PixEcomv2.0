@@ -32,19 +32,19 @@ export function CartPanel({ open, onClose, items, onUpdate, storeSlug, boostModu
     onUpdate(items.map(i => (i.id === id ? { ...i, qty } : i)));
   }
 
-  // Build checkout URL with all needed params from first item
+  // Build checkout URL — store full cart in sessionStorage for multi-item support
   function getCheckoutUrl() {
     const item = items[0];
     if (!item) return storeHref(storeSlug, '/checkout');
 
-    const totalQty = items.reduce((s, i) => s + i.qty, 0);
+    // Save full cart items to sessionStorage so checkout can read all of them
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('pixecom_cart', JSON.stringify(items));
+    }
+
     const params = new URLSearchParams();
-    params.set('qty', String(totalQty));
-    if (item.variantId) params.set('variantId', item.variantId);
-    params.set('price', String(item.price));
-    if (item.comparePrice) params.set('comparePrice', String(item.comparePrice));
+    params.set('cart', '1'); // flag: read cart from sessionStorage
     if (item.upsellPct) params.set('upsellPct', String(item.upsellPct));
-    if (item.variant) params.set('variant', item.variant);
 
     return storeHref(storeSlug, `/${item.slug}/checkout?${params.toString()}`);
   }

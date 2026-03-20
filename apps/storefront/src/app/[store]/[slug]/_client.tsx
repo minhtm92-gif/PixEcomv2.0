@@ -266,7 +266,8 @@ export default function SellpagePage({ initialData }: SellpagePageProps) {
     if (!pixelId || typeof window === 'undefined') return;
     if (window.fbq) return; // Already loaded
 
-    !function(f: any,b: any,e: any,v: any,n?: any,t?: any,s?: any){
+    // eslint-disable-next-line no-void
+    void function(f: any,b: any,e: any,v: any,n?: any,t?: any,s?: any){
       if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
       if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
