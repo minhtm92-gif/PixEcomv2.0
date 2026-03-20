@@ -34,6 +34,16 @@ export class StorefrontController {
   }
 
   /**
+   * GET /api/storefront/legal-pages
+   * Public — all published legal pages from platform settings.
+   * NOTE: must be registered BEFORE :sellerSlug to avoid route collision.
+   */
+  @Get('legal-pages')
+  getLegalPages() {
+    return this.storefront.getLegalPages();
+  }
+
+  /**
    * GET /api/storefront/sitemap-data
    * Public — lightweight list of all active sellers + published sellpages for sitemap.xml.
    * NOTE: must be registered BEFORE :sellerSlug to avoid route collision.

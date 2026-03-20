@@ -20,6 +20,8 @@ interface LegalDoc {
 }
 
 const DEFAULT_DOCS: LegalDoc[] = [
+  { slug: 'shipping', title: 'Shipping Policy', description: 'Shipping methods, delivery times, and costs for all orders.', status: 'Published', content: '', lastUpdated: new Date().toISOString().slice(0, 10) },
+  { slug: 'returns', title: 'Returns & Exchanges', description: 'Return and exchange policies for purchased products.', status: 'Published', content: '', lastUpdated: new Date().toISOString().slice(0, 10) },
   { slug: 'terms', title: 'Terms of Service', description: 'Governs the use of the PixEcom platform by all sellers and buyers.', status: 'Published', content: '', lastUpdated: new Date().toISOString().slice(0, 10) },
   { slug: 'privacy', title: 'Privacy Policy', description: 'Describes how we collect, use, and protect personal data.', status: 'Published', content: '', lastUpdated: new Date().toISOString().slice(0, 10) },
   { slug: 'seller-agreement', title: 'Seller Agreement', description: 'Terms and conditions for sellers operating on the platform.', status: 'Published', content: '', lastUpdated: new Date().toISOString().slice(0, 10) },

@@ -35,6 +35,26 @@ export class StorefrontService {
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
+  // LEGAL PAGES (from platform settings)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async getLegalPages(): Promise<Record<string, unknown>> {
+    const settings = await this.prisma.platformSettings.findFirst({
+      select: { legalPages: true },
+    });
+    const pages = (settings?.legalPages ?? {}) as Record<string, any>;
+
+    // Filter to published pages only
+    const result: Record<string, any> = {};
+    for (const [slug, doc] of Object.entries(pages)) {
+      if (doc && doc.status !== 'Draft') {
+        result[slug] = doc;
+      }
+    }
+    return result;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // SITEMAP DATA (lightweight, for sitemap.xml generation)
   // ─────────────────────────────────────────────────────────────────────────
 

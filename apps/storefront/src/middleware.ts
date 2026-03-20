@@ -81,9 +81,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(url);
   }
 
+  // Strip the seller slug if the pathname already starts with it.
+  // This happens because SSR-rendered links include the slug (window is
+  // undefined on the server so storeHref can't detect the custom domain).
+  let cleanPathname = pathname;
+  if (pathname.startsWith(`/${sellerSlug}/`) || pathname === `/${sellerSlug}`) {
+    cleanPathname = pathname.slice(`/${sellerSlug}`.length) || '/';
+  }
+
   // Rewrite: jal2.com/janisie → /{sellerSlug}/janisie
   const url = request.nextUrl.clone();
-  url.pathname = `/${sellerSlug}${pathname === '/' ? '' : pathname}`;
+  url.pathname = `/${sellerSlug}${cleanPathname === '/' ? '' : cleanPathname}`;
 
   return NextResponse.rewrite(url);
 }

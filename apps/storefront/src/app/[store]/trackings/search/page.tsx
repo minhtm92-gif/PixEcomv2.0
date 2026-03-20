@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import TrackingSearchPage from './_client';
 
 export function generateStaticParams() {
-  return [{ store: 'demo-store' }];
+  return [{ store: 'demo-store' }, { store: 'pixelxlab-store-rs59b8' }];
 }
 
 export const metadata: Metadata = {

@@ -187,7 +187,22 @@ export interface OrderTrackingData {
   }>;
 }
 
+// ─── Legal Page Types ────────────────────────────────────────────────────────
+
+export interface LegalPageDoc {
+  slug: string;
+  title: string;
+  description: string;
+  status: 'Published' | 'Draft';
+  content: string;
+  lastUpdated: string;
+}
+
 // ─── API Functions ──────────────────────────────────────────────────────────
+
+export async function fetchLegalPages(): Promise<Record<string, LegalPageDoc>> {
+  return sfFetch<Record<string, LegalPageDoc>>('/legal-pages');
+}
 
 export async function fetchStore(sellerSlug: string): Promise<StoreData> {
   return sfFetch<StoreData>(`/${sellerSlug}`);

@@ -55,13 +55,33 @@ export default function AdsManagerPage() {
   const campaignName = searchParams.get('campaignName') ?? campaignId ?? '';
   const adsetName = searchParams.get('adsetName') ?? adsetId ?? '';
 
-  // Filters
+  // Filters — restore date range from localStorage so it survives F5.
+  // For presets (Today, 7d, 30d), re-compute dates from the label so they
+  // stay relative even if the page is refreshed the next day.
   const [status, setStatus] = useState('ALL');
   const [adAccountId, setAdAccountId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFrom, setDateFrom] = useState(daysAgo(30));
-  const [dateTo, setDateTo] = useState(today());
-  const [activePreset, setActivePreset] = useState('30d');
+
+  const savedPreset = typeof window !== 'undefined' ? localStorage.getItem('ads_activePreset') : null;
+  const restoredPreset = DATE_PRESETS.find((p) => p.label === savedPreset);
+
+  const [dateFrom, setDateFrom] = useState(() => {
+    if (restoredPreset) return restoredPreset.value().from;
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ads_dateFrom');
+      if (saved) return saved;
+    }
+    return daysAgo(30);
+  });
+  const [dateTo, setDateTo] = useState(() => {
+    if (restoredPreset) return restoredPreset.value().to;
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('ads_dateTo');
+      if (saved) return saved;
+    }
+    return today();
+  });
+  const [activePreset, setActivePreset] = useState(savedPreset || '30d');
 
   // Data
   const [rows, setRows] = useState<(Campaign | Adset | Ad)[]>([]);
@@ -156,6 +176,9 @@ export default function AdsManagerPage() {
     setDateFrom(preset.from);
     setDateTo(preset.to);
     setActivePreset(label);
+    localStorage.setItem('ads_dateFrom', preset.from);
+    localStorage.setItem('ads_dateTo', preset.to);
+    localStorage.setItem('ads_activePreset', label);
   }
 
   function drillDown(row: Campaign | Adset | Ad) {
@@ -368,6 +391,8 @@ export default function AdsManagerPage() {
           onChange={(e) => {
             setDateFrom(e.target.value);
             setActivePreset('');
+            localStorage.setItem('ads_dateFrom', e.target.value);
+            localStorage.setItem('ads_activePreset', '');
           }}
           className="px-2 py-1.5 bg-input border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
@@ -378,6 +403,8 @@ export default function AdsManagerPage() {
           onChange={(e) => {
             setDateTo(e.target.value);
             setActivePreset('');
+            localStorage.setItem('ads_dateTo', e.target.value);
+            localStorage.setItem('ads_activePreset', '');
           }}
           className="px-2 py-1.5 bg-input border border-border rounded-lg text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
         />
