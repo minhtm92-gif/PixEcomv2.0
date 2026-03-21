@@ -188,6 +188,8 @@ export default function LivePreviewPage() {
     },
   ];
 
+  const currentHour = new Date().getHours();
+
   // Hourly stats table columns
   const hourlyCols: Column<HourlyStatsRow>[] = [
     {
@@ -196,8 +198,15 @@ export default function LivePreviewPage() {
       render: (r) => (
         <span className="text-foreground font-medium text-xs font-mono">
           {String(r.hour).padStart(2, '0')}:00
+          {r.hour === currentHour && <span className="ml-1 text-[10px] text-green-400">●</span>}
         </span>
       ),
+    },
+    {
+      key: 'spend',
+      label: 'Spent',
+      className: 'text-right',
+      render: (r) => <span className="font-mono text-foreground text-xs">{moneyWhole(r.spend)}</span>,
     },
     {
       key: 'revenue',
@@ -436,6 +445,7 @@ export default function LivePreviewPage() {
           rowKey={(r) => String(r.hour)}
           emptyMessage="No activity today yet."
           skeletonRows={6}
+          rowClassName={(r) => r.hour === currentHour ? 'bg-emerald-950/40' : ''}
         />
       </div>
 

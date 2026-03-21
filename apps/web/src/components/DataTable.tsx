@@ -21,6 +21,7 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
   rowKey: (row: T) => string;
+  rowClassName?: (row: T, idx: number) => string;
 }
 
 export function DataTable<T>({
@@ -28,6 +29,7 @@ export function DataTable<T>({
   data,
   loading = false,
   skeletonRows = 5,
+  rowClassName,
   emptyMessage = 'No data found.',
   onRowClick,
   rowKey,
@@ -79,6 +81,7 @@ export function DataTable<T>({
                   className={cn(
                     'border-b border-border last:border-0 transition-colors',
                     onRowClick && 'cursor-pointer hover:bg-muted/40',
+                    rowClassName?.(row, idx),
                   )}
                 >
                   {columns.map((col) => (
