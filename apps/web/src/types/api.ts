@@ -102,6 +102,7 @@ export interface AdsMetrics {
   clicks: number;
   ctr: number;
   cpc: number;
+  cpm: number;
   contentViews: number;
   costPerContentView: number;
   addToCart: number;

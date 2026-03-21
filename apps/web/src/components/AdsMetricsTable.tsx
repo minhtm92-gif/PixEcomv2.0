@@ -267,6 +267,12 @@ export function AdsMetricsTable({
       render: (r) => <MetricCell value={r.cpc} pending={r.storeMetricsPending} fmt={moneyWhole} />,
     },
     {
+      key: 'cpm',
+      label: 'CPM',
+      className: 'text-right',
+      render: (r) => <MetricCell value={r.cpm} pending={r.storeMetricsPending} fmt={moneyWhole} />,
+    },
+    {
       key: 'contentViews',
       label: 'CV',
       className: 'text-right',
@@ -423,6 +429,7 @@ export function SummaryBar({
       <SumItem label="Impr." value={metricOrNA(summary.impressions, summary.storeMetricsPending, num)} />
       <SumItem label="Clicks" value={metricOrNA(summary.clicks, summary.storeMetricsPending, num)} />
       <SumItem label="CTR" value={metricOrNA(summary.ctr, summary.storeMetricsPending, pct)} />
+      <SumItem label="CPM" value={metricOrNA(summary.cpm, summary.storeMetricsPending, moneyWhole)} />
       <SumItem label="CV" value={metricOrNA(summary.contentViews, summary.storeMetricsPending, num)} />
       <SumItem label="ATC" value={metricOrNA(summary.addToCart, summary.storeMetricsPending, num)} />
       <SumItem label="Checkout" value={metricOrNA(summary.checkout, summary.storeMetricsPending, num)} />

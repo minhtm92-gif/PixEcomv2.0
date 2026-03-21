@@ -58,6 +58,7 @@ export interface DerivedMetrics {
   clicks: number;
   ctr: number;           // clicks / impressions * 100
   cpc: number;           // spend / clicks
+  cpm: number;           // spend / impressions * 1000
   contentViews: number;
   costPerContentView: number; // spend / contentViews
   addToCart: number;
@@ -91,6 +92,7 @@ export function computeMetrics(raw: RawAdStats): DerivedMetrics {
     clicks: raw.linkClicks,
     ctr: safeDivide(raw.linkClicks, raw.impressions) * 100,
     cpc: safeDivide(raw.spend, raw.linkClicks),
+    cpm: safeDivide(raw.spend, raw.impressions) * 1000,
     contentViews: raw.contentViews,
     costPerContentView: safeDivide(raw.spend, raw.contentViews),
     addToCart: raw.addToCart,
