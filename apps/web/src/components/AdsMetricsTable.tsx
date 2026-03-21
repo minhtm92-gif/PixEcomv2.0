@@ -147,9 +147,17 @@ export function AdsMetricsTable({
       key: 'name',
       label: nameLabel,
       render: (r) => (
-        <span className="text-foreground font-medium whitespace-nowrap max-w-[200px] truncate block">
-          {r.name}
-        </span>
+        <div className="group relative">
+          <span
+            className="text-foreground font-medium whitespace-nowrap max-w-[200px] truncate block"
+            title={r.name}
+          >
+            {r.name}
+          </span>
+          <div className="absolute left-0 top-full z-50 hidden group-hover:block bg-zinc-900 text-white text-xs px-3 py-2 rounded shadow-lg whitespace-nowrap max-w-[500px]">
+            {r.name}
+          </div>
+        </div>
       ),
     },
     {

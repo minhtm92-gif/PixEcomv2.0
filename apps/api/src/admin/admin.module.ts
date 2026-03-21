@@ -9,6 +9,7 @@ import { AdminAnalyticsController } from './admin-analytics.controller';
 import { AdminSettingsController } from './admin-settings.controller';
 import { AdminFbConnectionsController } from './admin-fb-connections.controller';
 import { AdminService } from './admin.service';
+import { AdminAnalyticsService } from './admin-analytics.service';
 
 @Module({
   imports: [MediaModule],
@@ -22,6 +23,6 @@ import { AdminService } from './admin.service';
     AdminSettingsController,
     AdminFbConnectionsController,
   ],
-  providers: [AdminService],
+  providers: [AdminService, AdminAnalyticsService],
 })
 export class AdminModule {}

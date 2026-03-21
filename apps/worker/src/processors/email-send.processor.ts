@@ -231,7 +231,7 @@ export async function emailSendProcessor(
       // Real send
       const [response] = await sgMail.send({
         to: emailJob.toEmail,
-        from: { email: fromEmail, name: emailJob.toName ?? undefined },
+        from: { email: fromEmail, name: process.env.SENDGRID_FROM_NAME || 'PixelxLab' },
         subject,
         html: htmlBody || `<p>${subject}</p>`,
       });

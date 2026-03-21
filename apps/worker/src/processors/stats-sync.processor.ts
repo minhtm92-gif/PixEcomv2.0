@@ -288,6 +288,9 @@ export async function statsSyncProcessor(
       // 3. SellpageStatsDaily aggregation
       await aggregateSellpageStats(prisma, account.sellerId, dateFrom, dateTo, logger);
 
+      // 4. Sync campaign metadata (name, status, budget) from Meta
+      await syncCampaignMetadata(prisma, accessToken, account.externalId, account.sellerId, logger);
+
       processed++;
       logger.log(`Processed account ${account.externalId}: ${fetchResult.entities.length} entity-day rows`);
     } catch (err) {
@@ -460,4 +463,90 @@ async function aggregateSellpageStats(
 function safeDivideLocal(a: number, b: number): number {
   if (!b || !isFinite(b)) return 0;
   return a / b;
+}
+
+// ─── Campaign metadata sync from Meta ─────────────────────────────────────────
+
+function mapMetaStatus(effectiveStatus: string): 'ACTIVE' | 'PAUSED' | 'DELETED' | 'ARCHIVED' {
+  switch (effectiveStatus) {
+    case 'ACTIVE':
+      return 'ACTIVE';
+    case 'PAUSED':
+      return 'PAUSED';
+    case 'DELETED':
+      return 'DELETED';
+    case 'ARCHIVED':
+      return 'ARCHIVED';
+    default:
+      return 'PAUSED';
+  }
+}
+
+async function syncCampaignMetadata(
+  prisma: PrismaClient,
+  accessToken: string,
+  adAccountId: string,
+  sellerId: string,
+  logger: { log: (msg: string) => void; error: (msg: string, err?: unknown) => void },
+): Promise<void> {
+  try {
+    const url = `https://graph.facebook.com/v21.0/act_${adAccountId}/campaigns`;
+    const params = new URLSearchParams({
+      access_token: accessToken,
+      fields: 'id,name,status,effective_status,daily_budget,lifetime_budget,objective',
+      limit: '500',
+    });
+    const response = await fetch(`${url}?${params}`);
+    if (!response.ok) {
+      logger.error(`Campaign metadata sync failed for account ${adAccountId}: HTTP ${response.status}`);
+      return;
+    }
+    const data: any = await response.json();
+    const campaigns: Array<{
+      id: string;
+      name: string;
+      status: string;
+      effective_status: string;
+      daily_budget?: string;
+      lifetime_budget?: string;
+      objective?: string;
+    }> = data.data || [];
+
+    let updated = 0;
+    for (const campaign of campaigns) {
+      // daily_budget and lifetime_budget come as string cents from Meta API
+      const dailyBudgetCents = campaign.daily_budget ? Number(campaign.daily_budget) : null;
+      const lifetimeBudgetCents = campaign.lifetime_budget ? Number(campaign.lifetime_budget) : null;
+      // Convert cents to dollars; prefer daily_budget, fall back to lifetime_budget
+      const budgetDollars = dailyBudgetCents != null
+        ? dailyBudgetCents / 100
+        : lifetimeBudgetCents != null
+          ? lifetimeBudgetCents / 100
+          : null;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const updateData: any = {
+        name: campaign.name,
+        status: mapMetaStatus(campaign.effective_status),
+        deliveryStatus: campaign.effective_status,
+        updatedAt: new Date(),
+      };
+
+      if (budgetDollars != null) {
+        updateData.budget = budgetDollars;
+        updateData.budgetType = dailyBudgetCents != null ? 'DAILY' : 'LIFETIME';
+      }
+
+      const result = await prisma.campaign.updateMany({
+        where: { sellerId, externalCampaignId: campaign.id },
+        data: updateData,
+      });
+
+      if (result.count > 0) updated++;
+    }
+
+    logger.log(`Campaign metadata sync: ${campaigns.length} fetched, ${updated} updated for account ${adAccountId}`);
+  } catch (err) {
+    logger.error(`Campaign metadata sync error for account ${adAccountId}`, err);
+  }
 }
