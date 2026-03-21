@@ -797,6 +797,7 @@ export interface DailyStatsResponse {
 // ── Hourly Stats (Live Preview — today's hourly breakdown) ──
 export interface HourlyStatsRow {
   hour: number; // 0-23
+  date: string; // YYYY-MM-DD
   spend: number;
   revenue: number;
   contentViews: number;

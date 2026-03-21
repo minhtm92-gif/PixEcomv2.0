@@ -930,94 +930,99 @@ export class AdsManagerReadService {
    */
   async getHourlyStats(sellerId: string) {
     const now = new Date();
-    const todayMidnight = new Date(now);
-    todayMidnight.setHours(0, 0, 0, 0);
-    const currentHour = now.getHours();
+    // Rolling 24h window: from (now - 24h) to now
+    const twentyFourAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // 1. Get today's total ad spend from AdStatsDaily (daily granularity only)
-    const today = now.toISOString().split('T')[0];
-    const statDate = new Date(`${today}T00:00:00.000Z`);
+    // 1. Get total ad spend for the 24h window (may span 2 calendar days)
+    const todayStr = now.toISOString().split('T')[0];
+    const yesterdayStr = twentyFourAgo.toISOString().split('T')[0];
+    const statDates = [new Date(`${yesterdayStr}T00:00:00.000Z`)];
+    if (todayStr !== yesterdayStr) statDates.push(new Date(`${todayStr}T00:00:00.000Z`));
+
     const adStats = await this.prisma.adStatsDaily.aggregate({
       where: {
         sellerId,
         entityType: 'CAMPAIGN',
-        statDate,
+        statDate: { in: statDates },
       },
       _sum: { spend: true },
     });
     const todaySpend = Number(adStats._sum.spend ?? 0);
 
-    // 2. Query SpendSnapshot for today to derive hourly spend deltas
+    // 2. Query SpendSnapshot for both days to derive hourly spend deltas
     const snapshots = await this.prisma.spendSnapshot.findMany({
       where: {
         sellerId,
-        statDate,
+        recordedAt: { gte: twentyFourAgo },
       },
       orderBy: { recordedAt: 'asc' },
-      select: { cumulativeSpend: true, recordedAt: true },
+      select: { cumulativeSpend: true, recordedAt: true, statDate: true },
     });
 
-    // Group snapshots by hour, keeping only the LAST snapshot per hour
-    const hourlySpendMap = new Map<number, number>(); // hour -> cumulative spend at end of that hour
+    // Key snapshots by "YYYY-MM-DD_HH" to handle cross-day correctly
+    const snapshotBySlot = new Map<string, number>();
     for (const snap of snapshots) {
+      const d = snap.recordedAt.toISOString().split('T')[0];
       const h = snap.recordedAt.getHours();
-      hourlySpendMap.set(h, Number(snap.cumulativeSpend));
+      const key = `${d}_${h}`;
+      snapshotBySlot.set(key, Number(snap.cumulativeSpend)); // last wins
     }
 
-    // Calculate per-hour spend deltas
-    const hourlySpendDeltas = new Map<number, number>();
-    const sortedHours = Array.from(hourlySpendMap.keys()).sort((a, b) => a - b);
-    for (let i = 0; i < sortedHours.length; i++) {
-      const h = sortedHours[i];
-      const cumulative = hourlySpendMap.get(h)!;
+    // Calculate deltas between consecutive slots
+    const sortedSlots = Array.from(snapshotBySlot.keys()).sort();
+    const spendDeltas = new Map<string, number>();
+    for (let i = 0; i < sortedSlots.length; i++) {
+      const key = sortedSlots[i];
+      const cumulative = snapshotBySlot.get(key)!;
       if (i === 0) {
-        // First hour with a snapshot — its delta is the cumulative itself
-        hourlySpendDeltas.set(h, cumulative);
+        spendDeltas.set(key, cumulative);
       } else {
-        const prevCumulative = hourlySpendMap.get(sortedHours[i - 1])!;
-        hourlySpendDeltas.set(h, Math.max(0, cumulative - prevCumulative));
+        const prev = snapshotBySlot.get(sortedSlots[i - 1])!;
+        spendDeltas.set(key, Math.max(0, cumulative - prev));
       }
     }
 
-    // 3. Query StorefrontEvent grouped by hour for today — count unique visitors by ipHash
+    // 3. Query StorefrontEvent grouped by date+hour for rolling 24h
     const storefrontRows = await this.prisma.$queryRawUnsafe<
-      Array<{ hour_num: string; event_type: string; unique_count: string; total_value: string }>
+      Array<{ day: string; hour_num: string; event_type: string; unique_count: string; total_value: string }>
     >(
       `SELECT
+         created_at::date::text AS day,
          EXTRACT(HOUR FROM created_at)::int AS hour_num,
          event_type,
          COUNT(DISTINCT COALESCE(ip_hash, session_id, id::text)) AS unique_count,
          COALESCE(SUM(value), 0) AS total_value
        FROM storefront_events
        WHERE seller_id = $1::uuid AND created_at >= $2
-       GROUP BY EXTRACT(HOUR FROM created_at), event_type
-       ORDER BY hour_num`,
+       GROUP BY created_at::date, EXTRACT(HOUR FROM created_at), event_type
+       ORDER BY day, hour_num`,
       sellerId,
-      todayMidnight,
+      twentyFourAgo,
     );
 
-    // 4. Get order revenue per hour for today
+    // 4. Get order revenue per date+hour
     const orderRows = await this.prisma.$queryRawUnsafe<
-      Array<{ hour_num: string; order_count: string; total_revenue: string }>
+      Array<{ day: string; hour_num: string; order_count: string; total_revenue: string }>
     >(
       `SELECT
+         created_at::date::text AS day,
          EXTRACT(HOUR FROM created_at)::int AS hour_num,
          COUNT(*) AS order_count,
          COALESCE(SUM(total), 0) AS total_revenue
        FROM orders
        WHERE seller_id = $1::uuid AND created_at >= $2
          AND status IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
-       GROUP BY EXTRACT(HOUR FROM created_at)`,
+       GROUP BY created_at::date, EXTRACT(HOUR FROM created_at)`,
       sellerId,
-      todayMidnight,
+      twentyFourAgo,
     );
 
-    // 5. Build per-hour funnel map
-    const hourMap = new Map<number, { cv: number; atc: number; co: number; po: number; revenue: number }>();
+    // 5. Build per-slot funnel map (keyed by "YYYY-MM-DD_HH")
+    const slotMap = new Map<string, { cv: number; atc: number; co: number; po: number; revenue: number }>();
     for (const row of storefrontRows) {
-      const h = Number(row.hour_num);
-      if (!hourMap.has(h)) hourMap.set(h, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
-      const f = hourMap.get(h)!;
+      const key = `${row.day}_${Number(row.hour_num)}`;
+      if (!slotMap.has(key)) slotMap.set(key, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
+      const f = slotMap.get(key)!;
       const count = Number(row.unique_count);
       switch (row.event_type) {
         case 'content_view': f.cv = count; break;
@@ -1029,21 +1034,20 @@ export class AdsManagerReadService {
           break;
       }
     }
-
-    // Overlay order data per hour (more reliable for revenue)
     for (const row of orderRows) {
-      const h = Number(row.hour_num);
-      if (!hourMap.has(h)) hourMap.set(h, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
-      const f = hourMap.get(h)!;
+      const key = `${row.day}_${Number(row.hour_num)}`;
+      if (!slotMap.has(key)) slotMap.set(key, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
+      const f = slotMap.get(key)!;
       const rev = parseFloat(row.total_revenue) || 0;
       const cnt = Number(row.order_count);
       if (rev > f.revenue) f.revenue = rev;
       if (cnt > f.po) f.po = cnt;
     }
 
-    // 6. Build hourly rows — only hours up to current hour, most recent first
+    // 6. Build 24 hourly rows — rolling window, most recent first
     const hourly: Array<{
       hour: number;
+      date: string; // YYYY-MM-DD
       spend: number;
       revenue: number;
       contentViews: number;
@@ -1054,11 +1058,17 @@ export class AdsManagerReadService {
       cr: number;
     }> = [];
 
-    for (let h = currentHour; h >= 0; h--) {
-      const f = hourMap.get(h) ?? { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 };
-      const hourSpend = hourlySpendDeltas.get(h) ?? 0;
+    const currentHour = now.getHours();
+    for (let i = 0; i < 24; i++) {
+      const slotTime = new Date(now.getTime() - i * 60 * 60 * 1000);
+      const h = slotTime.getHours();
+      const d = slotTime.toISOString().split('T')[0];
+      const key = `${d}_${h}`;
+      const f = slotMap.get(key) ?? { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 };
+      const hourSpend = spendDeltas.get(key) ?? 0;
       hourly.push({
         hour: h,
+        date: d,
         spend: hourSpend,
         revenue: f.revenue,
         contentViews: f.cv,

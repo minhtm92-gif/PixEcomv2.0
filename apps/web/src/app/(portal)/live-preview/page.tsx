@@ -189,18 +189,24 @@ export default function LivePreviewPage() {
   ];
 
   const currentHour = new Date().getHours();
+  const todayDate = new Date().toISOString().split('T')[0];
 
   // Hourly stats table columns
   const hourlyCols: Column<HourlyStatsRow>[] = [
     {
       key: 'hour',
       label: 'Time',
-      render: (r) => (
-        <span className="text-foreground font-medium text-xs font-mono">
-          {String(r.hour).padStart(2, '0')}:00
-          {r.hour === currentHour && <span className="ml-1 text-[10px] text-green-400">●</span>}
-        </span>
-      ),
+      render: (r) => {
+        const isToday = r.date === todayDate;
+        const isNow = isToday && r.hour === currentHour;
+        return (
+          <span className="text-foreground font-medium text-xs font-mono">
+            {!isToday && <span className="text-muted-foreground mr-1 text-[10px]">Ytd</span>}
+            {String(r.hour).padStart(2, '0')}:00
+            {isNow && <span className="ml-1 text-[10px] text-green-400">● Now</span>}
+          </span>
+        );
+      },
     },
     {
       key: 'spend',
@@ -431,7 +437,7 @@ export default function LivePreviewPage() {
         <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
           <Clock size={14} className="text-muted-foreground" />
           Hourly Statistics
-          <span className="text-muted-foreground font-normal">(Today)</span>
+          <span className="text-muted-foreground font-normal">(Last 24 hours)</span>
           {todaySpend > 0 && (
             <span className="text-muted-foreground font-normal ml-2">
               — Spend: {moneyWhole(todaySpend)}
@@ -442,10 +448,10 @@ export default function LivePreviewPage() {
           columns={hourlyCols}
           data={hourlyStats}
           loading={hourlyLoading}
-          rowKey={(r) => String(r.hour)}
+          rowKey={(r) => `${r.date}_${r.hour}`}
           emptyMessage="No activity today yet."
           skeletonRows={6}
-          rowClassName={(r) => r.hour === currentHour ? 'bg-emerald-950/40' : ''}
+          rowClassName={(r) => (r.hour === currentHour && r.date === todayDate) ? 'bg-emerald-950/40' : ''}
         />
       </div>
 
