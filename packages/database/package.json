@@ -23,7 +23,8 @@
     "seed:alpha:stats": "tsx prisma/seed.alpha.stats.ts",
     "seed:alpha:stats:reset": "tsx prisma/seed.alpha.stats.reset.ts",
     "seed:alpha:stats:verify": "tsx prisma/seed.alpha.stats.verify.ts",
-    "seed:admin": "tsx prisma/seed.admin.ts"
+    "seed:admin": "tsx prisma/seed.admin.ts",
+    "seed:email-templates": "tsx prisma/seed.email-templates.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0"

@@ -12,6 +12,7 @@ import { PayPalPaymentService, PayPalGatewayConfig } from './payments/paypal.ser
 import { ReviewsService } from './reviews.service';
 import { EmailService } from '../email/email.service';
 import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
+import { DiscountCodeService } from '../email-marketing/discount-code.service';
 
 // ─── Shipping cost config ──────────────────────────────────────────────────
 const SHIPPING_COSTS: Record<string, number> = {
@@ -32,6 +33,7 @@ export class StorefrontService {
     private readonly reviewsSvc: ReviewsService,
     private readonly email: EmailService,
     private readonly webhookOutbound: WebhookOutboundService,
+    private readonly discountCodeService: DiscountCodeService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -608,9 +610,26 @@ export class StorefrontService {
           : SHIPPING_COSTS[dto.shippingMethod] ?? 4.99;
     }
 
-    // Discount
+    // Discount — support both sellpage discount (discountId) and recovery code (discountCode)
     let discountAmount = 0;
-    if (dto.discountId) {
+    let appliedRecoveryCodeId: string | null = null;
+
+    if (dto.discountCode) {
+      // Recovery discount code from email marketing
+      const codeResult = await this.discountCodeService.applyCode(
+        seller.id,
+        dto.discountCode,
+      );
+      if (codeResult.success) {
+        appliedRecoveryCodeId = codeResult.discountCodeId;
+        if (codeResult.type === 'PERCENTAGE') {
+          discountAmount = (subtotal * codeResult.value) / 100;
+        } else {
+          discountAmount = codeResult.value;
+        }
+        discountAmount = Math.min(discountAmount, subtotal);
+      }
+    } else if (dto.discountId) {
       const discount = await this.prisma.discount.findUnique({
         where: { id: dto.discountId },
         select: {
@@ -920,6 +939,58 @@ export class StorefrontService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // DISCOUNT CODE VALIDATION & APPLICATION
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async validateDiscountCode(sellerSlug: string, code: string) {
+    if (!code || !code.trim()) {
+      throw new BadRequestException('Discount code is required');
+    }
+
+    const seller = await this.prisma.seller.findUnique({
+      where: { slug: sellerSlug },
+      select: { id: true },
+    });
+    if (!seller) throw new NotFoundException('Store not found');
+
+    const result = await this.discountCodeService.validateCode(seller.id, code);
+
+    return {
+      valid: result.valid,
+      type: result.type ?? null,
+      value: result.value ?? null,
+      message: result.message ?? null,
+    };
+  }
+
+  async applyDiscountCode(sellerSlug: string, code: string) {
+    if (!code || !code.trim()) {
+      throw new BadRequestException('Discount code is required');
+    }
+
+    const seller = await this.prisma.seller.findUnique({
+      where: { slug: sellerSlug },
+      select: { id: true },
+    });
+    if (!seller) throw new NotFoundException('Store not found');
+
+    const result = await this.discountCodeService.applyCode(seller.id, code);
+
+    if (!result.success) {
+      throw new BadRequestException(
+        result.message || 'Invalid discount code',
+      );
+    }
+
+    return {
+      success: true,
+      type: result.type,
+      value: result.value,
+      discountCodeId: result.discountCodeId,
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // STOREFRONT EVENT TRACKING
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -981,6 +1052,7 @@ export class StorefrontService {
         sessionId: dto.sessionId || null,
         utmSource: dto.utmSource || null,
         utmCampaign: dto.utmCampaign || null,
+        email: dto.email || null,
         userAgent: userAgent?.substring(0, 500) || null,
         ipHash,
       },

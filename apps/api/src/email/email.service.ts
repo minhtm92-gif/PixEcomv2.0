@@ -134,6 +134,50 @@ export class EmailService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // PUBLIC: Send raw email (used by email-marketing module)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async sendRawEmail(params: {
+    to: string;
+    toName?: string;
+    subject: string;
+    html: string;
+    fromName?: string;
+  }): Promise<{ messageId?: string }> {
+    if (!this.enabled) {
+      this.logger.debug(
+        `[dry-run] Raw email would be sent to ${params.to}: ${params.subject}`,
+      );
+      return {};
+    }
+
+    try {
+      const [response] = await sgMail.send({
+        to: params.toName
+          ? { email: params.to, name: params.toName }
+          : params.to,
+        from: {
+          email: this.fromEmail,
+          name: params.fromName ?? 'Store',
+        },
+        subject: params.subject,
+        html: params.html,
+      });
+      this.logger.log(`Raw email sent to ${params.to}: ${params.subject}`);
+      const messageId = response?.headers?.['x-message-id'] as
+        | string
+        | undefined;
+      return { messageId };
+    } catch (err: any) {
+      this.logger.error(
+        `Failed to send raw email to ${params.to}: ${err.message}`,
+        err.stack,
+      );
+      throw err;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // PRIVATE: HTML Templates
   // ─────────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { EmailSendService } from '../email-marketing/email-send.service';
 import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
 
 /**
@@ -10,12 +12,18 @@ import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.ser
 @Injectable()
 export class WebhookService {
   private readonly logger = new Logger(WebhookService.name);
+  private readonly emailMarketingEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    private readonly emailSend: EmailSendService,
     private readonly webhookOutbound: WebhookOutboundService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    this.emailMarketingEnabled =
+      this.config.get<string>('EMAIL_MARKETING_ENABLED') === 'true';
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // CONFIRM ORDER (idempotent)
@@ -110,9 +118,21 @@ export class WebhookService {
 
     // F.3: Send order confirmation email + dispatch outbound webhook (fire-and-forget)
     if (confirmed) {
-      this.sendOrderConfirmationEmail(order.id).catch((err) =>
-        this.logger.error(`Webhook: Failed to send confirmation email: ${err.message}`),
+      if (this.emailMarketingEnabled) {
+        this.queueOrderConfirmationEmail(order.id).catch((err) =>
+          this.logger.error(`Webhook: Failed to queue confirmation email: ${err.message}`),
+        );
+      } else {
+        this.sendOrderConfirmationEmail(order.id).catch((err) =>
+          this.logger.error(`Webhook: Failed to send confirmation email: ${err.message}`),
+        );
+      }
+
+      // Cancel any pending cart/checkout recovery emails for this customer
+      this.cancelRecoveryEmails(order.id).catch((err) =>
+        this.logger.error(`Webhook: Failed to cancel recovery emails: ${err.message}`),
       );
+
       this.webhookOutbound.dispatchOrderEvent(order.sellerId, 'order.confirmed', order.id).catch((err) =>
         this.logger.error(`Webhook outbound failed: ${err.message}`),
       );
@@ -208,6 +228,13 @@ export class WebhookService {
       }
     });
 
+    // Send refund confirmation email (fire-and-forget)
+    if (this.emailMarketingEnabled) {
+      this.queueRefundConfirmationEmail(order.id).catch((err) =>
+        this.logger.error(`Webhook: Failed to queue refund email: ${err.message}`),
+      );
+    }
+
     // Dispatch outbound webhook (fire-and-forget)
     this.webhookOutbound.dispatchOrderEvent(order.sellerId, 'order.refunded', order.id).catch((err) =>
       this.logger.error(`Webhook outbound failed: ${err.message}`),
@@ -235,7 +262,7 @@ export class WebhookService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // F.3: SEND ORDER CONFIRMATION EMAIL (fire-and-forget helper)
+  // F.3: SEND ORDER CONFIRMATION EMAIL (fire-and-forget helper — legacy)
   // ─────────────────────────────────────────────────────────────────────────
 
   private async sendOrderConfirmationEmail(orderId: string): Promise<void> {
@@ -296,5 +323,195 @@ export class WebhookService {
       storeName: order.seller.name,
       storeSlug: order.seller.slug,
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // EMAIL MARKETING: QUEUE ORDER CONFIRMATION (T1)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  private async queueOrderConfirmationEmail(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        sellerId: true,
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        total: true,
+        subtotal: true,
+        shippingCost: true,
+        currency: true,
+        shippingAddress: true,
+        seller: { select: { name: true, slug: true } },
+        sellpage: {
+          select: {
+            slug: true,
+            domain: { select: { hostname: true } },
+          },
+        },
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: { select: { name: true } },
+            variant: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    const firstName = (order.customerName ?? 'Customer').split(' ')[0];
+    const addr = (order.shippingAddress ?? {}) as Record<string, string>;
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    const trackingUrl = `${frontendUrl}/${order.seller.slug}/trackings/search`;
+
+    const items = order.items.map((i) => ({
+      productName: i.product?.name ?? 'Product',
+      variantName: i.variant?.name ?? null,
+      quantity: i.quantity,
+      unitPrice: Number(i.unitPrice),
+      lineTotal: Number(i.lineTotal),
+    }));
+
+    const shippingAddressStr = [
+      addr.street,
+      addr.line2,
+      `${addr.city ?? ''}, ${addr.state ?? ''} ${addr.zip ?? ''}`,
+      addr.country,
+    ]
+      .filter(Boolean)
+      .join('<br>');
+
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: order.sellerId },
+      select: { supportEmail: true },
+    });
+
+    await this.emailSend.queueEmail({
+      sellerId: order.sellerId,
+      toEmail: order.customerEmail,
+      toName: order.customerName ?? undefined,
+      flowId: 'order_confirmation',
+      subject: `Order #${order.orderNumber} Confirmed — Thank You, ${firstName}!`,
+      priority: 1,
+      variables: {
+        first_name: firstName,
+        order_number: order.orderNumber,
+        items_html: this.emailSend.buildItemsHtml(items),
+        subtotal: `$${Number(order.subtotal).toFixed(2)}`,
+        shipping_cost: Number(order.shippingCost) > 0 ? `$${Number(order.shippingCost).toFixed(2)}` : 'Free',
+        total: `$${Number(order.total).toFixed(2)} ${order.currency}`,
+        shipping_address: shippingAddressStr,
+        tracking_url: trackingUrl,
+        store_name: order.seller.name,
+        support_phone: '',
+        support_email: settings?.supportEmail ?? '',
+        email: order.customerEmail,
+        unsubscribe_url: this.emailSend.buildUnsubscribeUrl(order.customerEmail, order.sellerId),
+      },
+    });
+
+    this.logger.log(
+      `Queued order_confirmation email for ${order.customerEmail} (order ${order.orderNumber})`,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // EMAIL MARKETING: QUEUE REFUND CONFIRMATION (T5)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  private async queueRefundConfirmationEmail(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        sellerId: true,
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        total: true,
+        currency: true,
+        paymentMethod: true,
+        seller: { select: { name: true } },
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: { select: { name: true } },
+            variant: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    const firstName = (order.customerName ?? 'Customer').split(' ')[0];
+
+    const items = order.items.map((i) => ({
+      productName: i.product?.name ?? 'Product',
+      variantName: i.variant?.name ?? null,
+      quantity: i.quantity,
+      unitPrice: Number(i.unitPrice),
+      lineTotal: Number(i.lineTotal),
+    }));
+
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: order.sellerId },
+      select: { supportEmail: true },
+    });
+
+    await this.emailSend.queueEmail({
+      sellerId: order.sellerId,
+      toEmail: order.customerEmail,
+      toName: order.customerName ?? undefined,
+      flowId: 'refund_confirmation',
+      subject: `Refund Processed — Order #${order.orderNumber}`,
+      priority: 1,
+      variables: {
+        first_name: firstName,
+        order_number: order.orderNumber,
+        refund_amount: `$${Number(order.total).toFixed(2)} ${order.currency}`,
+        original_total: `$${Number(order.total).toFixed(2)} ${order.currency}`,
+        payment_method: order.paymentMethod === 'stripe' ? 'Credit Card' : (order.paymentMethod ?? 'Original Payment Method'),
+        items_html: this.emailSend.buildItemsHtml(items),
+        store_name: order.seller.name,
+        support_phone: '',
+        support_email: settings?.supportEmail ?? '',
+        email: order.customerEmail,
+        unsubscribe_url: this.emailSend.buildUnsubscribeUrl(order.customerEmail, order.sellerId),
+      },
+    });
+
+    this.logger.log(
+      `Queued refund_confirmation email for ${order.customerEmail} (order ${order.orderNumber})`,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CANCEL RECOVERY EMAILS ON PURCHASE
+  // ─────────────────────────────────────────────────────────────────────────
+
+  private async cancelRecoveryEmails(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { sellerId: true, customerEmail: true },
+    });
+
+    if (!order) return;
+
+    const { cancelledCount } = await this.emailSend.cancelPendingEmails(
+      order.sellerId,
+      order.customerEmail,
+    );
+
+    if (cancelledCount > 0) {
+      this.logger.log(
+        `Cancelled ${cancelledCount} pending recovery email(s) for ${order.customerEmail} after order confirmation`,
+      );
+    }
   }
 }

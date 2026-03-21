@@ -19,6 +19,7 @@ import {
   Palette,
   TrendingUp,
   ArrowRightLeft,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -33,6 +34,7 @@ export const ADMIN_NAV = [
   { label: 'Products', href: '/admin/products', icon: ShoppingBag },
   { label: 'Stores', href: '/admin/stores', icon: Globe },
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+  { label: 'Email Marketing', href: '/admin/email', icon: Mail },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 

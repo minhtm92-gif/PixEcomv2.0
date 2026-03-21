@@ -3,8 +3,10 @@ import { StripeWebhookController } from './stripe-webhook.controller';
 import { PayPalWebhookController } from './paypal-webhook.controller';
 import { FulfillmentWebhookController } from './fulfillment-webhook.controller';
 import { WebhookService } from './webhook.service';
+import { EmailMarketingModule } from '../email-marketing/email-marketing.module';
 
 @Module({
+  imports: [EmailMarketingModule],
   controllers: [StripeWebhookController, PayPalWebhookController, FulfillmentWebhookController],
   providers: [WebhookService],
 })

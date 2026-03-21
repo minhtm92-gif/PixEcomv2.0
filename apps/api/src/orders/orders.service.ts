@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
+import { EmailSendService } from '../email-marketing/email-send.service';
 import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
 import { ListOrdersQueryDto } from './dto/list-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
@@ -150,12 +152,18 @@ export interface OrderDetail {
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
+  private readonly emailMarketingEnabled: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly email: EmailService,
+    private readonly emailSend: EmailSendService,
     private readonly webhookOutbound: WebhookOutboundService,
-  ) {}
+    private readonly config: ConfigService,
+  ) {
+    this.emailMarketingEnabled =
+      this.config.get<string>('EMAIL_MARKETING_ENABLED') === 'true';
+  }
 
   async listOrders(sellerId: string, query: ListOrdersQueryDto): Promise<OrderListResult> {
     const dateFrom = query.dateFrom ?? todayUTC();
@@ -438,8 +446,21 @@ export class OrdersService {
 
     // F.3: Send shipping notification email when status → SHIPPED
     if (target === 'SHIPPED') {
-      this.sendShippingEmail(orderId).catch((err) =>
-        this.logger.error(`Failed to send shipping email for ${orderId}: ${err.message}`),
+      if (this.emailMarketingEnabled) {
+        this.queueShippingEmail(orderId).catch((err) =>
+          this.logger.error(`Failed to queue shipping email for ${orderId}: ${err.message}`),
+        );
+      } else {
+        this.sendShippingEmail(orderId).catch((err) =>
+          this.logger.error(`Failed to send shipping email for ${orderId}: ${err.message}`),
+        );
+      }
+    }
+
+    // Send delivery confirmation email when status → DELIVERED
+    if (target === 'DELIVERED' && this.emailMarketingEnabled) {
+      this.queueDeliveryEmail(orderId).catch((err) =>
+        this.logger.error(`Failed to queue delivery email for ${orderId}: ${err.message}`),
       );
     }
 
@@ -512,5 +533,213 @@ export class OrdersService {
       storeName: order.seller.name,
       storeSlug: order.seller.slug,
     });
+  }
+
+  // ─── EMAIL MARKETING: QUEUE SHIPPING EMAIL (T3) ───────────────────────
+
+  private async queueShippingEmail(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        sellerId: true,
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        trackingNumber: true,
+        trackingUrl: true,
+        seller: { select: { name: true, slug: true } },
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: { select: { name: true } },
+            variant: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    const firstName = (order.customerName ?? 'Customer').split(' ')[0];
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    const trackingUrl = order.trackingUrl ?? `${frontendUrl}/${order.seller.slug}/trackings/search`;
+
+    const items = order.items.map((i) => ({
+      productName: i.product?.name ?? 'Product',
+      variantName: i.variant?.name ?? null,
+      quantity: i.quantity,
+      unitPrice: Number(i.unitPrice),
+      lineTotal: Number(i.lineTotal),
+    }));
+
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: order.sellerId },
+      select: { supportEmail: true },
+    });
+
+    await this.emailSend.queueEmail({
+      sellerId: order.sellerId,
+      toEmail: order.customerEmail,
+      toName: order.customerName ?? undefined,
+      flowId: 'shipping_confirmation',
+      subject: `Great News! Your Order #${order.orderNumber} Has Shipped`,
+      priority: 1,
+      variables: {
+        first_name: firstName,
+        order_number: order.orderNumber,
+        tracking_number: order.trackingNumber ?? 'Pending',
+        tracking_url: trackingUrl,
+        estimated_delivery: '7-15 business days',
+        items_html: this.emailSend.buildItemsHtml(items),
+        store_name: order.seller.name,
+        support_phone: '',
+        support_email: settings?.supportEmail ?? '',
+        email: order.customerEmail,
+        unsubscribe_url: this.emailSend.buildUnsubscribeUrl(order.customerEmail, order.sellerId),
+      },
+    });
+
+    this.logger.log(
+      `Queued shipping_confirmation email for ${order.customerEmail} (order ${order.orderNumber})`,
+    );
+  }
+
+  // ─── EMAIL MARKETING: QUEUE DELIVERY EMAIL (T4) ──────────────────────
+
+  private async queueDeliveryEmail(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        sellerId: true,
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        seller: { select: { name: true, slug: true } },
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: { select: { name: true } },
+            variant: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    const firstName = (order.customerName ?? 'Customer').split(' ')[0];
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    const reviewUrl = `${frontendUrl}/${order.seller.slug}`;
+
+    const items = order.items.map((i) => ({
+      productName: i.product?.name ?? 'Product',
+      variantName: i.variant?.name ?? null,
+      quantity: i.quantity,
+      unitPrice: Number(i.unitPrice),
+      lineTotal: Number(i.lineTotal),
+    }));
+
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: order.sellerId },
+      select: { supportEmail: true },
+    });
+
+    await this.emailSend.queueEmail({
+      sellerId: order.sellerId,
+      toEmail: order.customerEmail,
+      toName: order.customerName ?? undefined,
+      flowId: 'delivery_confirmation',
+      subject: `Your Order #${order.orderNumber} Has Been Delivered!`,
+      priority: 1,
+      variables: {
+        first_name: firstName,
+        order_number: order.orderNumber,
+        items_html: this.emailSend.buildItemsHtml(items),
+        review_url: reviewUrl,
+        store_name: order.seller.name,
+        support_phone: '',
+        support_email: settings?.supportEmail ?? '',
+        email: order.customerEmail,
+        unsubscribe_url: this.emailSend.buildUnsubscribeUrl(order.customerEmail, order.sellerId),
+      },
+    });
+
+    this.logger.log(
+      `Queued delivery_confirmation email for ${order.customerEmail} (order ${order.orderNumber})`,
+    );
+  }
+
+  // ─── ORDER DELAY NOTIFICATION (T6) — MANUAL TRIGGER ──────────────────
+
+  async sendOrderDelayNotification(
+    sellerId: string,
+    orderId: string,
+    reason?: string,
+  ): Promise<{ queued: boolean }> {
+    if (!this.emailMarketingEnabled) {
+      this.logger.warn('Order delay notification skipped — EMAIL_MARKETING_ENABLED is not true');
+      return { queued: false };
+    }
+
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, sellerId },
+      select: {
+        sellerId: true,
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        seller: { select: { name: true } },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    const firstName = (order.customerName ?? 'Customer').split(' ')[0];
+
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: order.sellerId },
+      select: { supportEmail: true },
+    });
+
+    await this.emailSend.queueEmail({
+      sellerId: order.sellerId,
+      toEmail: order.customerEmail,
+      toName: order.customerName ?? undefined,
+      flowId: 'order_delay',
+      subject: `Update on Your Order #${order.orderNumber}`,
+      priority: 1,
+      variables: {
+        first_name: firstName,
+        order_number: order.orderNumber,
+        delay_reason: reason ?? 'Due to high demand, your order is taking a bit longer than expected to process.',
+        store_name: order.seller.name,
+        support_phone: '',
+        support_email: settings?.supportEmail ?? '',
+        email: order.customerEmail,
+        unsubscribe_url: this.emailSend.buildUnsubscribeUrl(order.customerEmail, order.sellerId),
+      },
+    });
+
+    // Log the event
+    await this.prisma.orderEvent.create({
+      data: {
+        orderId,
+        sellerId,
+        eventType: 'PROCESSING' as never,
+        description: `Delay notification sent to customer. Reason: ${reason ?? 'High demand'}`,
+      },
+    });
+
+    this.logger.log(
+      `Queued order_delay email for ${order.customerEmail} (order ${order.orderNumber})`,
+    );
+
+    return { queued: true };
   }
 }

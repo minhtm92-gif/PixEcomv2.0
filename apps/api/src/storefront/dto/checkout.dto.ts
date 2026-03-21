@@ -102,6 +102,10 @@ export class CheckoutDto {
   @IsUUID()
   discountId?: string;
 
+  @IsOptional()
+  @IsString()
+  discountCode?: string;
+
   @IsIn(['stripe', 'paypal'])
   paymentMethod!: 'stripe' | 'paypal';
 

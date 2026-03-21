@@ -27,6 +27,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 import { PaymentGatewaysModule } from './payment-gateways/payment-gateways.module';
 import { WebhookOutboundModule } from './webhook-outbound/webhook-outbound.module';
 import { InternalModule } from './internal/internal.module';
+import { EmailMarketingModule } from './email-marketing/email-marketing.module';
 
 @Module({
   imports: [
@@ -60,6 +61,7 @@ import { InternalModule } from './internal/internal.module';
     WebhookOutboundModule,
     PaymentGatewaysModule,
     InternalModule,
+    EmailMarketingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

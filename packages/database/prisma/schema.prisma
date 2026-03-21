@@ -100,6 +100,12 @@ model Seller {
   reviews        Review[]
   webhookEndpoints WebhookEndpoint[]
   storefrontEvents StorefrontEvent[]
+  emailJobs        EmailJob[]
+  emailTemplates   EmailTemplate[]
+  emailSuppressions EmailSuppression[]
+  abandonedCarts   AbandonedCart[]
+  customerEmailPreferences CustomerEmailPreference[]
+  discountCodes    DiscountCode[]
 
   @@map("sellers")
 }
@@ -1123,6 +1129,7 @@ model StorefrontEvent {
   sessionId   String?  @map("session_id") @db.VarChar(100)
   utmSource   String?  @map("utm_source") @db.VarChar(100)
   utmCampaign String?  @map("utm_campaign") @db.VarChar(255)
+  email       String?  @db.VarChar(255)
   ipHash      String?  @map("ip_hash") @db.VarChar(64)
   userAgent   String?  @map("user_agent") @db.VarChar(500)
   createdAt   DateTime @default(now()) @map("created_at")
@@ -1134,4 +1141,185 @@ model StorefrontEvent {
   @@index([sellerId, sellpageId, eventType, createdAt])
   @@index([sessionId])
   @@map("storefront_events")
+}
+
+// ─── EMAIL MARKETING ────────────────────────────────
+
+enum EmailJobStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  FAILED
+  BOUNCED
+  COMPLAINED
+  CANCELLED
+}
+
+model EmailJob {
+  id            String         @id @default(uuid()) @db.Uuid
+  sellerId      String         @map("seller_id") @db.Uuid
+
+  // Recipient
+  toEmail       String         @map("to_email") @db.VarChar(255)
+  toName        String?        @map("to_name") @db.VarChar(255)
+  customerId    String?        @map("customer_id") @db.Uuid
+
+  // Content
+  flowId        String         @map("flow_id") @db.VarChar(100)
+  templateId    String?        @map("template_id") @db.Uuid
+  subject       String         @db.VarChar(500)
+  variables     Json           @default("{}") @db.JsonB
+
+  // Scheduling
+  scheduledAt   DateTime       @map("scheduled_at") @db.Timestamptz
+  priority      Int            @default(3) // 1=transactional, 2=recovery, 3=lifecycle, 4=marketing
+
+  // Status
+  status        EmailJobStatus @default(QUEUED)
+  attemptCount  Int            @default(0) @map("attempt_count")
+  maxAttempts   Int            @default(3) @map("max_attempts")
+  sentAt        DateTime?      @map("sent_at") @db.Timestamptz
+  error         String?        @db.Text
+
+  // Tracking
+  providerMessageId String?    @map("provider_message_id") @db.VarChar(255)
+  openedAt      DateTime?      @map("opened_at") @db.Timestamptz
+  clickedAt     DateTime?      @map("clicked_at") @db.Timestamptz
+  bouncedAt     DateTime?      @map("bounced_at") @db.Timestamptz
+  complainedAt  DateTime?      @map("complained_at") @db.Timestamptz
+  unsubscribedAt DateTime?     @map("unsubscribed_at") @db.Timestamptz
+
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller        Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  template      EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([sellerId, status])
+  @@index([scheduledAt, status])
+  @@index([toEmail, flowId])
+  @@index([customerId])
+  @@index([providerMessageId])
+  @@map("email_jobs")
+}
+
+model EmailTemplate {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String?   @map("seller_id") @db.Uuid
+
+  flowId        String    @map("flow_id") @db.VarChar(100)
+  name          String    @db.VarChar(255)
+  subject       String    @db.VarChar(500)
+  htmlBody      String    @map("html_body") @db.Text
+  textBody      String?   @map("text_body") @db.Text
+
+  isActive      Boolean   @default(true) @map("is_active")
+  isDefault     Boolean   @default(false) @map("is_default")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller        Seller?   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  emailJobs     EmailJob[]
+
+  @@unique([sellerId, flowId])
+  @@index([flowId, isDefault])
+  @@map("email_templates")
+}
+
+model EmailSuppression {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+  email         String    @db.VarChar(255)
+  reason        String    @db.VarChar(50) // unsubscribed, bounced, complained
+
+  suppressMarketing     Boolean @default(true) @map("suppress_marketing")
+  suppressTransactional Boolean @default(false) @map("suppress_transactional")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  seller        Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, email])
+  @@index([email])
+  @@map("email_suppressions")
+}
+
+model AbandonedCart {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+
+  sessionId     String    @map("session_id") @db.VarChar(100)
+  email         String?   @db.VarChar(255)
+
+  items         Json      @default("[]") @db.JsonB
+  totalValue    Decimal   @default(0) @map("total_value") @db.Decimal(10, 2)
+
+  stage         String    @db.VarChar(20) // cart, checkout
+
+  recoveryEmailsSent  Int       @default(0) @map("recovery_emails_sent")
+  recoveredAt         DateTime? @map("recovered_at") @db.Timestamptz
+  discountCodeUsed    String?   @map("discount_code_used") @db.VarChar(100)
+
+  abandonedAt   DateTime  @map("abandoned_at") @db.Timestamptz
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller        Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId, stage, recoveredAt])
+  @@index([email, abandonedAt])
+  @@index([sessionId])
+  @@index([expiresAt])
+  @@map("abandoned_carts")
+}
+
+model CustomerEmailPreference {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+  email         String    @db.VarChar(255)
+
+  marketingOptIn    Boolean @default(true) @map("marketing_opt_in")
+  lifecycleOptIn    Boolean @default(true) @map("lifecycle_opt_in")
+  timezone          String? @db.VarChar(64)
+
+  lastEmailSentAt   DateTime? @map("last_email_sent_at") @db.Timestamptz
+  emailsThisWeek    Int       @default(0) @map("emails_this_week")
+  weekResetAt       DateTime? @map("week_reset_at") @db.Timestamptz
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller        Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, email])
+  @@map("customer_email_preferences")
+}
+
+// ─── DISCOUNT CODES (Recovery / Marketing) ───────
+
+model DiscountCode {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+  code          String    @db.VarChar(50)
+  type          String    @default("PERCENTAGE") @db.VarChar(20) // PERCENTAGE, FIXED
+  value         Decimal   @db.Decimal(10, 2) // e.g., 10 for 10%
+  minOrderValue Decimal?  @map("min_order_value") @db.Decimal(10, 2)
+  maxUses       Int       @default(1) @map("max_uses")
+  usedCount     Int       @default(0) @map("used_count")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+  emailJobId    String?   @map("email_job_id") @db.Uuid // Link to the recovery email that generated it
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  seller        Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, code])
+  @@index([code])
+  @@map("discount_codes")
 }

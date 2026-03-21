@@ -34,4 +34,8 @@ export class TrackEventDto {
   @IsOptional()
   @IsString()
   utmCampaign?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
 }

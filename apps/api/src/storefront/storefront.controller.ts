@@ -129,6 +129,30 @@ export class StorefrontController {
   }
 
   /**
+   * POST /api/storefront/:sellerSlug/validate-discount
+   * Public — validate a recovery discount code.
+   */
+  @Post(':sellerSlug/validate-discount')
+  validateDiscount(
+    @Param('sellerSlug') sellerSlug: string,
+    @Body() body: { code: string },
+  ) {
+    return this.storefront.validateDiscountCode(sellerSlug, body.code);
+  }
+
+  /**
+   * POST /api/storefront/:sellerSlug/apply-discount
+   * Public — apply a recovery discount code at purchase time.
+   */
+  @Post(':sellerSlug/apply-discount')
+  applyDiscount(
+    @Param('sellerSlug') sellerSlug: string,
+    @Body() body: { code: string },
+  ) {
+    return this.storefront.applyDiscountCode(sellerSlug, body.code);
+  }
+
+  /**
    * GET /api/storefront/:sellerSlug/:sellpageSlug
    * Public — sellpage detail with product, variants, images, discounts.
    */

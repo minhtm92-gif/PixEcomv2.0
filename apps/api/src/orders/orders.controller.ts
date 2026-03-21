@@ -180,4 +180,20 @@ export class OrdersController {
   ) {
     return this.service.updateOrderStatus(user.sellerId, id, dto);
   }
+
+  /**
+   * POST /api/orders/:id/notify-delay
+   * T6 — Send an order delay notification email to the customer.
+   * Manual trigger by admin/seller.
+   * Body: { reason?: string }
+   */
+  @Post(':id/notify-delay')
+  @HttpCode(200)
+  notifyDelay(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.service.sendOrderDelayNotification(user.sellerId, id, body.reason);
+  }
 }
