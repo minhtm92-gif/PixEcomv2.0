@@ -11,16 +11,19 @@ import {
   DollarSign,
   TrendingUp,
   Users,
+  CalendarDays,
 } from 'lucide-react';
 import { apiGet, type ApiError } from '@/lib/apiClient';
 import { toastApiError } from '@/stores/toastStore';
 import { PageShell } from '@/components/PageShell';
 import { KpiCard } from '@/components/KpiCard';
 import { DataTable, type Column } from '@/components/DataTable';
-import { num, moneyWhole, pct } from '@/lib/format';
+import { num, moneyWhole, pct, fmtDate } from '@/lib/format';
 import type {
   LivePreviewResponse,
   LivePreviewCampaign,
+  DailyStatsResponse,
+  DailyStatsRow,
   SellpageListItem,
   SellpagesListResponse,
 } from '@/types/api';
@@ -46,6 +49,8 @@ export default function LivePreviewPage() {
   const [sellpages, setSellpages] = useState<Array<{ id: string; name: string }>>([]);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
+  const [dailyStats, setDailyStats] = useState<DailyStatsRow[]>([]);
+  const [dailyLoading, setDailyLoading] = useState(true);
 
   // Load sellpages for filter dropdown
   useEffect(() => {
@@ -60,6 +65,19 @@ export default function LivePreviewPage() {
       .catch(() => {
         // Non-critical: filter won't have sellpage options
       });
+  }, []);
+
+  // Load daily stats (refreshes with main data)
+  const fetchDailyStats = useCallback(async () => {
+    setDailyLoading(true);
+    try {
+      const result = await apiGet<DailyStatsResponse>('/ads-manager/daily-stats?days=7');
+      setDailyStats(result.daily ?? []);
+    } catch {
+      // Non-critical: daily stats table won't populate
+    } finally {
+      setDailyLoading(false);
+    }
   }, []);
 
   const fetchData = useCallback(async (showRefreshing = false) => {
@@ -87,9 +105,13 @@ export default function LivePreviewPage() {
   // Auto-refresh every 10s (real-time sliding window)
   useEffect(() => {
     fetchData();
-    const interval = setInterval(() => fetchData(true), 10_000);
+    fetchDailyStats();
+    const interval = setInterval(() => {
+      fetchData(true);
+      fetchDailyStats();
+    }, 10_000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, fetchDailyStats]);
 
   const t = data?.totals;
 
@@ -155,6 +177,72 @@ export default function LivePreviewPage() {
       className: 'text-right',
       hiddenOnMobile: true,
       render: (r) => <span className={`font-mono text-xs font-semibold ${getCrColor(r.cr2, 'cr2')}`}>{pct(r.cr2)}</span>,
+    },
+    {
+      key: 'cr',
+      label: 'CR',
+      className: 'text-right',
+      render: (r) => <span className={`font-mono text-xs font-semibold ${getCrColor(r.cr, 'cr')}`}>{pct(r.cr)}</span>,
+    },
+  ];
+
+  // Daily stats table columns
+  const dailyCols: Column<DailyStatsRow>[] = [
+    {
+      key: 'date',
+      label: 'Date',
+      render: (r) => (
+        <span className="text-foreground font-medium text-xs">{fmtDate(r.date + 'T00:00:00')}</span>
+      ),
+    },
+    {
+      key: 'spend',
+      label: 'Spend',
+      className: 'text-right',
+      render: (r) => <span className="font-mono text-foreground text-xs">{moneyWhole(r.spend)}</span>,
+    },
+    {
+      key: 'revenue',
+      label: 'Revenue',
+      className: 'text-right',
+      render: (r) => <span className="font-mono text-foreground text-xs">{moneyWhole(r.revenue)}</span>,
+    },
+    {
+      key: 'contentViews',
+      label: 'CV',
+      className: 'text-right',
+      hiddenOnMobile: true,
+      render: (r) => <span className="font-mono text-foreground text-xs">{num(r.contentViews)}</span>,
+    },
+    {
+      key: 'addToCart',
+      label: 'ATC',
+      className: 'text-right',
+      hiddenOnMobile: true,
+      render: (r) => <span className="font-mono text-foreground text-xs">{num(r.addToCart)}</span>,
+    },
+    {
+      key: 'checkout',
+      label: 'CO',
+      className: 'text-right',
+      hiddenOnMobile: true,
+      render: (r) => <span className="font-mono text-foreground text-xs">{num(r.checkout)}</span>,
+    },
+    {
+      key: 'purchases',
+      label: 'PO',
+      className: 'text-right',
+      render: (r) => <span className="font-mono text-foreground text-xs">{num(r.purchases)}</span>,
+    },
+    {
+      key: 'roas',
+      label: 'ROAS',
+      className: 'text-right',
+      render: (r) => (
+        <span className={`font-mono text-xs font-semibold ${r.roas >= 2 ? 'text-green-500' : r.roas >= 1 ? 'text-yellow-500' : 'text-red-500'}`}>
+          {r.roas.toFixed(2)}x
+        </span>
+      ),
     },
     {
       key: 'cr',
@@ -340,6 +428,23 @@ export default function LivePreviewPage() {
           )}
           <p className="text-xs text-muted-foreground mt-1">Purchases / Content Views</p>
         </div>
+      </div>
+
+      {/* Daily Statistics Table */}
+      <div className="mb-6">
+        <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+          <CalendarDays size={14} className="text-muted-foreground" />
+          Daily Statistics
+          <span className="text-muted-foreground font-normal">(Last 7 days)</span>
+        </h2>
+        <DataTable
+          columns={dailyCols}
+          data={dailyStats}
+          loading={dailyLoading}
+          rowKey={(r) => r.date}
+          emptyMessage="No daily stats available yet."
+          skeletonRows={7}
+        />
       </div>
 
       {/* Campaign Breakdown Table */}

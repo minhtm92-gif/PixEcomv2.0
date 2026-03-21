@@ -774,6 +774,26 @@ export interface LivePreviewResponse {
   windowMinutes: number;
 }
 
+// ── Daily Stats (Live Preview companion) ──
+export interface DailyStatsRow {
+  date: string;
+  spend: number;
+  revenue: number;
+  contentViews: number;
+  addToCart: number;
+  checkout: number;
+  purchases: number;
+  roas: number;
+  cr1: number;
+  cr2: number;
+  cr: number;
+}
+
+export interface DailyStatsResponse {
+  daily: DailyStatsRow[];
+  days: number;
+}
+
 // ── Health ──
 export interface HealthResponse {
   status: string;

@@ -18,11 +18,25 @@ interface StatsMap {
   [entityId: string]: RawAdStats;
 }
 
+/** Storefront funnel counts keyed by campaign UUID */
+interface StorefrontFunnel {
+  contentViews: number;
+  addToCart: number;
+  checkoutInitiated: number;
+  purchases: number;
+  purchaseValue: number;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
  * Turn Prisma groupBy result (ad_stats_daily) into a keyed map.
  * Sums raw fields — never averages derived columns.
+ *
+ * NOTE: contentViews, addToCart, checkoutInitiated, purchases from AdStatsDaily
+ * reflect Meta-reported action values (from Meta Pixel).  Since PixEcom uses
+ * its own storefront tracking, these Meta values are typically 0.
+ * The caller must overlay real storefront funnel data after building the map.
  */
 function buildStatsMap(
   rows: Array<{
@@ -56,6 +70,41 @@ function buildStatsMap(
 }
 
 /**
+ * Overlay storefront funnel data onto a StatsMap.
+ * For each entity in the map, if storefrontData has funnel numbers for that
+ * entity, replace the (typically-zero) Meta-reported values with real
+ * PixEcom storefront event counts.
+ *
+ * Also handles entities that have storefront data but no AdStatsDaily row yet
+ * (e.g. campaign has events but no spend recorded today).
+ */
+function overlayStorefrontData(
+  statsMap: StatsMap,
+  storefrontData: Map<string, StorefrontFunnel>,
+): void {
+  for (const [entityId, funnel] of storefrontData) {
+    if (!statsMap[entityId]) {
+      // Entity has storefront events but no ad stats row — create skeleton
+      statsMap[entityId] = {
+        ...zeroRaw(),
+        contentViews: funnel.contentViews,
+        addToCart: funnel.addToCart,
+        checkoutInitiated: funnel.checkoutInitiated,
+        purchases: funnel.purchases,
+        purchaseValue: funnel.purchaseValue,
+      };
+    } else {
+      // Replace Meta-reported funnel values with real storefront data
+      statsMap[entityId].contentViews = funnel.contentViews;
+      statsMap[entityId].addToCart = funnel.addToCart;
+      statsMap[entityId].checkoutInitiated = funnel.checkoutInitiated;
+      statsMap[entityId].purchases = funnel.purchases;
+      statsMap[entityId].purchaseValue = funnel.purchaseValue;
+    }
+  }
+}
+
+/**
  * Aggregate all entries in a StatsMap into one summary RawAdStats.
  */
 function aggregateSummary(map: StatsMap): RawAdStats {
@@ -78,6 +127,149 @@ function aggregateSummary(map: StatsMap): RawAdStats {
 @Injectable()
 export class AdsManagerReadService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ── Storefront funnel helpers ─────────────────────────────────────────────
+
+  /**
+   * Query StorefrontEvent grouped by utmCampaign to get real funnel metrics
+   * attributed to each campaign via UTM tracking.
+   *
+   * Returns a Map<campaignId, StorefrontFunnel>.
+   *
+   * The link: Facebook ad URL contains ?utm_campaign=<campaignId>
+   * → storefront pages send this to the event tracking API
+   * → StorefrontEvent.utmCampaign = campaign UUID.
+   */
+  private async getStorefrontFunnelByCampaign(
+    sellerId: string,
+    campaignIds: string[],
+    dateRange: { gte?: Date; lte?: Date },
+  ): Promise<Map<string, StorefrontFunnel>> {
+    const result = new Map<string, StorefrontFunnel>();
+    if (campaignIds.length === 0) return result;
+
+    // Build date filter for createdAt (StorefrontEvent uses createdAt, not statDate)
+    const createdAtFilter: { gte?: Date; lte?: Date } = {};
+    if (dateRange.gte) createdAtFilter.gte = dateRange.gte;
+    if (dateRange.lte) createdAtFilter.lte = dateRange.lte;
+
+    // Query StorefrontEvent grouped by (utmCampaign, eventType)
+    const eventRows = await this.prisma.storefrontEvent.groupBy({
+      by: ['utmCampaign', 'eventType'],
+      where: {
+        sellerId,
+        utmCampaign: { in: campaignIds },
+        ...(Object.keys(createdAtFilter).length > 0
+          ? { createdAt: createdAtFilter }
+          : {}),
+      },
+      _count: true,
+      _sum: { value: true },
+    });
+
+    // Build funnel map
+    for (const row of eventRows) {
+      const cid = row.utmCampaign!;
+      if (!result.has(cid)) {
+        result.set(cid, { contentViews: 0, addToCart: 0, checkoutInitiated: 0, purchases: 0, purchaseValue: 0 });
+      }
+      const funnel = result.get(cid)!;
+      switch (row.eventType) {
+        case 'content_view':
+          funnel.contentViews = row._count;
+          break;
+        case 'add_to_cart':
+          funnel.addToCart = row._count;
+          break;
+        case 'checkout':
+          funnel.checkoutInitiated = row._count;
+          break;
+        case 'purchase':
+          funnel.purchases = row._count;
+          funnel.purchaseValue = Number(row._sum.value ?? 0);
+          break;
+      }
+    }
+
+    // Also get purchase revenue from confirmed orders attributed via utmCampaign
+    // (Order.utmCampaign stores campaign UUID, same as StorefrontEvent)
+    const orderRows = await this.prisma.order.groupBy({
+      by: ['utmCampaign'],
+      where: {
+        sellerId,
+        utmCampaign: { in: campaignIds },
+        status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+        ...(Object.keys(createdAtFilter).length > 0
+          ? { createdAt: createdAtFilter }
+          : {}),
+      },
+      _sum: { total: true },
+      _count: true,
+    });
+
+    for (const row of orderRows) {
+      const cid = row.utmCampaign!;
+      if (!result.has(cid)) {
+        result.set(cid, { contentViews: 0, addToCart: 0, checkoutInitiated: 0, purchases: 0, purchaseValue: 0 });
+      }
+      const funnel = result.get(cid)!;
+      // Use order data for purchases/revenue if it's higher (orders are more reliable for revenue)
+      const orderRevenue = Number(row._sum.total ?? 0);
+      if (orderRevenue > funnel.purchaseValue) {
+        funnel.purchaseValue = orderRevenue;
+      }
+      if (row._count > funnel.purchases) {
+        funnel.purchases = row._count;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * For sub-campaign entities (adsets, ads), split the campaign-level storefront
+   * funnel proportionally by each entity's share of ad spend.
+   *
+   * This is necessary because UTM tracking only has campaign-level granularity
+   * (utm_campaign=campaignId). Adset/ad level attribution is approximated
+   * using spend share.
+   */
+  private splitFunnelBySpend(
+    campaignFunnel: Map<string, StorefrontFunnel>,
+    entityToCampaign: Map<string, string>,
+    entitySpend: Map<string, number>,
+    campaignTotalSpend: Map<string, number>,
+  ): Map<string, StorefrontFunnel> {
+    const result = new Map<string, StorefrontFunnel>();
+
+    for (const [entityId, campaignId] of entityToCampaign) {
+      const funnel = campaignFunnel.get(campaignId);
+      if (!funnel) continue;
+
+      const totalSpend = campaignTotalSpend.get(campaignId) ?? 0;
+      const mySpend = entitySpend.get(entityId) ?? 0;
+
+      // Spend ratio: if no spend at all, distribute evenly
+      let ratio: number;
+      if (totalSpend > 0) {
+        ratio = mySpend / totalSpend;
+      } else {
+        // Count entities in this campaign
+        const siblingsInCampaign = [...entityToCampaign.values()].filter(c => c === campaignId).length;
+        ratio = siblingsInCampaign > 0 ? 1 / siblingsInCampaign : 0;
+      }
+
+      result.set(entityId, {
+        contentViews: Math.round(funnel.contentViews * ratio),
+        addToCart: Math.round(funnel.addToCart * ratio),
+        checkoutInitiated: Math.round(funnel.checkoutInitiated * ratio),
+        purchases: Math.round(funnel.purchases * ratio),
+        purchaseValue: Math.round(funnel.purchaseValue * ratio * 100) / 100,
+      });
+    }
+
+    return result;
+  }
 
   // ── Campaigns ──────────────────────────────────────────────────────────────
 
@@ -127,6 +319,8 @@ export class AdsManagerReadService {
     const campaignIds = campaigns.map((c) => c.id);
 
     // 2. Fetch ad_stats_daily for all campaigns in range — sum raw counts
+    //    (spend, impressions, clicks come from Meta; funnel metrics will be
+    //     overlaid from StorefrontEvent below)
     const statRows = await this.prisma.adStatsDaily.groupBy({
       by: ['entityId'],
       where: {
@@ -151,7 +345,16 @@ export class AdsManagerReadService {
 
     const statsMap = buildStatsMap(statRows);
 
-    // 3. Build response rows
+    // 3. Overlay real storefront funnel data from StorefrontEvent
+    //    (replaces the typically-zero Meta-reported action values)
+    const storefrontFunnel = await this.getStorefrontFunnelByCampaign(
+      sellerId,
+      campaignIds,
+      dateRange,
+    );
+    overlayStorefrontData(statsMap, storefrontFunnel);
+
+    // 4. Build response rows
     const rows = campaigns.map((c) => {
       const raw = statsMap[c.id] ?? zeroRaw();
       const metrics = computeMetrics(raw);
@@ -167,7 +370,7 @@ export class AdsManagerReadService {
       };
     });
 
-    // 4. Summary row — aggregate raw then derive (never sum derived columns)
+    // 5. Summary row — aggregate raw then derive (never sum derived columns)
     const summaryRaw = aggregateSummary(statsMap);
     const summary = computeMetrics(summaryRaw);
 
@@ -229,7 +432,42 @@ export class AdsManagerReadService {
 
     const statsMap = buildStatsMap(statRows);
 
-    // 3. Build response rows
+    // 3. Overlay storefront funnel data
+    //    UTM tracking is at campaign level, so split campaign funnel proportionally
+    //    by each adset's share of the campaign's total spend.
+    const campaignId = query.campaignId;
+    const campaignFunnel = await this.getStorefrontFunnelByCampaign(
+      sellerId,
+      [campaignId],
+      dateRange,
+    );
+
+    if (campaignFunnel.size > 0) {
+      // Build entity→campaign and spend maps for proportional splitting
+      const entityToCampaign = new Map<string, string>();
+      const entitySpend = new Map<string, number>();
+      let totalCampaignSpend = 0;
+
+      for (const adset of adsets) {
+        entityToCampaign.set(adset.id, adset.campaignId);
+        const spend = statsMap[adset.id]?.spend ?? 0;
+        entitySpend.set(adset.id, spend);
+        totalCampaignSpend += spend;
+      }
+
+      const campaignTotalSpend = new Map<string, number>();
+      campaignTotalSpend.set(campaignId, totalCampaignSpend);
+
+      const adsetFunnel = this.splitFunnelBySpend(
+        campaignFunnel,
+        entityToCampaign,
+        entitySpend,
+        campaignTotalSpend,
+      );
+      overlayStorefrontData(statsMap, adsetFunnel);
+    }
+
+    // 4. Build response rows
     const rows = adsets.map((a) => {
       const raw = statsMap[a.id] ?? zeroRaw();
       const metrics = computeMetrics(raw);
@@ -246,7 +484,7 @@ export class AdsManagerReadService {
       };
     });
 
-    // 4. Summary
+    // 5. Summary
     const summaryRaw = aggregateSummary(statsMap);
     const summary = computeMetrics(summaryRaw);
 
@@ -310,7 +548,43 @@ export class AdsManagerReadService {
 
     const statsMap = buildStatsMap(statRows);
 
-    // 3. Build response rows
+    // 3. Overlay storefront funnel data
+    //    UTM tracking is at campaign level. All ads in this adset share the same
+    //    campaign. Split the campaign's funnel proportionally by each ad's spend.
+    const campaignId = ads[0]?.adset.campaignId;
+    if (campaignId) {
+      const campaignFunnel = await this.getStorefrontFunnelByCampaign(
+        sellerId,
+        [campaignId],
+        dateRange,
+      );
+
+      if (campaignFunnel.size > 0) {
+        const entityToCampaign = new Map<string, string>();
+        const entitySpend = new Map<string, number>();
+        let totalCampaignSpend = 0;
+
+        for (const ad of ads) {
+          entityToCampaign.set(ad.id, ad.adset.campaignId);
+          const spend = statsMap[ad.id]?.spend ?? 0;
+          entitySpend.set(ad.id, spend);
+          totalCampaignSpend += spend;
+        }
+
+        const campaignTotalSpend = new Map<string, number>();
+        campaignTotalSpend.set(campaignId, totalCampaignSpend);
+
+        const adFunnel = this.splitFunnelBySpend(
+          campaignFunnel,
+          entityToCampaign,
+          entitySpend,
+          campaignTotalSpend,
+        );
+        overlayStorefrontData(statsMap, adFunnel);
+      }
+    }
+
+    // 4. Build response rows
     const rows = ads.map((a) => {
       const raw = statsMap[a.id] ?? zeroRaw();
       const metrics = computeMetrics(raw);
@@ -327,7 +601,7 @@ export class AdsManagerReadService {
       };
     });
 
-    // 4. Summary
+    // 5. Summary
     const summaryRaw = aggregateSummary(statsMap);
     const summary = computeMetrics(summaryRaw);
 
@@ -497,6 +771,138 @@ export class AdsManagerReadService {
       updatedAt: new Date().toISOString(),
       windowMinutes: 10,
     };
+  }
+
+  // ── Daily Stats (Live Preview companion) ─────────────────────────────────
+
+  /**
+   * Returns per-day breakdown for the last N days.
+   * Ad platform metrics (spend, impressions, clicks) from AdStatsDaily.
+   * Funnel metrics (CV, ATC, CO, purchases) from StorefrontEvent.
+   */
+  async getDailyStats(sellerId: string, days = 7) {
+    const since = new Date();
+    since.setDate(since.getDate() - (days - 1));
+    since.setHours(0, 0, 0, 0);
+
+    // 1. Aggregate ad_stats_daily by statDate — ad platform metrics only
+    const adRows = await this.prisma.adStatsDaily.groupBy({
+      by: ['statDate'],
+      where: {
+        sellerId,
+        entityType: 'CAMPAIGN',
+        statDate: { gte: since },
+      },
+      _sum: {
+        spend: true,
+        impressions: true,
+        linkClicks: true,
+      },
+      orderBy: { statDate: 'desc' },
+    });
+
+    // 2. Query StorefrontEvent grouped by date for real funnel metrics
+    const storefrontRows = await this.prisma.$queryRawUnsafe<
+      Array<{ stat_date: Date; event_type: string; event_count: bigint; total_value: string }>
+    >(
+      `SELECT DATE(created_at) as stat_date, event_type, COUNT(*) as event_count,
+              COALESCE(SUM(value), 0) as total_value
+       FROM storefront_events
+       WHERE seller_id = $1::uuid AND created_at >= $2
+       GROUP BY DATE(created_at), event_type
+       ORDER BY stat_date DESC`,
+      sellerId,
+      since,
+    );
+
+    // Build per-date funnel map
+    const funnelByDate = new Map<string, { cv: number; atc: number; co: number; po: number; pv: number }>();
+    for (const row of storefrontRows) {
+      const dateKey = row.stat_date.toISOString().slice(0, 10);
+      if (!funnelByDate.has(dateKey)) {
+        funnelByDate.set(dateKey, { cv: 0, atc: 0, co: 0, po: 0, pv: 0 });
+      }
+      const f = funnelByDate.get(dateKey)!;
+      switch (row.event_type) {
+        case 'content_view': f.cv = Number(row.event_count); break;
+        case 'add_to_cart': f.atc = Number(row.event_count); break;
+        case 'checkout': f.co = Number(row.event_count); break;
+        case 'purchase':
+          f.po = Number(row.event_count);
+          f.pv = parseFloat(row.total_value) || 0;
+          break;
+      }
+    }
+
+    // Also get order revenue per date (more reliable for purchase value)
+    const orderRows = await this.prisma.$queryRawUnsafe<
+      Array<{ stat_date: Date; order_count: bigint; total_revenue: string }>
+    >(
+      `SELECT DATE(created_at) as stat_date, COUNT(*) as order_count,
+              COALESCE(SUM(total), 0) as total_revenue
+       FROM orders
+       WHERE seller_id = $1::uuid AND created_at >= $2
+         AND status IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
+       GROUP BY DATE(created_at)`,
+      sellerId,
+      since,
+    );
+
+    for (const row of orderRows) {
+      const dateKey = row.stat_date.toISOString().slice(0, 10);
+      if (!funnelByDate.has(dateKey)) {
+        funnelByDate.set(dateKey, { cv: 0, atc: 0, co: 0, po: 0, pv: 0 });
+      }
+      const f = funnelByDate.get(dateKey)!;
+      const rev = parseFloat(row.total_revenue) || 0;
+      const cnt = Number(row.order_count);
+      if (rev > f.pv) f.pv = rev;
+      if (cnt > f.po) f.po = cnt;
+    }
+
+    // 3. Merge ad platform + storefront data per date
+    // Collect all dates from both sources
+    const allDates = new Set<string>();
+    for (const row of adRows) {
+      allDates.add(row.statDate.toISOString().slice(0, 10));
+    }
+    for (const dateKey of funnelByDate.keys()) {
+      allDates.add(dateKey);
+    }
+
+    const adByDate = new Map(
+      adRows.map((r) => [
+        r.statDate.toISOString().slice(0, 10),
+        {
+          spend: Number(r._sum.spend ?? 0),
+          impressions: Number(r._sum.impressions ?? 0),
+          linkClicks: Number(r._sum.linkClicks ?? 0),
+        },
+      ]),
+    );
+
+    const daily = [...allDates]
+      .sort((a, b) => b.localeCompare(a)) // desc
+      .map((dateKey) => {
+        const ad = adByDate.get(dateKey) ?? { spend: 0, impressions: 0, linkClicks: 0 };
+        const funnel = funnelByDate.get(dateKey) ?? { cv: 0, atc: 0, co: 0, po: 0, pv: 0 };
+
+        return {
+          date: dateKey,
+          spend: ad.spend,
+          revenue: funnel.pv,
+          contentViews: funnel.cv,
+          addToCart: funnel.atc,
+          checkout: funnel.co,
+          purchases: funnel.po,
+          roas: safeDivide(funnel.pv, ad.spend),
+          cr1: safeDivide(funnel.co, funnel.cv) * 100,
+          cr2: safeDivide(funnel.po, funnel.co) * 100,
+          cr: safeDivide(funnel.po, funnel.cv) * 100,
+        };
+      });
+
+    return { daily, days };
   }
 
   // ── Filters ────────────────────────────────────────────────────────────────
