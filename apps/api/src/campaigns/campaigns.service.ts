@@ -630,7 +630,7 @@ export class CampaignsService {
     const metaPayload = {
       name: campaign.name,
       objective: 'OUTCOME_SALES',
-      status: campaign.status === 'PAUSED' ? 'PAUSED' : 'ACTIVE',
+      status: 'ACTIVE',
       special_ad_categories: [] as string[],
       bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
       ...budgetField,
@@ -651,7 +651,7 @@ export class CampaignsService {
       where: { id: campaignId },
       data: {
         externalCampaignId: metaCampaign.id,
-        status: campaign.status as any,
+        status: 'ACTIVE' as any,
       },
     });
 
