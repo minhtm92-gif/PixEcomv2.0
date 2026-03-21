@@ -153,40 +153,47 @@ export class AdsManagerReadService {
     if (dateRange.gte) createdAtFilter.gte = dateRange.gte;
     if (dateRange.lte) createdAtFilter.lte = dateRange.lte;
 
-    // Query StorefrontEvent grouped by (utmCampaign, eventType)
-    const eventRows = await this.prisma.storefrontEvent.groupBy({
-      by: ['utmCampaign', 'eventType'],
-      where: {
-        sellerId,
-        utmCampaign: { in: campaignIds },
-        ...(Object.keys(createdAtFilter).length > 0
-          ? { createdAt: createdAtFilter }
-          : {}),
-      },
-      _count: true,
-      _sum: { value: true },
-    });
+    // Query StorefrontEvent counting UNIQUE visitors (by ipHash) per campaign+event
+    // This filters out Meta crawler bots that generate hundreds of events from one IP
+    const dateWhere = Object.keys(createdAtFilter).length > 0
+      ? `AND se."created_at" >= '${createdAtFilter.gte?.toISOString() ?? ''}' ${createdAtFilter.lte ? `AND se."created_at" <= '${createdAtFilter.lte.toISOString()}'` : ''}`
+      : '';
 
-    // Build funnel map
+    const eventRows: Array<{ utm_campaign: string; event_type: string; unique_count: string; total_value: string | null }> =
+      await this.prisma.$queryRawUnsafe(`
+        SELECT
+          se."utm_campaign",
+          se."event_type",
+          COUNT(DISTINCT COALESCE(se."ip_hash", se."session_id", se."id"::text)) AS unique_count,
+          SUM(se."value") AS total_value
+        FROM "storefront_events" se
+        WHERE se."seller_id" = '${sellerId}'
+          AND se."utm_campaign" IN (${campaignIds.map(id => `'${id}'`).join(',')})
+          ${dateWhere}
+        GROUP BY se."utm_campaign", se."event_type"
+      `);
+
+    // Build funnel map from unique visitor counts
     for (const row of eventRows) {
-      const cid = row.utmCampaign!;
+      const cid = row.utm_campaign;
       if (!result.has(cid)) {
         result.set(cid, { contentViews: 0, addToCart: 0, checkoutInitiated: 0, purchases: 0, purchaseValue: 0 });
       }
       const funnel = result.get(cid)!;
-      switch (row.eventType) {
+      const count = Number(row.unique_count);
+      switch (row.event_type) {
         case 'content_view':
-          funnel.contentViews = row._count;
+          funnel.contentViews = count;
           break;
         case 'add_to_cart':
-          funnel.addToCart = row._count;
+          funnel.addToCart = count;
           break;
         case 'checkout':
-          funnel.checkoutInitiated = row._count;
+          funnel.checkoutInitiated = count;
           break;
         case 'purchase':
-          funnel.purchases = row._count;
-          funnel.purchaseValue = Number(row._sum.value ?? 0);
+          funnel.purchases = count;
+          funnel.purchaseValue = Number(row.total_value ?? 0);
           break;
       }
     }
