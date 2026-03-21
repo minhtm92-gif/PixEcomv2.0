@@ -925,7 +925,8 @@ export class AdsManagerReadService {
   /**
    * Returns per-hour breakdown for today (since midnight).
    * Funnel metrics (CV, ATC, CO, purchases) from StorefrontEvent grouped by hour.
-   * Ad spend is daily granularity only, so returned as todaySpend in the response.
+   * Ad spend per hour is derived from SpendSnapshot deltas (cumulative snapshots
+   * recorded every ~15 min by the stats-sync worker).
    */
   async getHourlyStats(sellerId: string) {
     const now = new Date();
@@ -935,17 +936,50 @@ export class AdsManagerReadService {
 
     // 1. Get today's total ad spend from AdStatsDaily (daily granularity only)
     const today = now.toISOString().split('T')[0];
+    const statDate = new Date(`${today}T00:00:00.000Z`);
     const adStats = await this.prisma.adStatsDaily.aggregate({
       where: {
         sellerId,
         entityType: 'CAMPAIGN',
-        statDate: new Date(`${today}T00:00:00.000Z`),
+        statDate,
       },
       _sum: { spend: true },
     });
     const todaySpend = Number(adStats._sum.spend ?? 0);
 
-    // 2. Query StorefrontEvent grouped by hour for today — count unique visitors by ipHash
+    // 2. Query SpendSnapshot for today to derive hourly spend deltas
+    const snapshots = await this.prisma.spendSnapshot.findMany({
+      where: {
+        sellerId,
+        statDate,
+      },
+      orderBy: { recordedAt: 'asc' },
+      select: { cumulativeSpend: true, recordedAt: true },
+    });
+
+    // Group snapshots by hour, keeping only the LAST snapshot per hour
+    const hourlySpendMap = new Map<number, number>(); // hour -> cumulative spend at end of that hour
+    for (const snap of snapshots) {
+      const h = snap.recordedAt.getHours();
+      hourlySpendMap.set(h, Number(snap.cumulativeSpend));
+    }
+
+    // Calculate per-hour spend deltas
+    const hourlySpendDeltas = new Map<number, number>();
+    const sortedHours = Array.from(hourlySpendMap.keys()).sort((a, b) => a - b);
+    for (let i = 0; i < sortedHours.length; i++) {
+      const h = sortedHours[i];
+      const cumulative = hourlySpendMap.get(h)!;
+      if (i === 0) {
+        // First hour with a snapshot — its delta is the cumulative itself
+        hourlySpendDeltas.set(h, cumulative);
+      } else {
+        const prevCumulative = hourlySpendMap.get(sortedHours[i - 1])!;
+        hourlySpendDeltas.set(h, Math.max(0, cumulative - prevCumulative));
+      }
+    }
+
+    // 3. Query StorefrontEvent grouped by hour for today — count unique visitors by ipHash
     const storefrontRows = await this.prisma.$queryRawUnsafe<
       Array<{ hour_num: string; event_type: string; unique_count: string; total_value: string }>
     >(
@@ -962,7 +996,7 @@ export class AdsManagerReadService {
       todayMidnight,
     );
 
-    // 3. Get order revenue per hour for today
+    // 4. Get order revenue per hour for today
     const orderRows = await this.prisma.$queryRawUnsafe<
       Array<{ hour_num: string; order_count: string; total_revenue: string }>
     >(
@@ -978,7 +1012,7 @@ export class AdsManagerReadService {
       todayMidnight,
     );
 
-    // 4. Build per-hour funnel map
+    // 5. Build per-hour funnel map
     const hourMap = new Map<number, { cv: number; atc: number; co: number; po: number; revenue: number }>();
     for (const row of storefrontRows) {
       const h = Number(row.hour_num);
@@ -1007,7 +1041,7 @@ export class AdsManagerReadService {
       if (cnt > f.po) f.po = cnt;
     }
 
-    // 5. Build hourly rows — only hours up to current hour, most recent first
+    // 6. Build hourly rows — only hours up to current hour, most recent first
     const hourly: Array<{
       hour: number;
       spend: number;
@@ -1022,15 +1056,16 @@ export class AdsManagerReadService {
 
     for (let h = currentHour; h >= 0; h--) {
       const f = hourMap.get(h) ?? { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 };
+      const hourSpend = hourlySpendDeltas.get(h) ?? 0;
       hourly.push({
         hour: h,
-        spend: 0, // Ad spend is daily only — shown as todaySpend in header
+        spend: hourSpend,
         revenue: f.revenue,
         contentViews: f.cv,
         addToCart: f.atc,
         checkout: f.co,
         purchases: f.po,
-        roas: 0, // No per-hour spend, so per-hour ROAS not meaningful
+        roas: hourSpend > 0 ? safeDivide(f.revenue, hourSpend) : 0,
         cr: f.cv > 0 ? safeDivide(f.po, f.cv) * 100 : 0,
       });
     }
