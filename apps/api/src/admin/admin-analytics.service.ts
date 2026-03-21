@@ -10,7 +10,7 @@ interface DailyBreakdown {
   aov: number;
 }
 
-interface RevenueResponse {
+export interface RevenueResponse {
   totalRevenue: number;
   totalOrders: number;
   averageOrderValue: number;
@@ -18,7 +18,7 @@ interface RevenueResponse {
   dailyBreakdown: DailyBreakdown[];
 }
 
-interface ProductStatsResponse {
+export interface ProductStatsResponse {
   productId: string;
   productName: string;
   revenue: number;
@@ -33,7 +33,7 @@ interface ProductStatsResponse {
   cpc: number;
 }
 
-interface OverviewResponse {
+export interface OverviewResponse {
   totalRevenue: number;
   totalOrders: number;
   totalCustomers: number;
