@@ -794,6 +794,24 @@ export interface DailyStatsResponse {
   days: number;
 }
 
+// ── Hourly Stats (Live Preview — today's hourly breakdown) ──
+export interface HourlyStatsRow {
+  hour: number; // 0-23
+  spend: number;
+  revenue: number;
+  contentViews: number;
+  addToCart: number;
+  checkout: number;
+  purchases: number;
+  roas: number;
+  cr: number;
+}
+
+export interface HourlyStatsResponse {
+  hourly: HourlyStatsRow[];
+  todaySpend: number;
+}
+
 // ── Health ──
 export interface HealthResponse {
   status: string;

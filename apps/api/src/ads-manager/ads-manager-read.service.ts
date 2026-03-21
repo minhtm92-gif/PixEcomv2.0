@@ -618,26 +618,34 @@ export class AdsManagerReadService {
   // ── Live Preview ─────────────────────────────────────────────────────────
 
   async getLivePreview(sellerId: string, sellpageId?: string) {
-    // 10-minute sliding window (Shopify Live View style)
+    // Today since midnight — full-day view
+    const todayMidnight = new Date();
+    todayMidnight.setHours(0, 0, 0, 0);
+
+    // Active visitors still uses 10-min sliding window (real-time indicator)
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-    // 1. PixelxLab events (CV, ATC, CO) in last 10 minutes
-    const eventCounts = await this.prisma.storefrontEvent.groupBy({
-      by: ['eventType'],
-      where: {
+    // 1. PixelxLab events (CV, ATC, CO) since midnight — unique visitors by ipHash
+    const eventRows: Array<{ event_type: string; unique_count: string }> =
+      await this.prisma.$queryRawUnsafe(
+        `SELECT
+           event_type,
+           COUNT(DISTINCT COALESCE(ip_hash, session_id, id::text)) AS unique_count
+         FROM storefront_events
+         WHERE seller_id = $1::uuid
+           AND created_at >= $2
+           ${sellpageId ? `AND sellpage_id = '${sellpageId}'` : ''}
+         GROUP BY event_type`,
         sellerId,
-        ...(sellpageId ? { sellpageId } : {}),
-        createdAt: { gte: tenMinAgo },
-      },
-      _count: true,
-    });
+        todayMidnight,
+      );
 
-    const evMap = Object.fromEntries(eventCounts.map(e => [e.eventType, e._count]));
+    const evMap = Object.fromEntries(eventRows.map(e => [e.event_type, Number(e.unique_count)]));
     const contentViews = evMap['content_view'] || 0;
     const addToCart = evMap['add_to_cart'] || 0;
     const checkout = evMap['checkout'] || 0;
 
-    // 2. Active visitors = unique sessions in last 10 minutes
+    // 2. Active visitors = unique sessions in last 10 minutes (real-time)
     const activeSessions = await this.prisma.storefrontEvent.findMany({
       where: {
         sellerId,
@@ -649,12 +657,12 @@ export class AdsManagerReadService {
     });
     const activeVisitors = activeSessions.filter(s => s.sessionId).length;
 
-    // 3. Purchases in last 10 minutes from Orders
+    // 3. Purchases since midnight from Orders
     const purchaseData = await this.prisma.order.aggregate({
       where: {
         sellerId,
         status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
-        createdAt: { gte: tenMinAgo },
+        createdAt: { gte: todayMidnight },
         ...(sellpageId ? { sellpageId } : {}),
       },
       _count: true,
@@ -689,13 +697,13 @@ export class AdsManagerReadService {
     const cr = safeDivide(purchases, contentViews) * 100;
     const roas = safeDivide(revenue, spend);
 
-    // 6. Campaign breakdown — group storefront events by utm_campaign in 10-min window
+    // 6. Campaign breakdown — group storefront events by utm_campaign since midnight
     const campaignEvents = await this.prisma.storefrontEvent.groupBy({
       by: ['utmCampaign', 'eventType'],
       where: {
         sellerId,
         ...(sellpageId ? { sellpageId } : {}),
-        createdAt: { gte: tenMinAgo },
+        createdAt: { gte: todayMidnight },
         utmCampaign: { not: null },
       },
       _count: true,
@@ -776,7 +784,7 @@ export class AdsManagerReadService {
       },
       byCampaign,
       updatedAt: new Date().toISOString(),
-      windowMinutes: 10,
+      windowMinutes: 0, // 0 = today (since midnight)
     };
   }
 
@@ -910,6 +918,124 @@ export class AdsManagerReadService {
       });
 
     return { daily, days };
+  }
+
+  // ── Hourly Stats (Today's hourly breakdown) ─────────────────────────────
+
+  /**
+   * Returns per-hour breakdown for today (since midnight).
+   * Funnel metrics (CV, ATC, CO, purchases) from StorefrontEvent grouped by hour.
+   * Ad spend is daily granularity only, so returned as todaySpend in the response.
+   */
+  async getHourlyStats(sellerId: string) {
+    const now = new Date();
+    const todayMidnight = new Date(now);
+    todayMidnight.setHours(0, 0, 0, 0);
+    const currentHour = now.getHours();
+
+    // 1. Get today's total ad spend from AdStatsDaily (daily granularity only)
+    const today = now.toISOString().split('T')[0];
+    const adStats = await this.prisma.adStatsDaily.aggregate({
+      where: {
+        sellerId,
+        entityType: 'CAMPAIGN',
+        statDate: new Date(`${today}T00:00:00.000Z`),
+      },
+      _sum: { spend: true },
+    });
+    const todaySpend = Number(adStats._sum.spend ?? 0);
+
+    // 2. Query StorefrontEvent grouped by hour for today — count unique visitors by ipHash
+    const storefrontRows = await this.prisma.$queryRawUnsafe<
+      Array<{ hour_num: string; event_type: string; unique_count: string; total_value: string }>
+    >(
+      `SELECT
+         EXTRACT(HOUR FROM created_at)::int AS hour_num,
+         event_type,
+         COUNT(DISTINCT COALESCE(ip_hash, session_id, id::text)) AS unique_count,
+         COALESCE(SUM(value), 0) AS total_value
+       FROM storefront_events
+       WHERE seller_id = $1::uuid AND created_at >= $2
+       GROUP BY EXTRACT(HOUR FROM created_at), event_type
+       ORDER BY hour_num`,
+      sellerId,
+      todayMidnight,
+    );
+
+    // 3. Get order revenue per hour for today
+    const orderRows = await this.prisma.$queryRawUnsafe<
+      Array<{ hour_num: string; order_count: string; total_revenue: string }>
+    >(
+      `SELECT
+         EXTRACT(HOUR FROM created_at)::int AS hour_num,
+         COUNT(*) AS order_count,
+         COALESCE(SUM(total), 0) AS total_revenue
+       FROM orders
+       WHERE seller_id = $1::uuid AND created_at >= $2
+         AND status IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
+       GROUP BY EXTRACT(HOUR FROM created_at)`,
+      sellerId,
+      todayMidnight,
+    );
+
+    // 4. Build per-hour funnel map
+    const hourMap = new Map<number, { cv: number; atc: number; co: number; po: number; revenue: number }>();
+    for (const row of storefrontRows) {
+      const h = Number(row.hour_num);
+      if (!hourMap.has(h)) hourMap.set(h, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
+      const f = hourMap.get(h)!;
+      const count = Number(row.unique_count);
+      switch (row.event_type) {
+        case 'content_view': f.cv = count; break;
+        case 'add_to_cart': f.atc = count; break;
+        case 'checkout': f.co = count; break;
+        case 'purchase':
+          f.po = count;
+          f.revenue = parseFloat(row.total_value) || 0;
+          break;
+      }
+    }
+
+    // Overlay order data per hour (more reliable for revenue)
+    for (const row of orderRows) {
+      const h = Number(row.hour_num);
+      if (!hourMap.has(h)) hourMap.set(h, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
+      const f = hourMap.get(h)!;
+      const rev = parseFloat(row.total_revenue) || 0;
+      const cnt = Number(row.order_count);
+      if (rev > f.revenue) f.revenue = rev;
+      if (cnt > f.po) f.po = cnt;
+    }
+
+    // 5. Build hourly rows — only hours up to current hour, most recent first
+    const hourly: Array<{
+      hour: number;
+      spend: number;
+      revenue: number;
+      contentViews: number;
+      addToCart: number;
+      checkout: number;
+      purchases: number;
+      roas: number;
+      cr: number;
+    }> = [];
+
+    for (let h = currentHour; h >= 0; h--) {
+      const f = hourMap.get(h) ?? { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 };
+      hourly.push({
+        hour: h,
+        spend: 0, // Ad spend is daily only — shown as todaySpend in header
+        revenue: f.revenue,
+        contentViews: f.cv,
+        addToCart: f.atc,
+        checkout: f.co,
+        purchases: f.po,
+        roas: 0, // No per-hour spend, so per-hour ROAS not meaningful
+        cr: f.cv > 0 ? safeDivide(f.po, f.cv) * 100 : 0,
+      });
+    }
+
+    return { hourly, todaySpend };
   }
 
   // ── Filters ────────────────────────────────────────────────────────────────

@@ -11,19 +11,19 @@ import {
   DollarSign,
   TrendingUp,
   Users,
-  CalendarDays,
+  Clock,
 } from 'lucide-react';
 import { apiGet, type ApiError } from '@/lib/apiClient';
 import { toastApiError } from '@/stores/toastStore';
 import { PageShell } from '@/components/PageShell';
 import { KpiCard } from '@/components/KpiCard';
 import { DataTable, type Column } from '@/components/DataTable';
-import { num, moneyWhole, pct, fmtDate } from '@/lib/format';
+import { num, moneyWhole, pct } from '@/lib/format';
 import type {
   LivePreviewResponse,
   LivePreviewCampaign,
-  DailyStatsResponse,
-  DailyStatsRow,
+  HourlyStatsResponse,
+  HourlyStatsRow,
   SellpageListItem,
   SellpagesListResponse,
 } from '@/types/api';
@@ -49,8 +49,9 @@ export default function LivePreviewPage() {
   const [sellpages, setSellpages] = useState<Array<{ id: string; name: string }>>([]);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
-  const [dailyStats, setDailyStats] = useState<DailyStatsRow[]>([]);
-  const [dailyLoading, setDailyLoading] = useState(true);
+  const [hourlyStats, setHourlyStats] = useState<HourlyStatsRow[]>([]);
+  const [hourlyLoading, setHourlyLoading] = useState(true);
+  const [todaySpend, setTodaySpend] = useState(0);
 
   // Load sellpages for filter dropdown
   useEffect(() => {
@@ -67,16 +68,17 @@ export default function LivePreviewPage() {
       });
   }, []);
 
-  // Load daily stats (refreshes with main data)
-  const fetchDailyStats = useCallback(async () => {
-    setDailyLoading(true);
+  // Load hourly stats for today (refreshes with main data)
+  const fetchHourlyStats = useCallback(async () => {
+    setHourlyLoading(true);
     try {
-      const result = await apiGet<DailyStatsResponse>('/ads-manager/daily-stats?days=7');
-      setDailyStats(result.daily ?? []);
+      const result = await apiGet<HourlyStatsResponse>('/ads-manager/hourly-stats');
+      setHourlyStats(result.hourly ?? []);
+      setTodaySpend(result.todaySpend ?? 0);
     } catch {
-      // Non-critical: daily stats table won't populate
+      // Non-critical: hourly stats table won't populate
     } finally {
-      setDailyLoading(false);
+      setHourlyLoading(false);
     }
   }, []);
 
@@ -102,16 +104,16 @@ export default function LivePreviewPage() {
     }
   }, [sellpageId]);
 
-  // Auto-refresh every 10s (real-time sliding window)
+  // Auto-refresh every 10s
   useEffect(() => {
     fetchData();
-    fetchDailyStats();
+    fetchHourlyStats();
     const interval = setInterval(() => {
       fetchData(true);
-      fetchDailyStats();
+      fetchHourlyStats();
     }, 10_000);
     return () => clearInterval(interval);
-  }, [fetchData, fetchDailyStats]);
+  }, [fetchData, fetchHourlyStats]);
 
   const t = data?.totals;
 
@@ -186,20 +188,16 @@ export default function LivePreviewPage() {
     },
   ];
 
-  // Daily stats table columns
-  const dailyCols: Column<DailyStatsRow>[] = [
+  // Hourly stats table columns
+  const hourlyCols: Column<HourlyStatsRow>[] = [
     {
-      key: 'date',
-      label: 'Date',
+      key: 'hour',
+      label: 'Time',
       render: (r) => (
-        <span className="text-foreground font-medium text-xs">{fmtDate(r.date + 'T00:00:00')}</span>
+        <span className="text-foreground font-medium text-xs font-mono">
+          {String(r.hour).padStart(2, '0')}:00
+        </span>
       ),
-    },
-    {
-      key: 'spend',
-      label: 'Spend',
-      className: 'text-right',
-      render: (r) => <span className="font-mono text-foreground text-xs">{moneyWhole(r.spend)}</span>,
     },
     {
       key: 'revenue',
@@ -211,7 +209,6 @@ export default function LivePreviewPage() {
       key: 'contentViews',
       label: 'CV',
       className: 'text-right',
-      hiddenOnMobile: true,
       render: (r) => <span className="font-mono text-foreground text-xs">{num(r.contentViews)}</span>,
     },
     {
@@ -235,16 +232,6 @@ export default function LivePreviewPage() {
       render: (r) => <span className="font-mono text-foreground text-xs">{num(r.purchases)}</span>,
     },
     {
-      key: 'roas',
-      label: 'ROAS',
-      className: 'text-right',
-      render: (r) => (
-        <span className={`font-mono text-xs font-semibold ${r.roas >= 2 ? 'text-green-500' : r.roas >= 1 ? 'text-yellow-500' : 'text-red-500'}`}>
-          {r.roas.toFixed(2)}x
-        </span>
-      ),
-    },
-    {
       key: 'cr',
       label: 'CR',
       className: 'text-right',
@@ -255,7 +242,7 @@ export default function LivePreviewPage() {
   return (
     <PageShell
       title="Live Preview"
-      subtitle="Last 10 minutes — live visitor activity"
+      subtitle="Today — live visitor activity"
       icon={<Activity size={22} />}
       actions={
         <div className="flex items-center gap-3">
@@ -369,7 +356,7 @@ export default function LivePreviewPage() {
           value={loading ? '' : moneyWhole(t?.revenue ?? 0)}
           icon={<DollarSign size={16} />}
           loading={loading}
-          sub="Last 10 minutes"
+          sub="Today"
         />
       </div>
 
@@ -430,20 +417,25 @@ export default function LivePreviewPage() {
         </div>
       </div>
 
-      {/* Daily Statistics Table */}
+      {/* Hourly Statistics Table */}
       <div className="mb-6">
         <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-          <CalendarDays size={14} className="text-muted-foreground" />
-          Daily Statistics
-          <span className="text-muted-foreground font-normal">(Last 7 days)</span>
+          <Clock size={14} className="text-muted-foreground" />
+          Hourly Statistics
+          <span className="text-muted-foreground font-normal">(Today)</span>
+          {todaySpend > 0 && (
+            <span className="text-muted-foreground font-normal ml-2">
+              — Spend: {moneyWhole(todaySpend)}
+            </span>
+          )}
         </h2>
         <DataTable
-          columns={dailyCols}
-          data={dailyStats}
-          loading={dailyLoading}
-          rowKey={(r) => r.date}
-          emptyMessage="No daily stats available yet."
-          skeletonRows={7}
+          columns={hourlyCols}
+          data={hourlyStats}
+          loading={hourlyLoading}
+          rowKey={(r) => String(r.hour)}
+          emptyMessage="No activity today yet."
+          skeletonRows={6}
         />
       </div>
 
@@ -462,7 +454,7 @@ export default function LivePreviewPage() {
           data={data?.byCampaign ?? []}
           loading={loading}
           rowKey={(r) => r.campaignName}
-          emptyMessage="No activity in the last 10 minutes."
+          emptyMessage="No campaign activity today."
           skeletonRows={4}
         />
       </div>

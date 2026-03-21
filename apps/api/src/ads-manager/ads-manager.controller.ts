@@ -34,6 +34,11 @@ export class AdsManagerController {
     return this.service.getDailyStats(req.user.sellerId, days ? parseInt(days, 10) : 7);
   }
 
+  @Get('hourly-stats')
+  getHourlyStats(@Req() req: any) {
+    return this.service.getHourlyStats(req.user.sellerId);
+  }
+
   @Get('campaigns')
   getCampaigns(@Req() req: any, @Query() query: CampaignsQueryDto) {
     return this.service.getCampaigns(req.user.sellerId, req.user.userId, query);
