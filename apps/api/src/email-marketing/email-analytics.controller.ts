@@ -15,6 +15,21 @@ export class EmailAnalyticsController {
   constructor(private readonly analyticsService: EmailAnalyticsService) {}
 
   /**
+   * Build a { from, to } date range from query params.
+   * Defaults to the last 30 days if either param is missing.
+   */
+  private buildDateRange(query: EmailAnalyticsQueryDto): {
+    from: Date;
+    to: Date;
+  } {
+    const to = query.to ? new Date(query.to) : new Date();
+    const from = query.from
+      ? new Date(query.from)
+      : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { from, to };
+  }
+
+  /**
    * GET /api/email-analytics/overview?from=2026-01-01&to=2026-03-21
    *
    * Aggregate email stats: sent, delivered, opened, clicked, bounced, complained + rates.
@@ -22,10 +37,7 @@ export class EmailAnalyticsController {
   @Get('overview')
   getOverview(@Req() req: any, @Query() query: EmailAnalyticsQueryDto) {
     const sellerId = req.user.sellerId;
-    return this.analyticsService.getOverview(sellerId, {
-      from: new Date(query.from),
-      to: new Date(query.to),
-    });
+    return this.analyticsService.getOverview(sellerId, this.buildDateRange(query));
   }
 
   /**
@@ -36,10 +48,7 @@ export class EmailAnalyticsController {
   @Get('flows')
   getFlowStats(@Req() req: any, @Query() query: EmailAnalyticsQueryDto) {
     const sellerId = req.user.sellerId;
-    return this.analyticsService.getFlowStats(sellerId, {
-      from: new Date(query.from),
-      to: new Date(query.to),
-    });
+    return this.analyticsService.getFlowStats(sellerId, this.buildDateRange(query));
   }
 
   /**
@@ -50,10 +59,7 @@ export class EmailAnalyticsController {
   @Get('recovery')
   getRecoveryStats(@Req() req: any, @Query() query: EmailAnalyticsQueryDto) {
     const sellerId = req.user.sellerId;
-    return this.analyticsService.getRecoveryStats(sellerId, {
-      from: new Date(query.from),
-      to: new Date(query.to),
-    });
+    return this.analyticsService.getRecoveryStats(sellerId, this.buildDateRange(query));
   }
 
   /**
@@ -67,9 +73,6 @@ export class EmailAnalyticsController {
     @Query() query: EmailAnalyticsQueryDto,
   ) {
     const sellerId = req.user.sellerId;
-    return this.analyticsService.getRevenueAttribution(sellerId, {
-      from: new Date(query.from),
-      to: new Date(query.to),
-    });
+    return this.analyticsService.getRevenueAttribution(sellerId, this.buildDateRange(query));
   }
 }
