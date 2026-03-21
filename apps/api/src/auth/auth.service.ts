@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { UserRole } from '@pixecom/database';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { Response } from 'express';
@@ -33,7 +34,7 @@ export interface AuthPayload {
     id: string;
     name: string;
     slug: string;
-  };
+  } | null;
 }
 
 @Injectable()
@@ -103,7 +104,7 @@ export class AuthService {
 
   // ─── Login ────────────────────────────────────────────────────────────────
 
-  async login(dto: LoginDto): Promise<AuthPayload> {
+  async login(dto: LoginDto, loginType: 'seller' | 'admin' = 'seller'): Promise<AuthPayload> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
       select: {
@@ -129,6 +130,39 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Enforce login type separation: prevent cross-portal login
+    if (loginType === 'seller' && user.isSuperadmin) {
+      throw new UnauthorizedException('Admin accounts must login at /admin');
+    }
+    if (loginType === 'admin' && !user.isSuperadmin) {
+      throw new UnauthorizedException('Not an admin account');
+    }
+
+    // Admin login: seller context is optional
+    if (loginType === 'admin') {
+      const sellerUser = await this.prisma.sellerUser.findFirst({
+        where: { userId: user.id, isActive: true },
+        include: { seller: { select: { id: true, name: true, slug: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const tokens = await this.generateTokens(
+        user.id,
+        sellerUser?.sellerId ?? 'ADMIN',
+        sellerUser?.role ?? 'ADMIN',
+        true,
+      );
+
+      return {
+        ...tokens,
+        user: { id: user.id, email: user.email, displayName: user.displayName },
+        seller: sellerUser
+          ? { id: sellerUser.seller.id, name: sellerUser.seller.name, slug: sellerUser.seller.slug }
+          : null,
+      };
+    }
+
+    // Seller login: seller context is REQUIRED
     const sellerUser = await this.prisma.sellerUser.findFirst({
       where: { userId: user.id, isActive: true },
       include: { seller: { select: { id: true, name: true, slug: true } } },
@@ -183,24 +217,26 @@ export class AuthService {
     // Rotation: delete old token before issuing new one
     await this.prisma.refreshToken.delete({ where: { id: stored.id } });
 
-    const sellerUser = await this.prisma.sellerUser.findFirst({
-      where: { userId: stored.userId, isActive: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    const [sellerUser, user] = await Promise.all([
+      this.prisma.sellerUser.findFirst({
+        where: { userId: stored.userId, isActive: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: stored.userId },
+        select: { isSuperadmin: true },
+      }),
+    ]);
 
-    if (!sellerUser) {
+    // Superadmin may have no sellerUser — allowed
+    if (!sellerUser && !user?.isSuperadmin) {
       throw new UnauthorizedException('No active seller account found');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: stored.userId },
-      select: { isSuperadmin: true },
-    });
-
     return this.generateTokens(
       stored.userId,
-      sellerUser.sellerId,
-      sellerUser.role,
+      sellerUser?.sellerId ?? 'ADMIN',
+      sellerUser?.role ?? 'ADMIN',
       user?.isSuperadmin ?? false,
     );
   }
@@ -223,11 +259,25 @@ export class AuthService {
         displayName: true,
         avatarUrl: true,
         isActive: true,
+        isSuperadmin: true,
       },
     });
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('User not found or inactive');
+    }
+
+    // Admin JWT has sellerId='ADMIN' — no real seller context
+    if (sellerId === 'ADMIN') {
+      return {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        sellerId: null,
+        role: null,
+        isSuperadmin: user.isSuperadmin,
+      };
     }
 
     const sellerUser = await this.prisma.sellerUser.findFirst({
@@ -242,7 +292,114 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       sellerId,
       role: sellerUser?.role ?? null,
+      isSuperadmin: user.isSuperadmin,
     };
+  }
+
+  // ─── SSO Login ──────────────────────────────────────────────────────────
+
+  /**
+   * Handle PixHub SSO login — upsert local user + seller, generate tokens.
+   */
+  async ssoLogin(ssoUser: {
+    id: string;
+    email: string;
+    sellerId?: string | null;
+    role: string;
+    displayName: string;
+    avatarUrl?: string | null;
+  }): Promise<TokenPair> {
+    // Map PixHub appRole to PixEcom UserRole
+    const pixecomRole = this.mapSsoRole(ssoUser.role);
+    const isSuperadmin = pixecomRole === 'SUPERADMIN';
+
+    // Find or create user by email, sync role from PixHub
+    let user = await this.prisma.user.findUnique({
+      where: { email: ssoUser.email.toLowerCase() },
+      select: { id: true, isSuperadmin: true, role: true },
+    });
+
+    if (!user) {
+      user = await this.prisma.user.create({
+        data: {
+          email: ssoUser.email.toLowerCase(),
+          displayName: ssoUser.displayName,
+          avatarUrl: ssoUser.avatarUrl,
+          passwordHash: '', // SSO user — no local password
+          isActive: true,
+          isSuperadmin,
+          role: pixecomRole,
+        },
+        select: { id: true, isSuperadmin: true, role: true },
+      });
+    } else if (user.role !== pixecomRole || user.isSuperadmin !== isSuperadmin) {
+      // Sync role from PixHub on every SSO login
+      user = await this.prisma.user.update({
+        where: { email: ssoUser.email.toLowerCase() },
+        data: {
+          role: pixecomRole,
+          isSuperadmin,
+          displayName: ssoUser.displayName,
+          avatarUrl: ssoUser.avatarUrl,
+        },
+        select: { id: true, isSuperadmin: true, role: true },
+      });
+    }
+
+    // Find seller context — auto-link SUPERADMIN users to platform seller
+    let sellerUser = await this.prisma.sellerUser.findFirst({
+      where: { userId: user.id, isActive: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (!sellerUser && isSuperadmin) {
+      // Auto-link C-level / superadmin users to the first active seller
+      const platformSeller = await this.prisma.seller.findFirst({
+        where: { isActive: true },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      if (platformSeller) {
+        sellerUser = await this.prisma.sellerUser.create({
+          data: {
+            sellerId: platformSeller.id,
+            userId: user.id,
+            role: 'ADMIN',
+            isActive: true,
+          },
+        });
+      }
+    }
+
+    const sellerId = sellerUser?.sellerId ?? 'ADMIN';
+    const role = sellerUser?.role ?? 'ADMIN';
+
+    return this.generateTokens(user.id, sellerId, role, user.isSuperadmin);
+  }
+
+  /**
+   * Map PixHub appRole → PixEcom UserRole enum.
+   * ADMIN/SUPERADMIN → SUPERADMIN (full platform access)
+   * EDITOR → CONTENT
+   * VIEWER → SELLER (read-only, needs seller association)
+   */
+  private mapSsoRole(ssoRole: string): UserRole {
+    switch (ssoRole) {
+      case 'SUPERADMIN':
+      case 'ADMIN':
+      case 'C_LEVEL':
+      case 'MANAGER':
+        return UserRole.SUPERADMIN;
+      case 'SUPPORT':
+        return UserRole.SUPPORT;
+      case 'FINANCE':
+        return UserRole.FINANCE;
+      case 'EDITOR':
+      case 'CONTENT_CREATOR':
+        return UserRole.CONTENT;
+      default:
+        return UserRole.SELLER;
+    }
   }
 
   // ─── Token Helpers ────────────────────────────────────────────────────────
@@ -293,6 +450,33 @@ export class AuthService {
       domain: this.config.get<string>('COOKIE_DOMAIN', ''),
       path: '/api/auth/refresh',
     });
+  }
+
+  // ─── Audit Logging ──────────────────────────────────────────────────────
+
+  /**
+   * Fire-and-forget audit log entry. Never blocks the response.
+   */
+  logAuditEvent(params: {
+    event: string;
+    userId?: string;
+    email?: string;
+    ipAddress?: string;
+    userAgent?: string;
+    metadata?: Record<string, unknown>;
+  }): void {
+    this.prisma.auditLog
+      .create({
+        data: {
+          event: params.event,
+          userId: params.userId,
+          email: params.email,
+          ipAddress: params.ipAddress,
+          userAgent: params.userAgent,
+          metadata: (params.metadata ?? undefined) as any,
+        },
+      })
+      .catch(() => {});
   }
 
   // ─── Slug Generation ─────────────────────────────────────────────────────

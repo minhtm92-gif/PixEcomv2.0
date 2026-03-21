@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/start-api.js"],
+      "port": 3001
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/start-web.js", "dev", "--port", "3000"],
+      "port": 3000
+    },
+    {
+      "name": "worker",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/start-worker.cjs"],
+      "port": 0
+    }
+  ]
+}

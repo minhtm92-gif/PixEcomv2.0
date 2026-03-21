@@ -10,4 +10,9 @@ export class UpdateSellerDto {
   @IsOptional()
   @MaxLength(500)
   logoUrl?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(500)
+  faviconUrl?: string;
 }

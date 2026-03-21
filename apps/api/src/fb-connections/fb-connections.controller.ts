@@ -43,7 +43,7 @@ export class FbConnectionsController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateFbConnectionDto,
   ) {
-    return this.service.createConnection(user.sellerId, dto);
+    return this.service.createConnection(user.sellerId, user.userId, dto);
   }
 
   /**
@@ -56,7 +56,7 @@ export class FbConnectionsController {
     @CurrentUser() user: AuthUser,
     @Query() query: ListFbConnectionsDto,
   ) {
-    return this.service.listConnections(user.sellerId, query);
+    return this.service.listConnections(user.sellerId, user.userId, query);
   }
 
   /**
@@ -69,6 +69,19 @@ export class FbConnectionsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.service.getConnection(user.sellerId, id);
+  }
+
+  /**
+   * GET /api/fb/connections/:id/account-details
+   * Fetch live ad account details from Meta Graph API.
+   * Only works for AD_ACCOUNT connections.
+   */
+  @Get(':id/account-details')
+  getAccountDetails(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.service.getAccountDetails(user.sellerId, id);
   }
 
   /**

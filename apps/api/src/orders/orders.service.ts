@@ -1,6 +1,38 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
+import { EmailSendService } from '../email-marketing/email-send.service';
+import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
 import { ListOrdersQueryDto } from './dto/list-orders.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
+
+// ─── Status transition map ────────────────────────────────────────────────────
+
+/** Valid transitions: currentStatus → allowed target statuses */
+export const ORDER_TRANSITIONS: Record<string, string[]> = {
+  PENDING:    ['CONFIRMED', 'CANCELLED'],
+  CONFIRMED:  ['PROCESSING', 'CANCELLED'],
+  PROCESSING: ['SHIPPED', 'CANCELLED'],
+  SHIPPED:    ['DELIVERED', 'REFUNDED'],
+  DELIVERED:  ['REFUNDED'],
+  CANCELLED:  [],
+  REFUNDED:   [],
+};
+
+/** Map order target status → OrderEventType enum string */
+const STATUS_TO_EVENT: Record<string, string> = {
+  CONFIRMED:  'CONFIRMED',
+  PROCESSING: 'PROCESSING',
+  SHIPPED:    'SHIPPED',
+  DELIVERED:  'DELIVERED',
+  CANCELLED:  'CANCELLED',
+  REFUNDED:   'REFUNDED',
+};
+
+export function canTransition(current: string, target: string): boolean {
+  return (ORDER_TRANSITIONS[current] ?? []).includes(target);
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -62,6 +94,9 @@ export interface OrderListItem {
   currency: string;
   status: string;
   itemsCount: number;
+  totalQuantity: number;
+  trackingNumber: string | null;
+  source: string | null;
 }
 
 export interface OrderListResult {
@@ -75,6 +110,7 @@ export interface OrderDetail {
   createdAt: Date;
   sellpage: { id: string; url: string } | null;
   customer: { email: string; name: string | null; phone: string | null };
+  shippingAddress: Record<string, unknown>;
   totals: {
     subtotal: number;
     shipping: number;
@@ -84,6 +120,19 @@ export interface OrderDetail {
     currency: string;
   };
   status: string;
+  source: string | null;
+  transactionId: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  paymentMethod: string | null;
+  paymentId: string | null;
+  utm: {
+    source: string | null;
+    medium: string | null;
+    campaign: string | null;
+    term: string | null;
+    content: string | null;
+  };
   items: Array<{
     productTitle: string;
     variantTitle: string | null;
@@ -102,7 +151,19 @@ export interface OrderDetail {
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(OrdersService.name);
+  private readonly emailMarketingEnabled: boolean;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly email: EmailService,
+    private readonly emailSend: EmailSendService,
+    private readonly webhookOutbound: WebhookOutboundService,
+    private readonly config: ConfigService,
+  ) {
+    this.emailMarketingEnabled =
+      this.config.get<string>('EMAIL_MARKETING_ENABLED') === 'true';
+  }
 
   async listOrders(sellerId: string, query: ListOrdersQueryDto): Promise<OrderListResult> {
     const dateFrom = query.dateFrom ?? todayUTC();
@@ -113,37 +174,50 @@ export class OrdersService {
     const cursorData = query.cursor ? decodeCursor(query.cursor) : null;
 
     // ── Build WHERE ──────────────────────────────────────────────────────────
-    const where: Record<string, unknown> = {
-      sellerId,
-      createdAt: { gte: toDateStart(dateFrom), lte: toDateEnd(dateTo) },
-    };
+    const andClauses: Record<string, unknown>[] = [
+      { sellerId },
+      { createdAt: { gte: toDateStart(dateFrom), lte: toDateEnd(dateTo) } },
+    ];
 
     if (query.sellpageId) {
-      where['sellpageId'] = query.sellpageId;
+      andClauses.push({ sellpageId: query.sellpageId });
     }
 
     if (query.status) {
-      where['status'] = query.status;
+      andClauses.push({ status: query.status });
+    }
+
+    if (query.source) {
+      andClauses.push({ source: query.source });
     }
 
     if (query.search) {
       const s = query.search;
-      where['OR'] = [
-        { orderNumber: { startsWith: s } },
-        { customerEmail: { contains: s, mode: 'insensitive' } },
-      ];
+      andClauses.push({
+        OR: [
+          { orderNumber: { startsWith: s } },
+          { customerEmail: { contains: s, mode: 'insensitive' } },
+          { customerName: { contains: s, mode: 'insensitive' } },
+          { customerPhone: { contains: s } },
+          { trackingNumber: { contains: s, mode: 'insensitive' } },
+        ],
+      });
     }
 
     // Keyset pagination: page after (createdAt, id) cursor
     if (cursorData) {
-      where['OR'] = [
-        { createdAt: { lt: cursorData.createdAt } },
-        {
-          createdAt: { equals: cursorData.createdAt },
-          id: { lt: cursorData.id },
-        },
-      ];
+      andClauses.push({
+        OR: [
+          { createdAt: { lt: cursorData.createdAt } },
+          {
+            createdAt: { equals: cursorData.createdAt },
+            id: { lt: cursorData.id },
+          },
+        ],
+      });
     }
+
+    const where = { AND: andClauses };
 
     // ── Query ────────────────────────────────────────────────────────────────
     const rows = await this.prisma.order.findMany({
@@ -160,6 +234,8 @@ export class OrdersService {
         total: true,
         currency: true,
         status: true,
+        trackingNumber: true,
+        source: true,
         sellpage: {
           select: {
             id: true,
@@ -168,6 +244,7 @@ export class OrdersService {
           },
         },
         _count: { select: { items: true } },
+        items: { select: { quantity: true } },
       },
     });
 
@@ -196,6 +273,9 @@ export class OrdersService {
       currency: r.currency,
       status: r.status,
       itemsCount: r._count.items,
+      totalQuantity: r.items.reduce((acc, it) => acc + it.quantity, 0),
+      trackingNumber: r.trackingNumber ?? null,
+      source: r.source ?? null,
     }));
 
     return { items, nextCursor };
@@ -218,6 +298,18 @@ export class OrdersService {
         total: true,
         currency: true,
         status: true,
+        shippingAddress: true,
+        trackingNumber: true,
+        trackingUrl: true,
+        paymentMethod: true,
+        paymentId: true,
+        source: true,
+        transactionId: true,
+        utmSource: true,
+        utmMedium: true,
+        utmCampaign: true,
+        utmTerm: true,
+        utmContent: true,
         sellpage: {
           select: {
             id: true,
@@ -265,6 +357,7 @@ export class OrdersService {
         name: order.customerName,
         phone: order.customerPhone ?? null,
       },
+      shippingAddress: (order.shippingAddress as Record<string, unknown>) ?? {},
       totals: {
         subtotal: Number(order.subtotal),
         shipping: Number(order.shippingCost),
@@ -274,6 +367,19 @@ export class OrdersService {
         currency: order.currency,
       },
       status: order.status,
+      source: order.source ?? null,
+      transactionId: order.transactionId ?? null,
+      trackingNumber: order.trackingNumber ?? null,
+      trackingUrl: order.trackingUrl ?? null,
+      paymentMethod: order.paymentMethod ?? null,
+      paymentId: order.paymentId ?? null,
+      utm: {
+        source: order.utmSource ?? null,
+        medium: order.utmMedium ?? null,
+        campaign: order.utmCampaign ?? null,
+        term: order.utmTerm ?? null,
+        content: order.utmContent ?? null,
+      },
       items: order.items.map((i) => ({
         productTitle: i.productName,
         variantTitle: i.variantName ?? null,
@@ -287,5 +393,353 @@ export class OrdersService {
         note: e.description ?? null,
       })),
     };
+  }
+
+  // ─── C.1: SINGLE ORDER STATUS CHANGE ─────────────────────────────────────
+
+  async updateOrderStatus(
+    sellerId: string,
+    orderId: string,
+    dto: UpdateOrderStatusDto,
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, sellerId },
+      select: { id: true, status: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    const current = order.status.toString();
+    const target = dto.status;
+
+    if (!canTransition(current, target)) {
+      throw new BadRequestException(
+        `Cannot transition from ${current} to ${target}`,
+      );
+    }
+
+    const eventType = STATUS_TO_EVENT[target] ?? 'CONFIRMED';
+    const description = dto.note ?? `Status changed to ${target}`;
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: target as never },
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.orderEvent.create({
+        data: {
+          orderId,
+          sellerId,
+          eventType: eventType as never,
+          description,
+        },
+      }),
+    ]);
+
+    // F.3: Send shipping notification email when status → SHIPPED
+    if (target === 'SHIPPED') {
+      if (this.emailMarketingEnabled) {
+        this.queueShippingEmail(orderId).catch((err) =>
+          this.logger.error(`Failed to queue shipping email for ${orderId}: ${err.message}`),
+        );
+      } else {
+        this.sendShippingEmail(orderId).catch((err) =>
+          this.logger.error(`Failed to send shipping email for ${orderId}: ${err.message}`),
+        );
+      }
+    }
+
+    // Send delivery confirmation email when status → DELIVERED
+    if (target === 'DELIVERED' && this.emailMarketingEnabled) {
+      this.queueDeliveryEmail(orderId).catch((err) =>
+        this.logger.error(`Failed to queue delivery email for ${orderId}: ${err.message}`),
+      );
+    }
+
+    // Dispatch outbound webhook (fire-and-forget)
+    this.webhookOutbound.dispatchOrderEvent(sellerId, `order.${target.toLowerCase()}`, orderId).catch((err) =>
+      this.logger.error(`Webhook outbound failed: ${err.message}`),
+    );
+
+    return updated;
+  }
+
+  // ─── C.3: GET VALID TRANSITIONS ──────────────────────────────────────────
+
+  async getOrderTransitions(sellerId: string, orderId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, sellerId },
+      select: { id: true, status: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    const current = order.status.toString();
+    return {
+      currentStatus: current,
+      validTransitions: ORDER_TRANSITIONS[current] ?? [],
+    };
+  }
+
+  // ─── F.3: SHIPPING EMAIL HELPER ─────────────────────────────────────────
+
+  private async sendShippingEmail(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        trackingNumber: true,
+        trackingUrl: true,
+        seller: { select: { name: true, slug: true } },
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: { select: { name: true } },
+            variant: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    await this.email.sendShippingNotification({
+      orderNumber: order.orderNumber,
+      customerName: order.customerName ?? 'Customer',
+      customerEmail: order.customerEmail,
+      trackingNumber: order.trackingNumber,
+      trackingUrl: order.trackingUrl,
+      items: order.items.map((i) => ({
+        productName: i.product?.name ?? 'Product',
+        variantName: i.variant?.name ?? null,
+        quantity: i.quantity,
+        unitPrice: Number(i.unitPrice),
+        lineTotal: Number(i.lineTotal),
+      })),
+      storeName: order.seller.name,
+      storeSlug: order.seller.slug,
+    });
+  }
+
+  // ─── EMAIL MARKETING: QUEUE SHIPPING EMAIL (T3) ───────────────────────
+
+  private async queueShippingEmail(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        sellerId: true,
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        trackingNumber: true,
+        trackingUrl: true,
+        seller: { select: { name: true, slug: true } },
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: { select: { name: true } },
+            variant: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    const firstName = (order.customerName ?? 'Customer').split(' ')[0];
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    const trackingUrl = order.trackingUrl ?? `${frontendUrl}/${order.seller.slug}/trackings/search`;
+
+    const items = order.items.map((i) => ({
+      productName: i.product?.name ?? 'Product',
+      variantName: i.variant?.name ?? null,
+      quantity: i.quantity,
+      unitPrice: Number(i.unitPrice),
+      lineTotal: Number(i.lineTotal),
+    }));
+
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: order.sellerId },
+      select: { supportEmail: true },
+    });
+
+    await this.emailSend.queueEmail({
+      sellerId: order.sellerId,
+      toEmail: order.customerEmail,
+      toName: order.customerName ?? undefined,
+      flowId: 'shipping_confirmation',
+      subject: `Great News! Your Order #${order.orderNumber} Has Shipped`,
+      priority: 1,
+      variables: {
+        first_name: firstName,
+        order_number: order.orderNumber,
+        tracking_number: order.trackingNumber ?? 'Pending',
+        tracking_url: trackingUrl,
+        estimated_delivery: '7-15 business days',
+        items_html: this.emailSend.buildItemsHtml(items),
+        store_name: order.seller.name,
+        support_phone: '',
+        support_email: settings?.supportEmail ?? '',
+        email: order.customerEmail,
+        unsubscribe_url: this.emailSend.buildUnsubscribeUrl(order.customerEmail, order.sellerId),
+      },
+    });
+
+    this.logger.log(
+      `Queued shipping_confirmation email for ${order.customerEmail} (order ${order.orderNumber})`,
+    );
+  }
+
+  // ─── EMAIL MARKETING: QUEUE DELIVERY EMAIL (T4) ──────────────────────
+
+  private async queueDeliveryEmail(orderId: string): Promise<void> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        sellerId: true,
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        seller: { select: { name: true, slug: true } },
+        items: {
+          select: {
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+            product: { select: { name: true } },
+            variant: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!order) return;
+
+    const firstName = (order.customerName ?? 'Customer').split(' ')[0];
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+    const reviewUrl = `${frontendUrl}/${order.seller.slug}`;
+
+    const items = order.items.map((i) => ({
+      productName: i.product?.name ?? 'Product',
+      variantName: i.variant?.name ?? null,
+      quantity: i.quantity,
+      unitPrice: Number(i.unitPrice),
+      lineTotal: Number(i.lineTotal),
+    }));
+
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: order.sellerId },
+      select: { supportEmail: true },
+    });
+
+    await this.emailSend.queueEmail({
+      sellerId: order.sellerId,
+      toEmail: order.customerEmail,
+      toName: order.customerName ?? undefined,
+      flowId: 'delivery_confirmation',
+      subject: `Your Order #${order.orderNumber} Has Been Delivered!`,
+      priority: 1,
+      variables: {
+        first_name: firstName,
+        order_number: order.orderNumber,
+        items_html: this.emailSend.buildItemsHtml(items),
+        review_url: reviewUrl,
+        store_name: order.seller.name,
+        support_phone: '',
+        support_email: settings?.supportEmail ?? '',
+        email: order.customerEmail,
+        unsubscribe_url: this.emailSend.buildUnsubscribeUrl(order.customerEmail, order.sellerId),
+      },
+    });
+
+    this.logger.log(
+      `Queued delivery_confirmation email for ${order.customerEmail} (order ${order.orderNumber})`,
+    );
+  }
+
+  // ─── ORDER DELAY NOTIFICATION (T6) — MANUAL TRIGGER ──────────────────
+
+  async sendOrderDelayNotification(
+    sellerId: string,
+    orderId: string,
+    reason?: string,
+  ): Promise<{ queued: boolean }> {
+    if (!this.emailMarketingEnabled) {
+      this.logger.warn('Order delay notification skipped — EMAIL_MARKETING_ENABLED is not true');
+      return { queued: false };
+    }
+
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, sellerId },
+      select: {
+        sellerId: true,
+        orderNumber: true,
+        customerEmail: true,
+        customerName: true,
+        seller: { select: { name: true } },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    const firstName = (order.customerName ?? 'Customer').split(' ')[0];
+
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId: order.sellerId },
+      select: { supportEmail: true },
+    });
+
+    await this.emailSend.queueEmail({
+      sellerId: order.sellerId,
+      toEmail: order.customerEmail,
+      toName: order.customerName ?? undefined,
+      flowId: 'order_delay',
+      subject: `Update on Your Order #${order.orderNumber}`,
+      priority: 1,
+      variables: {
+        first_name: firstName,
+        order_number: order.orderNumber,
+        delay_reason: reason ?? 'Due to high demand, your order is taking a bit longer than expected to process.',
+        store_name: order.seller.name,
+        support_phone: '',
+        support_email: settings?.supportEmail ?? '',
+        email: order.customerEmail,
+        unsubscribe_url: this.emailSend.buildUnsubscribeUrl(order.customerEmail, order.sellerId),
+      },
+    });
+
+    // Log the event
+    await this.prisma.orderEvent.create({
+      data: {
+        orderId,
+        sellerId,
+        eventType: 'PROCESSING' as never,
+        description: `Delay notification sent to customer. Reason: ${reason ?? 'High demand'}`,
+      },
+    });
+
+    this.logger.log(
+      `Queued order_delay email for ${order.customerEmail} (order ${order.orderNumber})`,
+    );
+
+    return { queued: true };
   }
 }

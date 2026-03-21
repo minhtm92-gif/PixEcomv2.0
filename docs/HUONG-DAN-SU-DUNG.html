@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PixEcom v2 — Hướng Dẫn Sử Dụng Hệ Thống</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+      colors: { brand: { 50:'#eff6ff',100:'#dbeafe',200:'#bfdbfe',300:'#93c5fd',400:'#60a5fa',500:'#3b82f6',600:'#2563eb',700:'#1d4ed8',800:'#1e40af',900:'#1e3a8a' } }
+    }
+  }
+}
+</script>
+<style>
+  html { font-family: 'Inter', system-ui, sans-serif; }
+  .copy-btn { transition: all 0.2s; }
+  .copy-btn:hover { background: #dbeafe; }
+  .copy-btn.copied { background: #d1fae5 !important; color: #065f46 !important; }
+  .toc-link { transition: all 0.15s; }
+  .toc-link:hover { color: #2563eb; background: #eff6ff; }
+  .toc-link.active { color: #2563eb; background: #eff6ff; border-left-color: #3b82f6; }
+  .section-card { transition: box-shadow 0.2s; }
+  .section-card:hover { box-shadow: 0 4px 24px rgba(59,130,246,0.08); }
+  @media (max-width: 1023px) { .sidebar-nav { display: none; } .sidebar-nav.open { display: flex; } }
+  table { border-collapse: collapse; }
+  th { background: #f8fafc; }
+  .badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #d1fae5; color: #065f46; }
+  .badge-purple { background: #ede9fe; color: #5b21b6; }
+  .badge-orange { background: #ffedd5; color: #9a3412; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  code { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+  pre code { display: block; overflow-x: auto; }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-800 antialiased">
+
+<!-- Mobile menu toggle -->
+<button id="menuToggle" class="lg:hidden fixed top-4 left-4 z-50 bg-white shadow-lg rounded-lg p-2 border border-gray-200" onclick="document.getElementById('sidebar').classList.toggle('open')">
+  <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+</button>
+
+<!-- Sidebar Navigation -->
+<nav id="sidebar" class="sidebar-nav fixed top-0 left-0 h-full w-72 bg-white border-r border-gray-200 z-40 flex flex-col overflow-y-auto">
+  <div class="p-6 border-b border-gray-100">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <div>
+        <div class="font-bold text-gray-900">PixEcom v2</div>
+        <div class="text-xs text-gray-500">User Guide</div>
+      </div>
+    </div>
+  </div>
+  <div class="flex-1 p-4 space-y-1">
+    <a href="#gioi-thieu" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">1. Gioi thieu he thong</a>
+    <a href="#url-he-thong" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">2. URL he thong</a>
+    <a href="#tai-khoan-test" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">3. Tai khoan test</a>
+    <a href="#seller-portal" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">4. Seller Portal</a>
+    <div class="pl-4 space-y-1">
+      <a href="#seller-login" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.1 Dang nhap</a>
+      <a href="#seller-orders" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.2 Orders</a>
+      <a href="#seller-ads" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.3 Ads Manager</a>
+      <a href="#seller-campaigns" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.4 Campaigns</a>
+      <a href="#seller-analytics" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.5 Analytics</a>
+      <a href="#seller-sellpages" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.6 Sellpages</a>
+      <a href="#seller-creatives" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.7 Creatives</a>
+      <a href="#seller-products" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.8 Products</a>
+      <a href="#seller-settings" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">4.9 Settings</a>
+    </div>
+    <a href="#admin-portal" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">5. Admin Portal</a>
+    <div class="pl-4 space-y-1">
+      <a href="#admin-login" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">5.1 Dang nhap</a>
+      <a href="#admin-dashboard" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">5.2 Dashboard</a>
+      <a href="#admin-sellers" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">5.3 Sellers</a>
+      <a href="#admin-orders" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">5.4 Orders</a>
+      <a href="#admin-products" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">5.5 Products</a>
+      <a href="#admin-settings" class="toc-link block px-3 py-1.5 text-xs rounded-lg border-l-2 border-transparent text-gray-500">5.6 Settings</a>
+    </div>
+    <a href="#storefront" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">6. Storefront</a>
+    <a href="#thanh-toan" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">7. Thanh toan</a>
+    <a href="#theme-toggle" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">8. Theme Toggle</a>
+    <a href="#api-reference" class="toc-link block px-3 py-2 text-sm rounded-lg border-l-2 border-transparent">9. API Reference</a>
+  </div>
+  <div class="p-4 border-t border-gray-100 text-xs text-gray-400 text-center">
+    PixEcom v2 &mdash; Updated 2026-02-24
+  </div>
+</nav>
+
+<!-- Main Content -->
+<main class="lg:ml-72 min-h-screen">
+  <div class="max-w-4xl mx-auto px-6 py-12 lg:py-16">
+
+    <!-- Header -->
+    <header class="mb-16 text-center">
+      <div class="inline-flex items-center gap-2 bg-brand-50 text-brand-700 px-4 py-1.5 rounded-full text-sm font-medium mb-6">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+        Tai lieu huong dan
+      </div>
+      <h1 class="text-4xl lg:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight">
+        PixEcom v2
+      </h1>
+      <p class="text-xl text-gray-500 max-w-2xl mx-auto">
+        Huong Dan Su Dung He Thong
+      </p>
+      <p class="text-sm text-gray-400 mt-4">Phien ban: 2.4.2 &mdash; Cap nhat: 24/02/2026</p>
+    </header>
+
+    <!-- Section 1: Gioi thieu -->
+    <section id="gioi-thieu" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-brand-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">1. Gioi thieu he thong</h2>
+        </div>
+
+        <p class="text-gray-600 mb-6 leading-relaxed">
+          <strong>PixEcom v2</strong> la nen tang e-commerce da nguoi ban (multi-tenant), cho phep nhieu seller quan ly cua hang, san pham, don hang va quang cao tren cung mot he thong. He thong bao gom 3 phan chinh:
+        </p>
+
+        <div class="grid md:grid-cols-3 gap-4 mb-8">
+          <div class="bg-blue-50 rounded-xl p-5 border border-blue-100">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="badge badge-blue">Seller</span>
+            </div>
+            <h3 class="font-semibold text-gray-900 mb-1">Seller Portal</h3>
+            <p class="text-sm text-gray-600">Trang quan ly danh cho nguoi ban. Quan ly don hang, san pham, sellpage, quang cao, analytics.</p>
+          </div>
+          <div class="bg-purple-50 rounded-xl p-5 border border-purple-100">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="badge badge-purple">Admin</span>
+            </div>
+            <h3 class="font-semibold text-gray-900 mb-1">Admin Portal</h3>
+            <p class="text-sm text-gray-600">Trang quan tri he thong. Quan ly seller, toan bo don hang, san pham, cai dat nen tang.</p>
+          </div>
+          <div class="bg-green-50 rounded-xl p-5 border border-green-100">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="badge badge-green">Public</span>
+            </div>
+            <h3 class="font-semibold text-gray-900 mb-1">Storefront</h3>
+            <p class="text-sm text-gray-600">Trang ban hang cong khai. Khach hang xem san pham, dat hang, thanh toan, theo doi don.</p>
+          </div>
+        </div>
+
+        <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+          <h4 class="font-semibold text-gray-900 mb-2">Kien truc ky thuat</h4>
+          <ul class="text-sm text-gray-600 space-y-1.5">
+            <li><strong>Frontend:</strong> Next.js 14 (React) + Tailwind CSS</li>
+            <li><strong>Backend:</strong> NestJS 10 (Node.js) REST API</li>
+            <li><strong>Database:</strong> PostgreSQL 16 + Prisma ORM</li>
+            <li><strong>Auth:</strong> JWT (15 phut) + Refresh Token (7 ngay, httpOnly cookie)</li>
+            <li><strong>Payment:</strong> Stripe + PayPal</li>
+            <li><strong>CDN:</strong> Cloudflare R2 tai cdn.pixelxlab.com</li>
+            <li><strong>Email:</strong> SendGrid</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: URL He Thong -->
+    <section id="url-he-thong" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">2. URL he thong</h2>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Dich vu</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">URL</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700 w-16"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr>
+                <td class="px-4 py-3 font-medium">Seller Portal</td>
+                <td class="px-4 py-3"><code class="text-brand-600 bg-brand-50 px-2 py-0.5 rounded text-xs">https://pixecom.pixelxlab.com</code></td>
+                <td class="px-4 py-3"><button onclick="copyText('https://pixecom.pixelxlab.com', this)" class="copy-btn text-xs px-2 py-1 rounded border border-gray-200 text-gray-500">Copy</button></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">Login (Seller)</td>
+                <td class="px-4 py-3"><code class="text-brand-600 bg-brand-50 px-2 py-0.5 rounded text-xs">https://pixecom.pixelxlab.com/login</code></td>
+                <td class="px-4 py-3"><button onclick="copyText('https://pixecom.pixelxlab.com/login', this)" class="copy-btn text-xs px-2 py-1 rounded border border-gray-200 text-gray-500">Copy</button></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">Admin Dashboard</td>
+                <td class="px-4 py-3"><code class="text-brand-600 bg-brand-50 px-2 py-0.5 rounded text-xs">https://pixecom.pixelxlab.com/admin</code></td>
+                <td class="px-4 py-3"><button onclick="copyText('https://pixecom.pixelxlab.com/admin', this)" class="copy-btn text-xs px-2 py-1 rounded border border-gray-200 text-gray-500">Copy</button></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">API</td>
+                <td class="px-4 py-3"><code class="text-brand-600 bg-brand-50 px-2 py-0.5 rounded text-xs">https://api.pixelxlab.com/api</code></td>
+                <td class="px-4 py-3"><button onclick="copyText('https://api.pixelxlab.com/api', this)" class="copy-btn text-xs px-2 py-1 rounded border border-gray-200 text-gray-500">Copy</button></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">API Health Check</td>
+                <td class="px-4 py-3"><code class="text-brand-600 bg-brand-50 px-2 py-0.5 rounded text-xs">https://api.pixelxlab.com/api/health</code></td>
+                <td class="px-4 py-3"><button onclick="copyText('https://api.pixelxlab.com/api/health', this)" class="copy-btn text-xs px-2 py-1 rounded border border-gray-200 text-gray-500">Copy</button></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">CDN (R2)</td>
+                <td class="px-4 py-3"><code class="text-brand-600 bg-brand-50 px-2 py-0.5 rounded text-xs">https://cdn.pixelxlab.com</code></td>
+                <td class="px-4 py-3"><button onclick="copyText('https://cdn.pixelxlab.com', this)" class="copy-btn text-xs px-2 py-1 rounded border border-gray-200 text-gray-500">Copy</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: Tai Khoan Test -->
+    <section id="tai-khoan-test" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">3. Tai khoan test</h2>
+        </div>
+
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+          <div class="flex gap-2">
+            <svg class="w-5 h-5 text-amber-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+            <p class="text-sm text-amber-800"><strong>Luu y:</strong> Day la cac tai khoan seed data dung de test. Tat ca mat khau deu la <code class="bg-amber-100 px-1.5 py-0.5 rounded font-mono text-xs">admin123456</code>.</p>
+          </div>
+        </div>
+
+        <!-- Seller Accounts -->
+        <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <span class="badge badge-blue">Seller</span> Tai khoan Seller
+        </h3>
+        <p class="text-sm text-gray-500 mb-3">Dang nhap tai: <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">/login</code></p>
+        <div class="overflow-x-auto mb-8">
+          <table class="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Seller</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Email</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Password</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Store Slug</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr>
+                <td class="px-4 py-3 font-medium">TechGear Pro</td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">techgear@example.com</code> <button onclick="copyText('techgear@example.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code> <button onclick="copyText('admin123456', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">techgear-pro</code></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">FashionHub</td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">fashionhub@example.com</code> <button onclick="copyText('fashionhub@example.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code> <button onclick="copyText('admin123456', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">fashionhub</code></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">HomeDecor Plus</td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">homedecor@example.com</code> <button onclick="copyText('homedecor@example.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code> <button onclick="copyText('admin123456', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">homedecor-plus</code></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">GadgetWorld</td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">gadgetworld@example.com</code> <button onclick="copyText('gadgetworld@example.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code> <button onclick="copyText('admin123456', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded">gadgetworld</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Admin Account -->
+        <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <span class="badge badge-purple">Admin</span> Tai khoan Superadmin
+        </h3>
+        <p class="text-sm text-gray-500 mb-3">Dang nhap tai: <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">/admin</code></p>
+        <div class="overflow-x-auto mb-8">
+          <table class="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Role</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Email</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Password</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="px-4 py-3"><span class="badge badge-red">SUPERADMIN</span></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin@pixecom.com</code> <button onclick="copyText('admin@pixecom.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code> <button onclick="copyText('admin123456', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Staff Accounts -->
+        <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+          <span class="badge badge-purple">Staff</span> Tai khoan Admin Staff
+        </h3>
+        <p class="text-sm text-gray-500 mb-3">Dang nhap tai: <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">/admin</code></p>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border border-gray-200 rounded-xl overflow-hidden">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Ten</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Email</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Password</th>
+                <th class="text-left px-4 py-3 font-semibold text-gray-700">Role</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr>
+                <td class="px-4 py-3 font-medium">Sarah Manager</td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">sarah.manager@pixecom.com</code> <button onclick="copyText('sarah.manager@pixecom.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code></td>
+                <td class="px-4 py-3"><span class="badge badge-purple">ADMIN</span></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">John Support</td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">john.support@pixecom.com</code> <button onclick="copyText('john.support@pixecom.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code></td>
+                <td class="px-4 py-3"><span class="badge badge-blue">SUPPORT</span></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">Emily Content</td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">emily.content@pixecom.com</code> <button onclick="copyText('emily.content@pixecom.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code></td>
+                <td class="px-4 py-3"><span class="badge badge-green">CONTENT</span></td>
+              </tr>
+              <tr>
+                <td class="px-4 py-3 font-medium">Mike Analyst</td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">mike.analyst@pixecom.com</code> <button onclick="copyText('mike.analyst@pixecom.com', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400 ml-1">Copy</button></td>
+                <td class="px-4 py-3"><code class="text-xs bg-gray-100 px-1.5 py-0.5 rounded">admin123456</code></td>
+                <td class="px-4 py-3"><span class="badge badge-orange">ANALYST</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: Seller Portal -->
+    <section id="seller-portal" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">4. Huong dan Seller Portal</h2>
+        </div>
+
+        <p class="text-gray-600 mb-8 leading-relaxed">
+          Seller Portal la noi nguoi ban quan ly toan bo hoat dong kinh doanh: don hang, san pham, sellpage (trang ban hang), quang cao Facebook, va analytics. Moi seller co mot cua hang rieng voi URL dang <code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs">/{store-slug}</code>.
+        </p>
+
+        <!-- 4.1 Login -->
+        <div id="seller-login" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.1</span>
+            Dang nhap
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <ol class="list-decimal list-inside space-y-2 text-sm text-gray-600">
+              <li>Truy cap <code class="bg-white px-1.5 py-0.5 rounded border text-xs">https://pixecom.pixelxlab.com/login</code></li>
+              <li>Nhap <strong>Email</strong> va <strong>Password</strong> cua tai khoan seller</li>
+              <li>Click nut <strong>"Sign In"</strong></li>
+              <li>He thong se chuyen huong den trang Dashboard cua Seller Portal</li>
+            </ol>
+            <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p class="text-xs text-blue-800"><strong>Luu y:</strong> Session se tu dong refresh token sau moi 15 phut. Neu khong thao tac trong 7 ngay, ban se phai dang nhap lai.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4.2 Orders -->
+        <div id="seller-orders" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.2</span>
+            Orders (Don hang)
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600 mb-3">Trang quan ly don hang cho phep ban xem, loc, tim kiem va xuat du lieu don hang.</p>
+            <div class="space-y-3">
+              <div class="flex gap-3">
+                <div class="w-20 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Xem</div>
+                <p class="text-sm text-gray-600">Danh sach don hang hien thi: ma don, ngay tao, khach hang, tong tien, trang thai, nguon (Facebook/Direct).</p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-20 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Loc</div>
+                <p class="text-sm text-gray-600">Loc theo trang thai (PENDING, CONFIRMED, SHIPPED, DELIVERED, CANCELLED, REFUNDED), nguon don hang, va khoang thoi gian.</p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-20 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Tim kiem</div>
+                <p class="text-sm text-gray-600">Tim theo ma don hang, ten hoac email khach hang.</p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-20 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Export</div>
+                <p class="text-sm text-gray-600">Xuat danh sach don hang ra file CSV de xu ly ben ngoai.</p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-20 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Import</div>
+                <p class="text-sm text-gray-600">Import tracking number hang loat tu file CSV (dung de cap nhat ma van don).</p>
+              </div>
+            </div>
+            <div class="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
+              <p class="text-xs text-green-800"><strong>Luong don hang:</strong> PENDING &rarr; CONFIRMED (thanh toan thanh cong) &rarr; SHIPPED (da gui hang) &rarr; DELIVERED (da giao). Khi don chuyen sang SHIPPED, email thong bao se tu dong gui cho khach hang.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4.3 Ads Manager -->
+        <div id="seller-ads" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.3</span>
+            Ads Manager
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600 mb-3">Ket noi tai khoan Facebook de dong bo va xem hieu suat quang cao.</p>
+            <div class="space-y-3">
+              <div class="flex gap-3">
+                <div class="w-24 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Ket noi FB</div>
+                <p class="text-sm text-gray-600">Click "Connect Facebook" de xac thuc qua Meta OAuth. Sau khi ket noi, he thong se dong bo du lieu quang cao tu Facebook Ads API.</p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-24 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Chi so</div>
+                <p class="text-sm text-gray-600">Xem cac chi so: Spend, Revenue, ROAS, CR (Conversion Rate), CR1 (Checkout Rate), CR2 (Purchase Rate), Clicks, Impressions, CPM, CPC.</p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-24 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Cong thuc</div>
+                <p class="text-sm text-gray-600">
+                  CR = purchase / contentView * 100<br>
+                  CR1 = checkout / contentView * 100<br>
+                  CR2 = purchase / checkout * 100<br>
+                  ROAS = revenue / spend
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4.4 Campaigns -->
+        <div id="seller-campaigns" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.4</span>
+            Campaigns
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600">Xem danh sach cac Facebook Ad Campaigns da dong bo tu Meta. Hien thi trang thai (Active, Paused, Archived), budget, va performance metrics cua tung campaign.</p>
+          </div>
+        </div>
+
+        <!-- 4.5 Analytics -->
+        <div id="seller-analytics" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.5</span>
+            Analytics
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600 mb-3">Bao cao tong hop hieu suat kinh doanh cua cua hang.</p>
+            <ul class="list-disc list-inside text-sm text-gray-600 space-y-1.5">
+              <li><strong>Revenue:</strong> Tong doanh thu theo thoi gian</li>
+              <li><strong>Orders:</strong> So don hang theo ngay/tuan/thang</li>
+              <li><strong>Conversion:</strong> Ti le chuyen doi (CR, CR1, CR2)</li>
+              <li><strong>Top Products:</strong> San pham ban chay nhat</li>
+              <li><strong>Traffic Sources:</strong> Nguon luu luong (Facebook, Direct, ...)</li>
+            </ul>
+            <div class="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p class="text-xs text-amber-800"><strong>Quan trong:</strong> He thong KHONG tinh trung binh cac ti le. Thay vao do, SUM tong raw counts truoc, roi moi tinh ti le. Vi du: CR = SUM(purchase) / SUM(contentView) * 100.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4.6 Sellpages -->
+        <div id="seller-sellpages" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.6</span>
+            Sellpages (Trang ban hang)
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600 mb-3">Sellpage la trang landing page cho tung san pham, noi khach hang xem chi tiet va mua hang.</p>
+            <div class="space-y-3">
+              <div class="flex gap-3">
+                <div class="w-24 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Tao moi</div>
+                <p class="text-sm text-gray-600">Tao sellpage moi voi tieu de, mo ta, hinh anh, gia, va lien ket san pham.</p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-24 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">Boost</div>
+                <p class="text-sm text-gray-600">Cac module tang cuong chuyen doi: countdown timer, stock counter, trust badges, social proof.</p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-24 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">URL</div>
+                <p class="text-sm text-gray-600">Sellpage co URL dang: <code class="bg-white px-1.5 py-0.5 rounded border text-xs">/{store-slug}/{product-slug}</code></p>
+              </div>
+              <div class="flex gap-3">
+                <div class="w-24 shrink-0 text-xs font-semibold text-gray-500 pt-0.5">SEO</div>
+                <p class="text-sm text-gray-600">He thong tu dong tao meta title, description, va JSON-LD structured data (Product schema) cho SEO.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4.7 Creatives -->
+        <div id="seller-creatives" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.7</span>
+            Creatives
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600">Quan ly ad creatives va media files. Upload hinh anh/video len CDN (Cloudflare R2) tai <code class="bg-white px-1.5 py-0.5 rounded border text-xs">cdn.pixelxlab.com</code>. To chuc va gan tag cho cac creative de su dung trong quang cao.</p>
+          </div>
+        </div>
+
+        <!-- 4.8 Products -->
+        <div id="seller-products" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.8</span>
+            Products (San pham)
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600 mb-3">Quan ly danh sach san pham cua cua hang.</p>
+            <ul class="list-disc list-inside text-sm text-gray-600 space-y-1.5">
+              <li><strong>Thong tin co ban:</strong> Ten, mo ta, hinh anh, gia ban, gia goc</li>
+              <li><strong>Variants:</strong> Cac bien the san pham (mau sac, kich co, ...)</li>
+              <li><strong>Stock:</strong> Quan ly ton kho. Khi khach mua, stock tu dong giam. Khi hoan tien (refund), stock tu dong phuc hoi.</li>
+              <li><strong>Trang thai:</strong> Published (hien thi tren storefront) hoac Draft (an)</li>
+              <li><strong>Reviews:</strong> Xem va duyet danh gia cua khach hang (PENDING &rarr; APPROVED/REJECTED)</li>
+              <li><strong>Stats:</strong> Xem so luong don hang va doanh thu cua tung san pham</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 4.9 Settings -->
+        <div id="seller-settings" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-brand-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">4.9</span>
+            Settings (Cai dat)
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <ul class="list-disc list-inside text-sm text-gray-600 space-y-1.5">
+              <li><strong>Store Info:</strong> Ten cua hang, logo, mo ta, slug</li>
+              <li><strong>Shipping:</strong> Cai dat phi van chuyen, vung giao hang</li>
+              <li><strong>Policies:</strong> Chinh sach doi tra, bao mat, dieu khoan</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 5: Admin Portal -->
+    <section id="admin-portal" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">5. Huong dan Admin Portal</h2>
+        </div>
+
+        <p class="text-gray-600 mb-8 leading-relaxed">
+          Admin Portal la trang quan tri danh cho doi ngu van hanh nen tang. Tai day, admin co the quan ly sellers, xem toan bo don hang, san pham, va cau hinh he thong.
+        </p>
+
+        <!-- 5.1 Admin Login -->
+        <div id="admin-login" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-purple-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">5.1</span>
+            Dang nhap Admin
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <ol class="list-decimal list-inside space-y-2 text-sm text-gray-600">
+              <li>Truy cap <code class="bg-white px-1.5 py-0.5 rounded border text-xs">https://pixecom.pixelxlab.com/admin</code></li>
+              <li>Nhap <strong>Email</strong> va <strong>Password</strong> cua tai khoan admin</li>
+              <li>Click <strong>"Sign In"</strong></li>
+              <li>He thong su dung endpoint <code class="bg-white px-1.5 py-0.5 rounded border text-xs">/api/auth/admin-login</code> (khac voi seller login)</li>
+            </ol>
+            <div class="mt-4 bg-purple-50 border border-purple-200 rounded-lg p-3">
+              <p class="text-xs text-purple-800"><strong>Phan quyen:</strong> SUPERADMIN co toan quyen. ADMIN co the quan ly sellers va orders. SUPPORT chi xem don hang. CONTENT quan ly noi dung. ANALYST chi xem analytics.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5.2 Dashboard -->
+        <div id="admin-dashboard" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-purple-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">5.2</span>
+            Dashboard
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600 mb-3">Tong quan toan nen tang:</p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="bg-white rounded-lg p-3 border text-center">
+                <div class="text-xs text-gray-500">Total Sellers</div>
+                <div class="text-lg font-bold text-gray-900">So seller</div>
+              </div>
+              <div class="bg-white rounded-lg p-3 border text-center">
+                <div class="text-xs text-gray-500">Total Orders</div>
+                <div class="text-lg font-bold text-gray-900">Tong don</div>
+              </div>
+              <div class="bg-white rounded-lg p-3 border text-center">
+                <div class="text-xs text-gray-500">Revenue</div>
+                <div class="text-lg font-bold text-gray-900">Doanh thu</div>
+              </div>
+              <div class="bg-white rounded-lg p-3 border text-center">
+                <div class="text-xs text-gray-500">Products</div>
+                <div class="text-lg font-bold text-gray-900">San pham</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5.3 Sellers -->
+        <div id="admin-sellers" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-purple-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">5.3</span>
+            Quan ly Sellers
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <ul class="list-disc list-inside text-sm text-gray-600 space-y-1.5">
+              <li><strong>Xem danh sach:</strong> Tat ca seller dang ky tren he thong</li>
+              <li><strong>Duyet seller:</strong> Phe duyet seller moi (PENDING &rarr; ACTIVE)</li>
+              <li><strong>Tam ngung:</strong> Suspend seller vi pham (ACTIVE &rarr; SUSPENDED)</li>
+              <li><strong>Chi tiet:</strong> Xem thong tin, don hang, san pham, doanh thu cua tung seller</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- 5.4 Orders -->
+        <div id="admin-orders" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-purple-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">5.4</span>
+            Orders (Toan he thong)
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600">Xem toan bo don hang tren nen tang, bao gom don cua tat ca sellers. Loc theo seller, trang thai, thoi gian. Admin co the can thiep vao don hang khi can (vi du: xu ly khieu nai, hoan tien).</p>
+          </div>
+        </div>
+
+        <!-- 5.5 Products -->
+        <div id="admin-products" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-purple-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">5.5</span>
+            Products (Toan he thong)
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <p class="text-sm text-gray-600">Xem toan bo san pham tren nen tang. Loc theo seller, trang thai (Published/Draft), danh muc. Admin co the an (unpublish) san pham vi pham chinh sach.</p>
+          </div>
+        </div>
+
+        <!-- 5.6 Settings -->
+        <div id="admin-settings" class="mb-8 scroll-mt-8">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <span class="w-7 h-7 bg-purple-500 text-white rounded-lg flex items-center justify-center text-xs font-bold">5.6</span>
+            Platform Settings
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <ul class="list-disc list-inside text-sm text-gray-600 space-y-1.5">
+              <li><strong>Payment Gateways:</strong> Cau hinh Stripe va PayPal (keys, webhook secrets)</li>
+              <li><strong>Discounts:</strong> Tao va quan ly ma giam gia toan nen tang</li>
+              <li><strong>Platform Settings:</strong> Cai dat chung: ten nen tang, phi hoa hong, gioi han</li>
+              <li><strong>Staff Management:</strong> Quan ly tai khoan staff (ADMIN, SUPPORT, CONTENT, ANALYST)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 6: Storefront -->
+    <section id="storefront" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">6. Storefront (Trang ban hang cong khai)</h2>
+        </div>
+
+        <p class="text-gray-600 mb-6 leading-relaxed">
+          Storefront la trang web cong khai ma khach hang truy cap de xem san pham va mua hang. Khong can dang nhap.
+        </p>
+
+        <div class="space-y-4 mb-6">
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <h4 class="font-semibold text-gray-900 mb-2">Trang chu cua hang (Store Homepage)</h4>
+            <p class="text-sm text-gray-600 mb-2">URL: <code class="bg-white px-1.5 py-0.5 rounded border text-xs">https://pixecom.pixelxlab.com/{store-slug}</code></p>
+            <p class="text-sm text-gray-600">Hien thi tat ca san pham da published cua cua hang. Khach hang co the click vao san pham de xem chi tiet.</p>
+            <div class="mt-3 space-y-1">
+              <p class="text-xs text-gray-500">Vi du cac store:</p>
+              <div class="flex flex-wrap gap-2">
+                <code class="text-xs bg-brand-50 text-brand-700 px-2 py-1 rounded">/techgear-pro</code>
+                <code class="text-xs bg-brand-50 text-brand-700 px-2 py-1 rounded">/fashionhub</code>
+                <code class="text-xs bg-brand-50 text-brand-700 px-2 py-1 rounded">/homedecor-plus</code>
+                <code class="text-xs bg-brand-50 text-brand-700 px-2 py-1 rounded">/gadgetworld</code>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <h4 class="font-semibold text-gray-900 mb-2">Trang san pham (Sellpage)</h4>
+            <p class="text-sm text-gray-600 mb-2">URL: <code class="bg-white px-1.5 py-0.5 rounded border text-xs">https://pixecom.pixelxlab.com/{store-slug}/{product-slug}</code></p>
+            <p class="text-sm text-gray-600">Hien thi chi tiet san pham: hinh anh, mo ta, gia, variants, reviews, nut "Buy Now".</p>
+            <p class="text-sm text-gray-600 mt-2">Vi du: <code class="bg-white px-1.5 py-0.5 rounded border text-xs">/techgear-pro/laptop-stand-pro</code></p>
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <h4 class="font-semibold text-gray-900 mb-2">Danh gia san pham (Reviews)</h4>
+            <p class="text-sm text-gray-600">Khach hang co the xem danh gia cua nguoi mua khac va gui danh gia moi. Danh gia can duoc seller duyet (PENDING &rarr; APPROVED) truoc khi hien thi cong khai. Diem trung binh (rating) tu dong cap nhat.</p>
+          </div>
+
+          <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+            <h4 class="font-semibold text-gray-900 mb-2">Theo doi don hang (Order Tracking)</h4>
+            <p class="text-sm text-gray-600">Nhap ma don hang va email de xem trang thai don hang, ma van don, va lich su cap nhat.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 7: Thanh Toan -->
+    <section id="thanh-toan" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">7. Thanh toan (Payment)</h2>
+        </div>
+
+        <p class="text-gray-600 mb-6 leading-relaxed">
+          He thong ho tro 2 phuong thuc thanh toan: <strong>Stripe</strong> (the tin dung/ghi no) va <strong>PayPal</strong>.
+        </p>
+
+        <div class="grid md:grid-cols-2 gap-4 mb-6">
+          <div class="bg-indigo-50 rounded-xl p-5 border border-indigo-100">
+            <h4 class="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+              Stripe
+            </h4>
+            <p class="text-sm text-gray-600 mb-3">Thanh toan bang the (Visa, Mastercard, ...) qua Stripe Elements (CardElement).</p>
+            <div class="bg-white rounded-lg p-3 border">
+              <p class="text-xs font-semibold text-gray-700 mb-2">The test de thu nghiem:</p>
+              <div class="space-y-1.5">
+                <div class="flex justify-between items-center">
+                  <span class="text-xs text-gray-500">So the:</span>
+                  <code class="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">4242 4242 4242 4242</code>
+                  <button onclick="copyText('4242424242424242', this)" class="copy-btn text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-400">Copy</button>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-xs text-gray-500">Han su dung:</span>
+                  <code class="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">12/28</code>
+                  <span class="text-xs text-gray-400">(bat ky ngay tuong lai)</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-xs text-gray-500">CVC:</span>
+                  <code class="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">123</code>
+                  <span class="text-xs text-gray-400">(bat ky 3 so)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-yellow-50 rounded-xl p-5 border border-yellow-100">
+            <h4 class="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+              PayPal
+            </h4>
+            <p class="text-sm text-gray-600 mb-3">Thanh toan qua tai khoan PayPal. He thong su dung PayPal REST API (server-side).</p>
+            <div class="bg-white rounded-lg p-3 border">
+              <p class="text-xs font-semibold text-gray-700 mb-2">Che do Sandbox:</p>
+              <p class="text-xs text-gray-600">Dang chay o che do sandbox (test). Khong xu ly tien that. Nut PayPal se hien thi khi chon phuong thuc thanh toan PayPal tai trang checkout.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+          <h4 class="font-semibold text-gray-900 mb-2">Luong thanh toan</h4>
+          <div class="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
+            <span class="bg-white border px-3 py-1.5 rounded-lg font-medium">1. Chon san pham</span>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <span class="bg-white border px-3 py-1.5 rounded-lg font-medium">2. Buy Now</span>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <span class="bg-white border px-3 py-1.5 rounded-lg font-medium">3. Checkout</span>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <span class="bg-white border px-3 py-1.5 rounded-lg font-medium">4. Thanh toan</span>
+            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            <span class="bg-green-100 border-green-300 border px-3 py-1.5 rounded-lg font-medium text-green-800">5. Xac nhan</span>
+          </div>
+          <div class="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p class="text-xs text-blue-800"><strong>Webhooks:</strong> He thong su dung Stripe Webhook va PayPal Webhook de xac nhan thanh toan phia server. Tranh tinh trang race condition giua client confirm va webhook bang cach su dung atomic <code>updateMany WHERE status = 'PENDING'</code>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 8: Theme Toggle -->
+    <section id="theme-toggle" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">8. Theme Toggle (Chuyen doi giao dien)</h2>
+        </div>
+
+        <div class="bg-gray-50 rounded-xl p-5 border border-gray-200">
+          <p class="text-sm text-gray-600 mb-4">He thong ho tro 2 che do giao dien: <strong>Light Mode</strong> (sang) va <strong>Dark Mode</strong> (toi).</p>
+          <div class="space-y-3">
+            <div class="flex gap-3 items-start">
+              <div class="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+              </div>
+              <div>
+                <p class="text-sm font-medium text-gray-900">Chuyen doi</p>
+                <p class="text-sm text-gray-600">Click vao icon mat troi/mat trang trong phan header cua sidebar de chuyen doi giua Light va Dark mode.</p>
+              </div>
+            </div>
+            <div class="flex gap-3 items-start">
+              <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
+              </div>
+              <div>
+                <p class="text-sm font-medium text-gray-900">Luu tru</p>
+                <p class="text-sm text-gray-600">Tuy chon duoc luu trong <code class="bg-white px-1.5 py-0.5 rounded border text-xs">localStorage</code> cua trinh duyet. Lan sau truy cap se tu dong ap dung che do da chon.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 9: API Reference -->
+    <section id="api-reference" class="mb-16 scroll-mt-8">
+      <div class="section-card bg-white rounded-2xl border border-gray-200 p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900">9. API Endpoints Reference</h2>
+        </div>
+
+        <p class="text-gray-600 mb-6 leading-relaxed">
+          Base URL: <code class="bg-gray-100 px-2 py-0.5 rounded text-sm">https://api.pixelxlab.com/api</code>
+        </p>
+
+        <!-- Health -->
+        <div class="mb-6">
+          <h3 class="text-base font-semibold text-gray-900 mb-3">Health Check</h3>
+          <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+            <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/health</code>
+            <span class="text-gray-500 text-xs ml-4">&rarr; {"status":"ok"}</span>
+          </div>
+        </div>
+
+        <!-- Auth -->
+        <div class="mb-6">
+          <h3 class="text-base font-semibold text-gray-900 mb-3">Authentication</h3>
+          <div class="space-y-2">
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-yellow-400">POST</code><code class="text-sm text-gray-300"> /api/auth/login</code>
+              <span class="text-gray-500 text-xs ml-4">Seller login (email + password)</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-yellow-400">POST</code><code class="text-sm text-gray-300"> /api/auth/admin-login</code>
+              <span class="text-gray-500 text-xs ml-4">Admin login (email + password)</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-yellow-400">POST</code><code class="text-sm text-gray-300"> /api/auth/refresh</code>
+              <span class="text-gray-500 text-xs ml-4">Refresh JWT token (httpOnly cookie)</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-yellow-400">POST</code><code class="text-sm text-gray-300"> /api/auth/logout</code>
+              <span class="text-gray-500 text-xs ml-4">Logout (clear refresh token)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Orders -->
+        <div class="mb-6">
+          <h3 class="text-base font-semibold text-gray-900 mb-3">Orders <span class="badge badge-blue ml-2">Auth Required</span></h3>
+          <div class="space-y-2">
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/orders</code>
+              <span class="text-gray-500 text-xs ml-4">Danh sach don hang cua seller</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/orders/:id</code>
+              <span class="text-gray-500 text-xs ml-4">Chi tiet don hang</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-blue-400">PATCH</code><code class="text-sm text-gray-300"> /api/orders/:id/status</code>
+              <span class="text-gray-500 text-xs ml-4">Cap nhat trang thai don hang</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Products -->
+        <div class="mb-6">
+          <h3 class="text-base font-semibold text-gray-900 mb-3">Products <span class="badge badge-blue ml-2">Auth Required</span></h3>
+          <div class="space-y-2">
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/products</code>
+              <span class="text-gray-500 text-xs ml-4">Danh sach san pham cua seller</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-yellow-400">POST</code><code class="text-sm text-gray-300"> /api/products</code>
+              <span class="text-gray-500 text-xs ml-4">Tao san pham moi</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-blue-400">PATCH</code><code class="text-sm text-gray-300"> /api/products/:id</code>
+              <span class="text-gray-500 text-xs ml-4">Cap nhat san pham</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Storefront -->
+        <div class="mb-6">
+          <h3 class="text-base font-semibold text-gray-900 mb-3">Storefront <span class="badge badge-green ml-2">Public</span></h3>
+          <div class="space-y-2">
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/storefront/:sellerSlug</code>
+              <span class="text-gray-500 text-xs ml-4">Store homepage data</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/storefront/:sellerSlug/:sellpageSlug</code>
+              <span class="text-gray-500 text-xs ml-4">Sellpage detail data</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-yellow-400">POST</code><code class="text-sm text-gray-300"> /api/storefront/checkout</code>
+              <span class="text-gray-500 text-xs ml-4">Tao don hang + thanh toan</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-yellow-400">POST</code><code class="text-sm text-gray-300"> /api/storefront/:slug/reviews</code>
+              <span class="text-gray-500 text-xs ml-4">Gui danh gia san pham</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/storefront/sitemap-data</code>
+              <span class="text-gray-500 text-xs ml-4">Data cho sitemap.xml</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin -->
+        <div class="mb-6">
+          <h3 class="text-base font-semibold text-gray-900 mb-3">Admin <span class="badge badge-purple ml-2">Admin Auth</span></h3>
+          <div class="space-y-2">
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/admin/dashboard</code>
+              <span class="text-gray-500 text-xs ml-4">Dashboard metrics</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/admin/sellers</code>
+              <span class="text-gray-500 text-xs ml-4">Danh sach sellers</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/admin/orders</code>
+              <span class="text-gray-500 text-xs ml-4">Tat ca don hang</span>
+            </div>
+            <div class="bg-gray-900 rounded-xl p-4 overflow-x-auto">
+              <code class="text-sm text-green-400">GET</code><code class="text-sm text-gray-300"> /api/admin/products</code>
+              <span class="text-gray-500 text-xs ml-4">Tat ca san pham</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="text-center py-8 border-t border-gray-200">
+      <p class="text-sm text-gray-500">PixEcom v2 &mdash; Phien ban 2.4.2 &mdash; Cap nhat: 24/02/2026</p>
+      <p class="text-xs text-gray-400 mt-1">Built with Next.js 14, NestJS 10, PostgreSQL 16, Stripe, PayPal</p>
+    </footer>
+
+  </div>
+</main>
+
+<!-- Copy to Clipboard Script -->
+<script>
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(function() {
+    var original = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = original;
+      btn.classList.remove('copied');
+    }, 1500);
+  }).catch(function() {
+    // Fallback for older browsers
+    var textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+    var original = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = original;
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
+// Active TOC tracking
+document.addEventListener('DOMContentLoaded', function() {
+  var links = document.querySelectorAll('.toc-link');
+  var sections = [];
+  links.forEach(function(link) {
+    var id = link.getAttribute('href');
+    if (id && id.startsWith('#')) {
+      var el = document.querySelector(id);
+      if (el) sections.push({ el: el, link: link });
+    }
+  });
+
+  function updateActive() {
+    var scrollY = window.scrollY + 100;
+    var current = null;
+    sections.forEach(function(s) {
+      if (s.el.offsetTop <= scrollY) {
+        current = s;
+      }
+    });
+    links.forEach(function(l) { l.classList.remove('active'); });
+    if (current) current.link.classList.add('active');
+  }
+
+  window.addEventListener('scroll', updateActive);
+  updateActive();
+});
+
+// Close mobile menu on link click
+document.querySelectorAll('.toc-link').forEach(function(link) {
+  link.addEventListener('click', function() {
+    if (window.innerWidth < 1024) {
+      document.getElementById('sidebar').classList.remove('open');
+    }
+  });
+});
+</script>
+
+</body>
+</html>

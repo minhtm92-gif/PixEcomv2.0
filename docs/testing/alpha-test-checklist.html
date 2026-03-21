@@ -1,0 +1,2009 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PixEcom v2 — Alpha Test Checklist</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --card-hover: #22263a;
+      --border: #2a2e3d;
+      --text: #e4e4e7;
+      --text-muted: #9ca3af;
+      --accent: #6366f1;
+      --accent-light: #818cf8;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --blocker: #dc2626;
+      --major: #f59e0b;
+      --minor: #3b82f6;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px 20px 60px;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      padding: 40px 0 32px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 32px;
+    }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    .header .meta {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+    .header .meta span { margin: 0 12px; }
+
+    /* Progress Bar */
+    .progress-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    .progress-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .progress-label { font-weight: 600; font-size: 15px; }
+    .progress-stats { display: flex; gap: 20px; font-size: 13px; color: var(--text-muted); }
+    .progress-stats .stat { display: flex; align-items: center; gap: 6px; }
+    .progress-stats .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .dot-done { background: var(--success); }
+    .dot-pass { background: var(--success); }
+    .dot-fail { background: var(--danger); }
+    .dot-na { background: var(--text-muted); }
+    .dot-pending { background: var(--border); }
+    .progress-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--success));
+      border-radius: 4px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+    .progress-pct {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent-light);
+    }
+
+    /* Tester Info */
+    .tester-info {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+    .tester-info label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+    .tester-info input, .tester-info select {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .tester-info input:focus, .tester-info select:focus {
+      border-color: var(--accent);
+    }
+
+    /* Section */
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .section-header {
+      padding: 18px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.2s;
+    }
+    .section-header:hover { background: var(--card-hover); }
+    .section-title {
+      font-size: 17px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-badge {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .badge-progress { background: rgba(99,102,241,0.15); color: var(--accent-light); }
+    .badge-done { background: rgba(34,197,94,0.15); color: var(--success); }
+    .section-chevron {
+      font-size: 20px;
+      transition: transform 0.3s;
+      color: var(--text-muted);
+    }
+    .section.collapsed .section-chevron { transform: rotate(-90deg); }
+    .section.collapsed .section-body { display: none; }
+    .section-body { padding: 0 24px 20px; }
+
+    /* Checklist Items */
+    .check-group {
+      margin-top: 14px;
+    }
+    .check-group-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent-light);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .check-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      transition: background 0.15s;
+      margin-bottom: 2px;
+    }
+    .check-item:hover { background: var(--card-hover); }
+    .check-item.sub { padding-left: 38px; }
+
+    /* Tri-state button */
+    .tri-state {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .tri-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      cursor: pointer;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      color: var(--text-muted);
+    }
+    .tri-btn:hover { border-color: var(--text-muted); }
+    .tri-btn.active-pass { background: rgba(34,197,94,0.2); border-color: var(--success); color: var(--success); }
+    .tri-btn.active-fail { background: rgba(239,68,68,0.2); border-color: var(--danger); color: var(--danger); }
+    .tri-btn.active-na { background: rgba(156,163,175,0.2); border-color: var(--text-muted); color: var(--text-muted); }
+
+    .check-label {
+      flex: 1;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .check-label.checked {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    /* Note input */
+    .check-note {
+      width: 200px;
+      flex-shrink: 0;
+      padding: 6px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      outline: none;
+    }
+    .check-note:focus { border-color: var(--accent); }
+    .check-note::placeholder { color: #555; }
+
+    /* Known Gaps */
+    .known-gaps {
+      margin-top: 14px;
+      padding: 12px 16px;
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 8px;
+    }
+    .known-gaps-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--warning);
+      margin-bottom: 8px;
+    }
+    .known-gaps ul { list-style: none; }
+    .known-gaps li {
+      font-size: 13px;
+      color: var(--text-muted);
+      padding: 3px 0;
+    }
+    .known-gaps li::before { content: "⚠ "; color: var(--warning); }
+
+    /* Metric Definition Table */
+    .metric-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 14px;
+      font-size: 13px;
+    }
+    .metric-table th, .metric-table td {
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+    .metric-table th {
+      background: var(--bg);
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .metric-radio {
+      display: flex;
+      gap: 12px;
+    }
+    .metric-radio label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .metric-radio input[type="radio"] {
+      accent-color: var(--accent);
+    }
+
+    /* Bug Report Section */
+    .bug-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .bug-form .full { grid-column: 1 / -1; }
+    .bug-form label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+    .bug-form input, .bug-form select, .bug-form textarea {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+    .bug-form textarea { min-height: 80px; resize: vertical; }
+    .bug-form input:focus, .bug-form select:focus, .bug-form textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-add-bug {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: background 0.2s;
+    }
+    .btn-add-bug:hover { background: var(--accent-light); }
+
+    /* Bug List */
+    .bug-list { margin-top: 14px; }
+    .bug-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .bug-card-info { flex: 1; }
+    .bug-card-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .bug-card-meta { font-size: 12px; color: var(--text-muted); }
+    .severity-tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .severity-blocker { background: rgba(220,38,38,0.2); color: var(--blocker); }
+    .severity-major { background: rgba(245,158,11,0.2); color: var(--major); }
+    .severity-minor { background: rgba(59,130,246,0.2); color: var(--minor); }
+    .btn-remove-bug {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px;
+    }
+    .btn-remove-bug:hover { color: var(--danger); }
+
+    /* Missing Items */
+    .missing-item-row {
+      display: grid;
+      grid-template-columns: 180px 1fr 1fr 120px 140px;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .missing-item-row input, .missing-item-row select {
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+    .missing-item-row input:focus, .missing-item-row select:focus {
+      border-color: var(--accent);
+    }
+
+    /* Exit Criteria */
+    .criteria-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 2px;
+    }
+    .criteria-item:hover { background: var(--card-hover); }
+    .criteria-check {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--success);
+      cursor: pointer;
+    }
+    .criteria-label { font-size: 14px; flex: 1; }
+    .criteria-label strong { color: var(--accent-light); }
+
+    /* Action Buttons */
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      padding: 32px 0;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 12px 28px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent-light); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { opacity: 0.9; }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 14px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 9999;
+      animation: slideIn 0.3s ease;
+      display: none;
+    }
+    .toast.show { display: block; }
+    .toast-success { background: var(--success); color: #fff; }
+    .toast-error { background: var(--danger); color: #fff; }
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Day Plan Tabs */
+    .day-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .day-tab {
+      padding: 8px 18px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .day-tab:hover { border-color: var(--accent); }
+    .day-tab.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    .day-schedule {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 28px;
+      display: none;
+    }
+    .day-schedule.active { display: block; }
+    .schedule-row {
+      display: grid;
+      grid-template-columns: 80px 120px 1fr;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .schedule-row:last-child { border-bottom: none; }
+    .schedule-time { color: var(--accent-light); font-weight: 600; }
+    .schedule-who { color: var(--warning); }
+
+    /* How-to section */
+    .howto {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 28px;
+    }
+    .howto h3 { font-size: 15px; margin-bottom: 14px; color: var(--warning); }
+    .howto-step {
+      padding: 8px 0;
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+    }
+    .howto-step .num {
+      background: var(--accent);
+      color: #fff;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+      .tester-info { grid-template-columns: 1fr; }
+      .bug-form { grid-template-columns: 1fr; }
+      .missing-item-row { grid-template-columns: 1fr; }
+      .check-item { flex-wrap: wrap; }
+      .check-note { width: 100%; }
+      .schedule-row { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <h1>PixEcom v2 — Alpha Test Checklist</h1>
+    <div class="meta">
+      <span>Version 1.0</span>
+      <span>|</span>
+      <span id="currentDate"></span>
+      <span>|</span>
+      <span>Frontend Integration Preview</span>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-section">
+    <div class="progress-top">
+      <div>
+        <div class="progress-label">Test Progress</div>
+        <div class="progress-stats">
+          <div class="stat"><span class="dot dot-pass"></span> <span id="statPass">0</span> Pass</div>
+          <div class="stat"><span class="dot dot-fail"></span> <span id="statFail">0</span> Fail</div>
+          <div class="stat"><span class="dot dot-na"></span> <span id="statNA">0</span> N/A</div>
+          <div class="stat"><span class="dot dot-pending"></span> <span id="statPending">0</span> Pending</div>
+        </div>
+      </div>
+      <div class="progress-pct" id="progressPct">0%</div>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progressBar"></div>
+    </div>
+  </div>
+
+  <!-- Tester Info -->
+  <div class="tester-info">
+    <div>
+      <label>Tester Name</label>
+      <input type="text" id="testerName" placeholder="Your name..." data-persist="testerName">
+    </div>
+    <div>
+      <label>Test Date</label>
+      <input type="date" id="testDate" data-persist="testDate">
+    </div>
+    <div>
+      <label>Test Account</label>
+      <input type="text" id="testAccount" placeholder="Email used..." data-persist="testAccount">
+    </div>
+  </div>
+
+  <!-- Day Plan -->
+  <div class="day-tabs">
+    <div class="day-tab active" onclick="showDay(1)">Day 1 — Login + Orders + Sellpages</div>
+    <div class="day-tab" onclick="showDay(2)">Day 2 — Ads Manager</div>
+    <div class="day-tab" onclick="showDay(3)">Day 3 — Analytics + Summary</div>
+  </div>
+
+  <div class="day-schedule active" id="day1">
+    <div class="schedule-row">
+      <div class="schedule-time">Morning</div>
+      <div class="schedule-who">Seller A</div>
+      <div>Login &rarr; /orders &rarr; filter by date, status, search &rarr; open 1 order detail</div>
+    </div>
+    <div class="schedule-row">
+      <div class="schedule-time">Morning</div>
+      <div class="schedule-who">Staff QA</div>
+      <div>Login &rarr; /sellpages &rarr; view list &rarr; open 1 sellpage detail</div>
+    </div>
+    <div class="schedule-row">
+      <div class="schedule-time">Afternoon</div>
+      <div class="schedule-who">Both</div>
+      <div>Fill feedback form (Section 3). Record all 400/401/403/500 errors with <code>requestId</code></div>
+    </div>
+  </div>
+
+  <div class="day-schedule" id="day2">
+    <div class="schedule-row">
+      <div class="schedule-time">Morning</div>
+      <div class="schedule-who">Seller A</div>
+      <div>/ads-manager &rarr; Campaign list &rarr; click Campaign &rarr; Adset &rarr; Ad</div>
+    </div>
+    <div class="schedule-row">
+      <div class="schedule-time">Morning</div>
+      <div class="schedule-who">Staff QA</div>
+      <div>Change date filter (Today / 7d / 30d / Custom) &rarr; verify metrics change</div>
+    </div>
+    <div class="schedule-row">
+      <div class="schedule-time">Afternoon</div>
+      <div class="schedule-who">Both</div>
+      <div>Check metric columns: spend, impressions, clicks, CPC, CPM, CTR, CR, ROAS...</div>
+    </div>
+  </div>
+
+  <div class="day-schedule" id="day3">
+    <div class="schedule-row">
+      <div class="schedule-time">Morning</div>
+      <div class="schedule-who">Seller A</div>
+      <div>/analytics &rarr; check KPI cards (Revenue, Ad Spend, ROAS, YouTake, Hold, CashToBalance)</div>
+    </div>
+    <div class="schedule-row">
+      <div class="schedule-time">Morning</div>
+      <div class="schedule-who">Staff QA</div>
+      <div>Cross-check: compare Analytics vs Ads Manager metrics &rarr; note discrepancies</div>
+    </div>
+    <div class="schedule-row">
+      <div class="schedule-time">Afternoon</div>
+      <div class="schedule-who">Both</div>
+      <div>Review all feedback &rarr; classify Blocker/Major/Minor &rarr; 15-min summary meeting</div>
+    </div>
+  </div>
+
+  <!-- Section 2.1: Orders -->
+  <div class="section" id="sec-orders">
+    <div class="section-header" onclick="toggleSection('sec-orders')">
+      <div class="section-title">
+        <span>2.1</span>
+        <span>Orders <code style="font-size:12px;color:var(--text-muted)">/orders + /orders/[id]</code></span>
+        <span class="section-badge badge-progress" id="badge-sec-orders">0 / 13</span>
+      </div>
+      <span class="section-chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <div class="check-group-title">Order List</div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Order list loads correctly (cursor pagination)</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-0">
+        </div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Date filter (dateFrom / dateTo) works</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-1">
+        </div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Status filter works</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-2">
+        </div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Search by order code or customer email works</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-3">
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Order Detail</div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Customer info (name, email, phone) displays correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-4">
+        </div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Product line items + quantity + price display correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-5">
+        </div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Totals (subtotal, shipping, tax, total) display correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-6">
+        </div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Event history / status timeline shows correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-7">
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Security & Error Handling</div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Internal fields NOT shown (sellerId, paymentMethod, trackingNumber, notes)</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-8">
+        </div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">4xx/5xx errors show clear message (no blank screen)</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-9">
+        </div>
+        <div class="check-item" data-section="orders">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">requestId displays when error occurs</span>
+          <input class="check-note" placeholder="Notes..." data-persist="orders-10">
+        </div>
+      </div>
+
+      <div class="known-gaps">
+        <div class="known-gaps-title">Known Gaps</div>
+        <ul>
+          <li>Refresh tracking (not wired yet)</li>
+          <li>transactionId (not shown on UI)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2.2: Ads Manager -->
+  <div class="section" id="sec-ads">
+    <div class="section-header" onclick="toggleSection('sec-ads')">
+      <div class="section-title">
+        <span>2.2</span>
+        <span>Ads Manager <code style="font-size:12px;color:var(--text-muted)">/ads-manager</code></span>
+        <span class="section-badge badge-progress" id="badge-sec-ads">0 / 15</span>
+      </div>
+      <span class="section-chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <div class="check-group-title">3-Tier Navigation</div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Campaign list loads correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-0">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Click Campaign &rarr; Adset list loads correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-1">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Click Adset &rarr; Ad list loads correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-2">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Breadcrumb navigation works (Campaign > Adset > Ad)</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-3">
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Filters</div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Date filter works: Today / 7d / 30d / Custom range</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-4">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Status filter works</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-5">
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Metric Columns</div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Spend column displays correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-6">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Impressions + Clicks display correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-7">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">CPC (Cost Per Click) + CPM (Cost Per Mille) display correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-8">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">CTR (Click-Through Rate) displays correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-9">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">CR / CR1 / CR2 &mdash; verify definitions are correct</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-10">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">ROAS (Return On Ad Spend) &mdash; verify formula</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-11">
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Error Handling</div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Metrics change when date range changes</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-12">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">4xx/5xx errors show clear message</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-13">
+        </div>
+        <div class="check-item" data-section="ads">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">requestId displays when error occurs</span>
+          <input class="check-note" placeholder="Notes..." data-persist="ads-14">
+        </div>
+      </div>
+
+      <div class="known-gaps">
+        <div class="known-gaps-title">Known Gaps</div>
+        <ul>
+          <li>Column sorting</li>
+          <li>Export CSV/Excel</li>
+          <li>Bulk actions</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2.3: Analytics -->
+  <div class="section" id="sec-analytics">
+    <div class="section-header" onclick="toggleSection('sec-analytics')">
+      <div class="section-title">
+        <span>2.3</span>
+        <span>Analytics <code style="font-size:12px;color:var(--text-muted)">/analytics</code></span>
+        <span class="section-badge badge-progress" id="badge-sec-analytics">0 / 10</span>
+      </div>
+      <span class="section-chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <div class="check-group-title">Page & KPI Cards</div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Page loads without errors</span>
+          <input class="check-note" placeholder="Notes..." data-persist="analytics-0">
+        </div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Revenue KPI card shows correct value</span>
+          <input class="check-note" placeholder="Notes..." data-persist="analytics-1">
+        </div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Ad Spend KPI card shows correct value</span>
+          <input class="check-note" placeholder="Notes..." data-persist="analytics-2">
+        </div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">ROAS KPI &mdash; <strong>record formula UI is using</strong></span>
+          <input class="check-note" placeholder="Formula used..." data-persist="analytics-3">
+        </div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">YouTake KPI &mdash; <strong>record formula UI is using</strong></span>
+          <input class="check-note" placeholder="Formula used..." data-persist="analytics-4">
+        </div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Hold KPI card displays</span>
+          <input class="check-note" placeholder="Notes..." data-persist="analytics-5">
+        </div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">CashToBalance KPI card displays</span>
+          <input class="check-note" placeholder="Notes..." data-persist="analytics-6">
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Filters & Cross-check</div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Date range filter works (if available)</span>
+          <input class="check-note" placeholder="Notes..." data-persist="analytics-7">
+        </div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Metrics match Ads Manager logic (cross-check)</span>
+          <input class="check-note" placeholder="Discrepancies..." data-persist="analytics-8">
+        </div>
+        <div class="check-item" data-section="analytics">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label"><strong>Note:</strong> which metrics are stub/fake (showing 0 or N/A)</span>
+          <input class="check-note" placeholder="Stub metrics..." data-persist="analytics-9">
+        </div>
+      </div>
+
+      <!-- Metric Definition Table -->
+      <div class="check-group">
+        <div class="check-group-title">Metric Definitions Verification</div>
+        <table class="metric-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>Expected Definition</th>
+              <th>UI Correct?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>CR</strong> (Conversion Rate)</td>
+              <td>Orders / Clicks &times; 100</td>
+              <td>
+                <div class="metric-radio">
+                  <label><input type="radio" name="metric-cr" value="correct" data-persist="metric-cr"> Correct</label>
+                  <label><input type="radio" name="metric-cr" value="wrong" data-persist="metric-cr"> Wrong</label>
+                  <label><input type="radio" name="metric-cr" value="unclear" data-persist="metric-cr"> Unclear</label>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>CR1</strong></td>
+              <td>AddToCart / Clicks &times; 100</td>
+              <td>
+                <div class="metric-radio">
+                  <label><input type="radio" name="metric-cr1" value="correct" data-persist="metric-cr1"> Correct</label>
+                  <label><input type="radio" name="metric-cr1" value="wrong" data-persist="metric-cr1"> Wrong</label>
+                  <label><input type="radio" name="metric-cr1" value="unclear" data-persist="metric-cr1"> Unclear</label>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>CR2</strong></td>
+              <td>Orders / AddToCart &times; 100</td>
+              <td>
+                <div class="metric-radio">
+                  <label><input type="radio" name="metric-cr2" value="correct" data-persist="metric-cr2"> Correct</label>
+                  <label><input type="radio" name="metric-cr2" value="wrong" data-persist="metric-cr2"> Wrong</label>
+                  <label><input type="radio" name="metric-cr2" value="unclear" data-persist="metric-cr2"> Unclear</label>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>ROAS</strong></td>
+              <td>Revenue / Ad Spend</td>
+              <td>
+                <div class="metric-radio">
+                  <label><input type="radio" name="metric-roas" value="correct" data-persist="metric-roas"> Correct</label>
+                  <label><input type="radio" name="metric-roas" value="wrong" data-persist="metric-roas"> Wrong</label>
+                  <label><input type="radio" name="metric-roas" value="unclear" data-persist="metric-roas"> Unclear</label>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2.4: Sellpages -->
+  <div class="section" id="sec-sellpages">
+    <div class="section-header" onclick="toggleSection('sec-sellpages')">
+      <div class="section-title">
+        <span>2.4</span>
+        <span>Sellpages <code style="font-size:12px;color:var(--text-muted)">/sellpages + /sellpages/[id]</code></span>
+        <span class="section-badge badge-progress" id="badge-sec-sellpages">0 / 8</span>
+      </div>
+      <span class="section-chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <div class="check-group-title">Sellpage List</div>
+        <div class="check-item" data-section="sellpages">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Sellpage list loads correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="sellpages-0">
+        </div>
+        <div class="check-item" data-section="sellpages">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Status filter (DRAFT / PUBLISHED / ARCHIVED) works</span>
+          <input class="check-note" placeholder="Notes..." data-persist="sellpages-1">
+        </div>
+        <div class="check-item" data-section="sellpages">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Search by name works</span>
+          <input class="check-note" placeholder="Notes..." data-persist="sellpages-2">
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Sellpage Detail</div>
+        <div class="check-item" data-section="sellpages">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Name, slug, domain display correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="sellpages-3">
+        </div>
+        <div class="check-item" data-section="sellpages">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Product snapshot (linked product) shows correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="sellpages-4">
+        </div>
+        <div class="check-item" data-section="sellpages">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">Status (Draft/Published) shows correctly</span>
+          <input class="check-note" placeholder="Notes..." data-persist="sellpages-5">
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Error Handling</div>
+        <div class="check-item" data-section="sellpages">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">4xx/5xx errors show clear message</span>
+          <input class="check-note" placeholder="Notes..." data-persist="sellpages-6">
+        </div>
+        <div class="check-item" data-section="sellpages">
+          <div class="tri-state">
+            <button class="tri-btn" onclick="setState(this,'pass')" title="Pass">&#10003;</button>
+            <button class="tri-btn" onclick="setState(this,'fail')" title="Fail">&#10007;</button>
+            <button class="tri-btn" onclick="setState(this,'na')" title="N/A">&#8212;</button>
+          </div>
+          <span class="check-label">requestId displays when error occurs</span>
+          <input class="check-note" placeholder="Notes..." data-persist="sellpages-7">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Bug Report -->
+  <div class="section" id="sec-bugs">
+    <div class="section-header" onclick="toggleSection('sec-bugs')">
+      <div class="section-title">
+        <span>3</span>
+        <span>Bug Reports / Feedback</span>
+        <span class="section-badge badge-progress" id="badge-sec-bugs">0 bugs</span>
+      </div>
+      <span class="section-chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div class="bug-form" id="bugForm">
+        <div>
+          <label>Severity</label>
+          <select id="bugSeverity">
+            <option value="">-- Select --</option>
+            <option value="Blocker">Blocker &mdash; Cannot use, blocks main flow</option>
+            <option value="Major">Major &mdash; Wrong logic/missing data, still usable</option>
+            <option value="Minor">Minor &mdash; UI misalign, missing label, small issue</option>
+          </select>
+        </div>
+        <div>
+          <label>Page / Module</label>
+          <select id="bugPage">
+            <option value="">-- Select --</option>
+            <option value="Orders">Orders</option>
+            <option value="Orders Detail">Orders Detail</option>
+            <option value="Ads Manager - Campaign">Ads Manager &mdash; Campaign</option>
+            <option value="Ads Manager - Adset">Ads Manager &mdash; Adset</option>
+            <option value="Ads Manager - Ad">Ads Manager &mdash; Ad</option>
+            <option value="Analytics">Analytics</option>
+            <option value="Sellpages">Sellpages</option>
+            <option value="Sellpage Detail">Sellpage Detail</option>
+            <option value="Login">Login</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="full">
+          <label>Short Title</label>
+          <input type="text" id="bugTitle" placeholder='e.g. "ROAS column shows 0 when data exists"'>
+        </div>
+        <div class="full">
+          <label>Steps to Reproduce</label>
+          <textarea id="bugSteps" placeholder="1. Login with account...&#10;2. Go to /ads-manager&#10;3. Click campaign 'ABC'&#10;4. Check ROAS column"></textarea>
+        </div>
+        <div>
+          <label>Expected Result</label>
+          <input type="text" id="bugExpected" placeholder='e.g. "ROAS = Revenue / Spend = 2.5"'>
+        </div>
+        <div>
+          <label>Actual Result</label>
+          <input type="text" id="bugActual" placeholder='e.g. "ROAS shows 0.00"'>
+        </div>
+        <div>
+          <label>Screenshot/Video URL</label>
+          <input type="text" id="bugScreenshot" placeholder="Google Drive / Imgur / Loom link">
+        </div>
+        <div>
+          <label>Request ID <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="bugRequestId" placeholder="x-request-id header value">
+        </div>
+        <div>
+          <label>HTTP Status Code</label>
+          <input type="text" id="bugStatusCode" placeholder="400, 401, 403, 500...">
+        </div>
+        <div>
+          <label>Tester</label>
+          <input type="text" id="bugTester" placeholder="Your name">
+        </div>
+      </div>
+      <button class="btn-add-bug" onclick="addBug()">&#43; Add Bug Report</button>
+      <div class="bug-list" id="bugList"></div>
+    </div>
+  </div>
+
+  <!-- Section 4: Missing Item Requests -->
+  <div class="section" id="sec-missing">
+    <div class="section-header" onclick="toggleSection('sec-missing')">
+      <div class="section-title">
+        <span>4</span>
+        <span>Missing Item Requests</span>
+        <span class="section-badge badge-progress" id="badge-sec-missing">0 items</span>
+      </div>
+      <span class="section-chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div id="missingItems">
+        <div class="missing-item-row">
+          <select><option value="">Page...</option><option>Orders</option><option>Ads Manager</option><option>Analytics</option><option>Sellpages</option><option>Other</option></select>
+          <input type="text" placeholder="Description (e.g. Add 'Cost Per Order' column)">
+          <input type="text" placeholder="Why needed">
+          <select><option value="">Priority</option><option>High</option><option>Medium</option><option>Low</option></select>
+          <input type="text" placeholder="Proposed by">
+        </div>
+      </div>
+      <button class="btn-add-bug" onclick="addMissingItem()" style="margin-top:14px;">&#43; Add Item</button>
+    </div>
+  </div>
+
+  <!-- Section 5: Alpha Exit Criteria -->
+  <div class="section" id="sec-exit">
+    <div class="section-header" onclick="toggleSection('sec-exit')">
+      <div class="section-title">
+        <span>5</span>
+        <span>Alpha Exit Criteria</span>
+        <span class="section-badge badge-progress" id="badge-sec-exit">0 / 10</span>
+      </div>
+      <span class="section-chevron">&#9660;</span>
+    </div>
+    <div class="section-body">
+      <div class="check-group">
+        <div class="check-group-title">Must Have (Required)</div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-0" onchange="updateExitCriteria()">
+          <span class="criteria-label"><strong>Zero Blocker</strong> &mdash; No open Blocker bugs</span>
+        </div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-1" onchange="updateExitCriteria()">
+          <span class="criteria-label"><strong>Login works</strong> &mdash; Login/logout stable, token refresh no errors</span>
+        </div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-2" onchange="updateExitCriteria()">
+          <span class="criteria-label"><strong>4 core pages load</strong> &mdash; Orders, Ads Manager, Analytics, Sellpages render without crash</span>
+        </div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-3" onchange="updateExitCriteria()">
+          <span class="criteria-label"><strong>Tenant isolation confirmed</strong> &mdash; Seller A cannot see Seller B data (test with 2 accounts)</span>
+        </div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-4" onchange="updateExitCriteria()">
+          <span class="criteria-label"><strong>Consistent metrics</strong> &mdash; Analytics matches Ads Manager (&plusmn;5% acceptable for rounding)</span>
+        </div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-5" onchange="updateExitCriteria()">
+          <span class="criteria-label"><strong>Basic error handling</strong> &mdash; 4xx/5xx show message with requestId, no blank screen</span>
+        </div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-6" onchange="updateExitCriteria()">
+          <span class="criteria-label"><strong>Metric definitions aligned</strong> &mdash; CR/CR1/CR2/ROAS confirmed between FE and BE</span>
+        </div>
+      </div>
+
+      <div class="check-group">
+        <div class="check-group-title">Should Have</div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-7" onchange="updateExitCriteria()">
+          <span class="criteria-label">All Major bugs have a fix plan (not necessarily fixed)</span>
+        </div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-8" onchange="updateExitCriteria()">
+          <span class="criteria-label">Feedback form collected &ge;1 round from each tester</span>
+        </div>
+        <div class="criteria-item">
+          <input type="checkbox" class="criteria-check" data-persist="exit-9" onchange="updateExitCriteria()">
+          <span class="criteria-label">Missing Item Requests reviewed and categorized</span>
+        </div>
+      </div>
+
+      <div class="known-gaps" style="background: rgba(34,197,94,0.08); border-color: rgba(34,197,94,0.2);">
+        <div class="known-gaps-title" style="color: var(--success);">Won't Block Alpha</div>
+        <ul>
+          <li style="color:var(--text-muted)">Bug Minor (UI polish, spacing, color)</li>
+          <li style="color:var(--text-muted)">Export CSV/Excel (not available)</li>
+          <li style="color:var(--text-muted)">Refresh tracking, transactionId (known gaps)</li>
+          <li style="color:var(--text-muted)">Stub metrics (YouTake, Hold, CashToBalance if not wired)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- How to capture requestId -->
+  <div class="howto">
+    <h3>&#9888;&#65039; How to capture requestId + Status Code</h3>
+    <p style="font-size:13px;color:var(--danger);margin-bottom:14px;font-weight:600;">All errors MUST include requestId + status code. No requestId = cannot debug.</p>
+    <div class="howto-step"><span class="num">1</span> <span><strong>On UI:</strong> When error occurs, the toast/alert shows "Request ID: xxxxxxxx". Copy it.</span></div>
+    <div class="howto-step"><span class="num">2</span> <span><strong>DevTools:</strong> Press F12 &rarr; Network tab &rarr; redo the failing action &rarr; find red request &rarr; Headers tab &rarr; look for Status Code + <code>x-request-id</code></span></div>
+    <div class="howto-step"><span class="num">3</span> <span><strong>Console:</strong> Press F12 &rarr; Console tab &rarr; find error line with requestId &rarr; copy</span></div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="action-bar">
+    <button class="btn btn-primary" onclick="saveToLocal()">&#128190; Save Progress</button>
+    <button class="btn btn-success" onclick="exportReport()">&#128196; Export Report</button>
+    <button class="btn btn-outline" onclick="exportJSON()">&#128229; Export JSON</button>
+    <button class="btn btn-outline" onclick="importJSON()">&#128228; Import JSON</button>
+    <button class="btn btn-danger" onclick="clearAll()">&#128465; Reset All</button>
+  </div>
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ====== State ======
+let bugs = [];
+let state = {};
+
+// ====== Init ======
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('currentDate').textContent = new Date().toLocaleDateString('vi-VN');
+  document.getElementById('testDate').valueAsDate = new Date();
+  loadFromLocal();
+  updateProgress();
+});
+
+// ====== Tri-state buttons ======
+function setState(btn, type) {
+  const triState = btn.parentElement;
+  const item = btn.closest('.check-item');
+  const label = item.querySelector('.check-label');
+  const buttons = triState.querySelectorAll('.tri-btn');
+
+  // Check if already active (toggle off)
+  const wasActive = btn.classList.contains('active-' + type);
+
+  // Clear all
+  buttons.forEach(b => {
+    b.classList.remove('active-pass', 'active-fail', 'active-na');
+  });
+  label.classList.remove('checked');
+
+  if (!wasActive) {
+    btn.classList.add('active-' + type);
+    if (type === 'pass' || type === 'na') {
+      label.classList.add('checked');
+    }
+  }
+
+  updateProgress();
+  autoSave();
+}
+
+// ====== Section toggle ======
+function toggleSection(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+// ====== Day tabs ======
+function showDay(n) {
+  document.querySelectorAll('.day-tab').forEach((t, i) => t.classList.toggle('active', i === n - 1));
+  document.querySelectorAll('.day-schedule').forEach((s, i) => s.classList.toggle('active', i === n - 1));
+}
+
+// ====== Progress ======
+function updateProgress() {
+  const items = document.querySelectorAll('.check-item');
+  let pass = 0, fail = 0, na = 0, pending = 0;
+
+  items.forEach(item => {
+    const triState = item.querySelector('.tri-state');
+    if (!triState) return;
+    if (triState.querySelector('.active-pass')) pass++;
+    else if (triState.querySelector('.active-fail')) fail++;
+    else if (triState.querySelector('.active-na')) na++;
+    else pending++;
+  });
+
+  const total = pass + fail + na + pending;
+  const done = pass + fail + na;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  document.getElementById('statPass').textContent = pass;
+  document.getElementById('statFail').textContent = fail;
+  document.getElementById('statNA').textContent = na;
+  document.getElementById('statPending').textContent = pending;
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('progressBar').style.width = pct + '%';
+
+  // Update section badges
+  ['orders', 'ads', 'analytics', 'sellpages'].forEach(sec => {
+    const secItems = document.querySelectorAll(`[data-section="${sec}"]`);
+    let secDone = 0;
+    secItems.forEach(item => {
+      const ts = item.querySelector('.tri-state');
+      if (ts && (ts.querySelector('.active-pass') || ts.querySelector('.active-fail') || ts.querySelector('.active-na'))) {
+        secDone++;
+      }
+    });
+    const badge = document.getElementById(`badge-sec-${sec}`);
+    if (badge) {
+      badge.textContent = `${secDone} / ${secItems.length}`;
+      badge.className = secDone === secItems.length && secItems.length > 0 ? 'section-badge badge-done' : 'section-badge badge-progress';
+    }
+  });
+
+  // Exit criteria
+  updateExitCriteria();
+}
+
+function updateExitCriteria() {
+  const checks = document.querySelectorAll('.criteria-check');
+  let done = 0;
+  checks.forEach(c => { if (c.checked) done++; });
+  const badge = document.getElementById('badge-sec-exit');
+  if (badge) {
+    badge.textContent = `${done} / ${checks.length}`;
+    badge.className = done === checks.length ? 'section-badge badge-done' : 'section-badge badge-progress';
+  }
+}
+
+// ====== Bug Reports ======
+function addBug() {
+  const severity = document.getElementById('bugSeverity').value;
+  const page = document.getElementById('bugPage').value;
+  const title = document.getElementById('bugTitle').value;
+  const steps = document.getElementById('bugSteps').value;
+  const expected = document.getElementById('bugExpected').value;
+  const actual = document.getElementById('bugActual').value;
+  const screenshot = document.getElementById('bugScreenshot').value;
+  const requestId = document.getElementById('bugRequestId').value;
+  const statusCode = document.getElementById('bugStatusCode').value;
+  const tester = document.getElementById('bugTester').value;
+
+  if (!severity || !title) {
+    showToast('Please fill Severity and Title', 'error');
+    return;
+  }
+
+  const bug = {
+    id: Date.now(),
+    severity, page, title, steps, expected, actual,
+    screenshot, requestId, statusCode, tester,
+    date: new Date().toISOString()
+  };
+
+  bugs.push(bug);
+  renderBugs();
+
+  // Clear form
+  ['bugSeverity','bugPage','bugTitle','bugSteps','bugExpected','bugActual','bugScreenshot','bugRequestId','bugStatusCode'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+
+  showToast('Bug report added!', 'success');
+  autoSave();
+}
+
+function removeBug(id) {
+  bugs = bugs.filter(b => b.id !== id);
+  renderBugs();
+  autoSave();
+}
+
+function renderBugs() {
+  const list = document.getElementById('bugList');
+  const badge = document.getElementById('badge-sec-bugs');
+
+  if (bugs.length === 0) {
+    list.innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:10px 0;">No bugs reported yet.</p>';
+    badge.textContent = '0 bugs';
+    return;
+  }
+
+  badge.textContent = `${bugs.length} bug${bugs.length > 1 ? 's' : ''}`;
+
+  list.innerHTML = bugs.map(bug => `
+    <div class="bug-card">
+      <div class="bug-card-info">
+        <div class="bug-card-title">
+          <span class="severity-tag severity-${bug.severity.toLowerCase()}">${bug.severity}</span>
+          ${bug.title}
+        </div>
+        <div class="bug-card-meta">
+          ${bug.page || 'N/A'} &bull; ${bug.tester || 'Unknown'} &bull; ${new Date(bug.date).toLocaleDateString('vi-VN')}
+          ${bug.requestId ? ' &bull; ReqID: ' + bug.requestId : ''}
+          ${bug.statusCode ? ' &bull; HTTP ' + bug.statusCode : ''}
+        </div>
+      </div>
+      <button class="btn-remove-bug" onclick="removeBug(${bug.id})" title="Remove">&times;</button>
+    </div>
+  `).join('');
+}
+
+// ====== Missing Items ======
+function addMissingItem() {
+  const container = document.getElementById('missingItems');
+  const row = document.createElement('div');
+  row.className = 'missing-item-row';
+  row.innerHTML = `
+    <select><option value="">Page...</option><option>Orders</option><option>Ads Manager</option><option>Analytics</option><option>Sellpages</option><option>Other</option></select>
+    <input type="text" placeholder="Description">
+    <input type="text" placeholder="Why needed">
+    <select><option value="">Priority</option><option>High</option><option>Medium</option><option>Low</option></select>
+    <input type="text" placeholder="Proposed by">
+  `;
+  container.appendChild(row);
+
+  const badge = document.getElementById('badge-sec-missing');
+  badge.textContent = `${container.children.length} items`;
+  autoSave();
+}
+
+// ====== Persistence ======
+const STORAGE_KEY = 'pixecom-alpha-test-v1';
+
+function collectState() {
+  const data = {
+    testerName: document.getElementById('testerName').value,
+    testDate: document.getElementById('testDate').value,
+    testAccount: document.getElementById('testAccount').value,
+    checkStates: [],
+    notes: {},
+    exitCriteria: [],
+    metrics: {},
+    bugs: bugs,
+    missingItems: [],
+    timestamp: new Date().toISOString()
+  };
+
+  // Collect check states
+  document.querySelectorAll('.check-item').forEach((item, i) => {
+    const ts = item.querySelector('.tri-state');
+    if (!ts) return;
+    let state = 'pending';
+    if (ts.querySelector('.active-pass')) state = 'pass';
+    else if (ts.querySelector('.active-fail')) state = 'fail';
+    else if (ts.querySelector('.active-na')) state = 'na';
+    data.checkStates.push({ index: i, state: state });
+
+    const note = item.querySelector('.check-note');
+    if (note && note.value) {
+      data.notes[note.dataset.persist || i] = note.value;
+    }
+  });
+
+  // Exit criteria
+  document.querySelectorAll('.criteria-check').forEach((c, i) => {
+    data.exitCriteria.push(c.checked);
+  });
+
+  // Metric radios
+  document.querySelectorAll('.metric-radio input:checked').forEach(r => {
+    data.metrics[r.name] = r.value;
+  });
+
+  // Missing items
+  document.querySelectorAll('.missing-item-row').forEach(row => {
+    const inputs = row.querySelectorAll('input, select');
+    data.missingItems.push(Array.from(inputs).map(i => i.value));
+  });
+
+  return data;
+}
+
+function restoreState(data) {
+  if (!data) return;
+
+  if (data.testerName) document.getElementById('testerName').value = data.testerName;
+  if (data.testDate) document.getElementById('testDate').value = data.testDate;
+  if (data.testAccount) document.getElementById('testAccount').value = data.testAccount;
+
+  // Restore check states
+  if (data.checkStates) {
+    const items = document.querySelectorAll('.check-item');
+    data.checkStates.forEach(cs => {
+      const item = items[cs.index];
+      if (!item) return;
+      const buttons = item.querySelectorAll('.tri-btn');
+      const label = item.querySelector('.check-label');
+      if (cs.state === 'pass' && buttons[0]) { buttons[0].classList.add('active-pass'); label.classList.add('checked'); }
+      if (cs.state === 'fail' && buttons[1]) { buttons[1].classList.add('active-fail'); }
+      if (cs.state === 'na' && buttons[2]) { buttons[2].classList.add('active-na'); label.classList.add('checked'); }
+    });
+  }
+
+  // Notes
+  if (data.notes) {
+    document.querySelectorAll('.check-note').forEach(note => {
+      const key = note.dataset.persist;
+      if (key && data.notes[key]) note.value = data.notes[key];
+    });
+  }
+
+  // Exit criteria
+  if (data.exitCriteria) {
+    document.querySelectorAll('.criteria-check').forEach((c, i) => {
+      if (data.exitCriteria[i]) c.checked = true;
+    });
+  }
+
+  // Metrics
+  if (data.metrics) {
+    Object.entries(data.metrics).forEach(([name, value]) => {
+      const radio = document.querySelector(`input[name="${name}"][value="${value}"]`);
+      if (radio) radio.checked = true;
+    });
+  }
+
+  // Bugs
+  if (data.bugs) {
+    bugs = data.bugs;
+    renderBugs();
+  }
+
+  // Missing items
+  if (data.missingItems && data.missingItems.length > 0) {
+    const container = document.getElementById('missingItems');
+    container.innerHTML = '';
+    data.missingItems.forEach(values => {
+      const row = document.createElement('div');
+      row.className = 'missing-item-row';
+      row.innerHTML = `
+        <select><option value="">Page...</option><option>Orders</option><option>Ads Manager</option><option>Analytics</option><option>Sellpages</option><option>Other</option></select>
+        <input type="text" placeholder="Description">
+        <input type="text" placeholder="Why needed">
+        <select><option value="">Priority</option><option>High</option><option>Medium</option><option>Low</option></select>
+        <input type="text" placeholder="Proposed by">
+      `;
+      container.appendChild(row);
+      const inputs = row.querySelectorAll('input, select');
+      values.forEach((v, i) => { if (inputs[i]) inputs[i].value = v; });
+    });
+    const badge = document.getElementById('badge-sec-missing');
+    badge.textContent = `${data.missingItems.length} items`;
+  }
+
+  updateProgress();
+}
+
+function saveToLocal() {
+  const data = collectState();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  showToast('Progress saved!', 'success');
+}
+
+function loadFromLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      restoreState(JSON.parse(raw));
+    }
+  } catch(e) {
+    console.error('Failed to load state:', e);
+  }
+}
+
+function autoSave() {
+  const data = collectState();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+// ====== Export ======
+function exportReport() {
+  const data = collectState();
+  const lines = [];
+
+  lines.push('# PixEcom v2 — Alpha Test Report');
+  lines.push('');
+  lines.push(`**Tester:** ${data.testerName || 'N/A'}`);
+  lines.push(`**Date:** ${data.testDate || 'N/A'}`);
+  lines.push(`**Account:** ${data.testAccount || 'N/A'}`);
+  lines.push(`**Generated:** ${new Date().toLocaleString('vi-VN')}`);
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+
+  // Checklist results
+  const sections = [
+    { name: 'Orders', key: 'orders' },
+    { name: 'Ads Manager', key: 'ads' },
+    { name: 'Analytics', key: 'analytics' },
+    { name: 'Sellpages', key: 'sellpages' }
+  ];
+
+  lines.push('## Checklist Results');
+  lines.push('');
+
+  const items = document.querySelectorAll('.check-item');
+  let currentSection = '';
+
+  items.forEach((item, i) => {
+    const sec = item.dataset.section;
+    if (sec && sec !== currentSection) {
+      currentSection = sec;
+      const secName = sections.find(s => s.key === sec);
+      lines.push('');
+      lines.push(`### ${secName ? secName.name : sec}`);
+      lines.push('');
+    }
+
+    const ts = item.querySelector('.tri-state');
+    if (!ts) return;
+
+    let status = '[ ]';
+    if (ts.querySelector('.active-pass')) status = '[PASS]';
+    else if (ts.querySelector('.active-fail')) status = '[FAIL]';
+    else if (ts.querySelector('.active-na')) status = '[N/A]';
+
+    const label = item.querySelector('.check-label').textContent.trim();
+    const note = item.querySelector('.check-note');
+    const noteText = note && note.value ? ` — _${note.value}_` : '';
+
+    lines.push(`- ${status} ${label}${noteText}`);
+  });
+
+  // Metric definitions
+  lines.push('');
+  lines.push('### Metric Definitions');
+  lines.push('');
+  lines.push('| Metric | Expected | Verified |');
+  lines.push('|--------|----------|----------|');
+  ['metric-cr', 'metric-cr1', 'metric-cr2', 'metric-roas'].forEach(name => {
+    const checked = document.querySelector(`input[name="${name}"]:checked`);
+    const labels = { 'metric-cr': 'CR', 'metric-cr1': 'CR1', 'metric-cr2': 'CR2', 'metric-roas': 'ROAS' };
+    const defs = { 'metric-cr': 'Orders/Clicks x100', 'metric-cr1': 'ATC/Clicks x100', 'metric-cr2': 'Orders/ATC x100', 'metric-roas': 'Revenue/AdSpend' };
+    lines.push(`| ${labels[name]} | ${defs[name]} | ${checked ? checked.value : 'Not checked'} |`);
+  });
+
+  // Bug reports
+  lines.push('');
+  lines.push('## Bug Reports');
+  lines.push('');
+  if (bugs.length === 0) {
+    lines.push('_No bugs reported._');
+  } else {
+    bugs.forEach((bug, i) => {
+      lines.push(`### Bug ${i + 1}: ${bug.title}`);
+      lines.push(`- **Severity:** ${bug.severity}`);
+      lines.push(`- **Page:** ${bug.page}`);
+      if (bug.steps) lines.push(`- **Steps:** ${bug.steps.replace(/\n/g, ' → ')}`);
+      if (bug.expected) lines.push(`- **Expected:** ${bug.expected}`);
+      if (bug.actual) lines.push(`- **Actual:** ${bug.actual}`);
+      if (bug.requestId) lines.push(`- **Request ID:** ${bug.requestId}`);
+      if (bug.statusCode) lines.push(`- **HTTP Status:** ${bug.statusCode}`);
+      if (bug.tester) lines.push(`- **Tester:** ${bug.tester}`);
+      lines.push('');
+    });
+  }
+
+  // Exit criteria
+  lines.push('## Alpha Exit Criteria');
+  lines.push('');
+  const exitLabels = [
+    'Zero Blocker', 'Login works', '4 core pages load', 'Tenant isolation',
+    'Consistent metrics', 'Error handling', 'Metric definitions',
+    'Major bugs have fix plan', 'Feedback collected', 'Missing items reviewed'
+  ];
+  document.querySelectorAll('.criteria-check').forEach((c, i) => {
+    lines.push(`- [${c.checked ? 'x' : ' '}] ${exitLabels[i] || 'Criteria ' + (i+1)}`);
+  });
+
+  // Summary
+  const itemsArr = document.querySelectorAll('.check-item');
+  let totalPass = 0, totalFail = 0, totalNA = 0, totalPending = 0;
+  itemsArr.forEach(item => {
+    const ts = item.querySelector('.tri-state');
+    if (!ts) return;
+    if (ts.querySelector('.active-pass')) totalPass++;
+    else if (ts.querySelector('.active-fail')) totalFail++;
+    else if (ts.querySelector('.active-na')) totalNA++;
+    else totalPending++;
+  });
+
+  lines.push('');
+  lines.push('## Summary');
+  lines.push('');
+  lines.push(`| Status | Count |`);
+  lines.push(`|--------|-------|`);
+  lines.push(`| Pass | ${totalPass} |`);
+  lines.push(`| Fail | ${totalFail} |`);
+  lines.push(`| N/A | ${totalNA} |`);
+  lines.push(`| Pending | ${totalPending} |`);
+  lines.push(`| **Total** | **${totalPass + totalFail + totalNA + totalPending}** |`);
+  lines.push(`| Bugs | ${bugs.length} (Blocker: ${bugs.filter(b=>b.severity==='Blocker').length}, Major: ${bugs.filter(b=>b.severity==='Major').length}, Minor: ${bugs.filter(b=>b.severity==='Minor').length}) |`);
+
+  const content = lines.join('\n');
+  downloadFile(`alpha-test-report-${data.testDate || 'undated'}.md`, content, 'text/markdown');
+  showToast('Report exported as Markdown!', 'success');
+}
+
+function exportJSON() {
+  const data = collectState();
+  downloadFile(`alpha-test-data-${data.testDate || 'undated'}.json`, JSON.stringify(data, null, 2), 'application/json');
+  showToast('JSON data exported!', 'success');
+}
+
+function importJSON() {
+  document.getElementById('importFile').click();
+}
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      // Clear current state
+      document.querySelectorAll('.tri-btn').forEach(b => b.classList.remove('active-pass', 'active-fail', 'active-na'));
+      document.querySelectorAll('.check-label').forEach(l => l.classList.remove('checked'));
+      document.querySelectorAll('.criteria-check').forEach(c => c.checked = false);
+      document.querySelectorAll('.check-note').forEach(n => n.value = '');
+
+      restoreState(data);
+      showToast('Data imported successfully!', 'success');
+    } catch (err) {
+      showToast('Invalid JSON file', 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function clearAll() {
+  if (!confirm('Are you sure you want to reset all test data? This cannot be undone.')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  document.querySelectorAll('.tri-btn').forEach(b => b.classList.remove('active-pass', 'active-fail', 'active-na'));
+  document.querySelectorAll('.check-label').forEach(l => l.classList.remove('checked'));
+  document.querySelectorAll('.criteria-check').forEach(c => c.checked = false);
+  document.querySelectorAll('.check-note').forEach(n => n.value = '');
+  document.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+  document.getElementById('testerName').value = '';
+  document.getElementById('testAccount').value = '';
+  bugs = [];
+  renderBugs();
+  updateProgress();
+  showToast('All data cleared!', 'success');
+}
+
+// ====== Helpers ======
+function downloadFile(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function showToast(msg, type) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = `toast show toast-${type}`;
+  setTimeout(() => { toast.className = 'toast'; }, 3000);
+}
+</script>
+</body>
+</html>

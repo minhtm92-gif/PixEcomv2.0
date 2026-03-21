@@ -22,6 +22,16 @@ export interface ProductVariantDto {
   position: number;
 }
 
+export interface ProductSellpageDto {
+  id: string;
+  slug: string;
+  variant: string | null;
+  status: string;
+  titleOverride: string | null;
+  descriptionOverride: string | null;
+  sections: unknown[];
+}
+
 export interface ProductDetailDto extends ProductCardDto {
   productCode: string;
   description: string | null;
@@ -31,6 +41,7 @@ export interface ProductDetailDto extends ProductCardDto {
   currency: string;
   status: string;
   variants: ProductVariantDto[];
+  sellpages: ProductSellpageDto[];
   createdAt: string;
   updatedAt: string;
 }

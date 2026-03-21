@@ -22,6 +22,7 @@ export class SellerService {
         name: true,
         slug: true,
         logoUrl: true,
+        faviconUrl: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -41,7 +42,7 @@ export class SellerService {
    * sellerId scopes the update — cannot touch another seller's row.
    */
   async updateProfile(sellerId: string, dto: UpdateSellerDto) {
-    if (dto.name === undefined && dto.logoUrl === undefined) {
+    if (dto.name === undefined && dto.logoUrl === undefined && dto.faviconUrl === undefined) {
       throw new BadRequestException('At least one field must be provided');
     }
 
@@ -60,12 +61,14 @@ export class SellerService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+        ...(dto.faviconUrl !== undefined && { faviconUrl: dto.faviconUrl }),
       },
       select: {
         id: true,
         name: true,
         slug: true,
         logoUrl: true,
+        faviconUrl: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,

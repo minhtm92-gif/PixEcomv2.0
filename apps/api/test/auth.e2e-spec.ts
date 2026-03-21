@@ -199,6 +199,128 @@ describe('Auth (e2e)', () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Test 4: Admin-login endpoint + login type separation (Task A3)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  describe('Test 4: POST /auth/admin-login — login type separation', () => {
+    /**
+     * Because E2E tests run against a live DB and register() never creates
+     * superadmin accounts (correct by design), these tests verify the
+     * non-superadmin side of the separation:
+     *
+     *   - Seller account → /auth/login      ✅ 200
+     *   - Seller account → /auth/admin-login ❌ 401 "Not an admin account"
+     *
+     * The superadmin → /auth/login rejection path requires a seeded superadmin
+     * account and is tested via the staging seed flow.
+     */
+
+    it('POST /auth/admin-login rejects a regular seller account (401)', async () => {
+      const email = uniqueEmail();
+      await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({ email, password: 'Password123!', displayName: 'Admin Type Test' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/admin-login')
+        .send({ email, password: 'Password123!' })
+        .expect(401);
+
+      expect(res.body.message).toBe('Not an admin account');
+    });
+
+    it('POST /auth/admin-login returns 400 on missing email', async () => {
+      await request(app.getHttpServer())
+        .post('/api/auth/admin-login')
+        .send({ password: 'Password123!' })
+        .expect(400);
+    });
+
+    it('POST /auth/admin-login returns 400 on missing password', async () => {
+      await request(app.getHttpServer())
+        .post('/api/auth/admin-login')
+        .send({ email: 'admin@example.com' })
+        .expect(400);
+    });
+
+    it('POST /auth/admin-login returns 401 on wrong password', async () => {
+      const email = uniqueEmail();
+      await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({ email, password: 'Password123!', displayName: 'WrongPwd Test' })
+        .expect(201);
+
+      // Wrong password — hits the bcrypt check before the type check
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/admin-login')
+        .send({ email, password: 'WrongPassword!' })
+        .expect(401);
+
+      expect(res.body.message).toBe('Invalid credentials');
+    });
+
+    it('POST /auth/admin-login returns 401 on unknown email', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/admin-login')
+        .send({ email: 'nobody@pixecom-e2e-ghost.io', password: 'Password123!' })
+        .expect(401);
+
+      expect(res.body.message).toBe('Invalid credentials');
+    });
+
+    it('POST /auth/login returns 401 on unknown email', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ email: 'nobody@pixecom-e2e-ghost2.io', password: 'Password123!' })
+        .expect(401);
+
+      expect(res.body.message).toBe('Invalid credentials');
+    });
+
+    it('GET /auth/me includes isSuperadmin field (false for new sellers)', async () => {
+      const email = uniqueEmail();
+      const registerRes = await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({ email, password: 'Password123!', displayName: 'Me Test isSuperadmin' })
+        .expect(201);
+
+      const meRes = await request(app.getHttpServer())
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${registerRes.body.accessToken as string}`)
+        .expect(200);
+
+      expect(meRes.body).toHaveProperty('isSuperadmin');
+      expect(meRes.body.isSuperadmin).toBe(false);
+    });
+
+    it('POST /auth/login refresh flow still works normally', async () => {
+      const email = uniqueEmail();
+      await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({ email, password: 'Password123!', displayName: 'Refresh After Login' })
+        .expect(201);
+
+      const loginRes = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({ email, password: 'Password123!' })
+        .expect(200);
+
+      expect(loginRes.body).toHaveProperty('accessToken');
+      const cookies = loginRes.headers['set-cookie'] as unknown as string[];
+      const cookie = cookies.find((c: string) => c.startsWith('refresh_token='));
+      expect(cookie).toBeDefined();
+
+      const refreshRes = await request(app.getHttpServer())
+        .post('/api/auth/refresh')
+        .set('Cookie', cookie!)
+        .expect(200);
+
+      expect(refreshRes.body).toHaveProperty('accessToken');
+    });
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Additional: Input validation
   // ─────────────────────────────────────────────────────────────────────────
 

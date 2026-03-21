@@ -7,22 +7,46 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── ADMIN PORTAL ENUMS ──────────────────────────────
+
+enum SellerStatus {
+  ACTIVE
+  PENDING
+  DEACTIVATED
+  REJECTED
+
+  @@map("seller_status")
+}
+
+enum UserRole {
+  SUPERADMIN
+  SUPPORT
+  FINANCE
+  CONTENT
+  SELLER
+
+  @@map("user_role")
+}
+
 // ─── AUTH LAYER ──────────────────────────────────────
 
 model User {
-  id            String   @id @default(uuid()) @db.Uuid
-  email         String   @unique @db.VarChar(255)
-  passwordHash  String?  @map("password_hash") @db.VarChar(255)
-  displayName   String   @map("display_name") @db.VarChar(255)
-  avatarUrl     String?  @map("avatar_url") @db.VarChar(500)
-  isActive      Boolean  @default(true) @map("is_active")
-  isSuperadmin  Boolean  @default(false) @map("is_superadmin")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique @db.VarChar(255)
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  displayName  String   @map("display_name") @db.VarChar(255)
+  avatarUrl    String?  @map("avatar_url") @db.VarChar(500)
+  isActive     Boolean  @default(true) @map("is_active")
+  isSuperadmin Boolean  @default(false) @map("is_superadmin")
+  role         UserRole @default(SELLER)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   refreshTokens RefreshToken[]
   sellerUsers   SellerUser[]
+  fbConnections FbConnection[]
 
+  @@index([email, isActive])
   @@map("users")
 }
 
@@ -42,14 +66,20 @@ model RefreshToken {
 // ─── SELLER LAYER ────────────────────────────────────
 
 model Seller {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String   @db.VarChar(255)
-  slug      String   @unique @db.VarChar(100)
-  logoUrl   String?  @map("logo_url") @db.VarChar(500)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id               String       @id @default(uuid()) @db.Uuid
+  name             String       @db.VarChar(255)
+  slug             String       @unique @db.VarChar(100)
+  logoUrl          String?      @map("logo_url") @db.VarChar(500)
+  faviconUrl       String?      @map("favicon_url") @db.VarChar(500)
+  isActive         Boolean      @default(true) @map("is_active")
+  status           SellerStatus @default(ACTIVE)
+  paypalGatewayId     String?  @map("paypal_gateway_id") @db.Uuid
+  creditCardGatewayId String?  @map("credit_card_gateway_id") @db.Uuid
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
+  paypalGateway     PaymentGateway? @relation("SellerPaypal", fields: [paypalGatewayId], references: [id], onDelete: SetNull)
+  creditCardGateway PaymentGateway? @relation("SellerCreditCard", fields: [creditCardGatewayId], references: [id], onDelete: SetNull)
   sellerUsers    SellerUser[]
   settings       SellerSettings?
   domains        SellerDomain[]
@@ -67,6 +97,15 @@ model Seller {
   sellpageStats  SellpageStatsDaily[]
   assets         Asset[]
   creatives      Creative[]
+  reviews        Review[]
+  webhookEndpoints WebhookEndpoint[]
+  storefrontEvents StorefrontEvent[]
+  emailJobs        EmailJob[]
+  emailTemplates   EmailTemplate[]
+  emailSuppressions EmailSuppression[]
+  abandonedCarts   AbandonedCart[]
+  customerEmailPreferences CustomerEmailPreference[]
+  discountCodes    DiscountCode[]
 
   @@map("sellers")
 }
@@ -163,22 +202,28 @@ enum ProductStatus {
 }
 
 model Product {
-  id               String        @id @default(uuid()) @db.Uuid
-  productCode      String        @unique @map("product_code") @db.VarChar(50)
-  name             String        @db.VarChar(255)
-  slug             String        @unique @db.VarChar(100)
-  basePrice        Decimal       @map("base_price") @db.Decimal(10, 2)
-  compareAtPrice   Decimal?      @map("compare_at_price") @db.Decimal(10, 2)
-  costPrice        Decimal?      @map("cost_price") @db.Decimal(10, 2)
-  currency         String        @default("USD") @db.VarChar(3)
-  sku              String?       @db.VarChar(100)
-  description      String?
-  descriptionBlocks Json         @default("[]") @map("description_blocks") @db.JsonB
-  shippingInfo     Json          @default("{}") @map("shipping_info") @db.JsonB
-  tags             Json          @default("[]") @db.JsonB
-  status           ProductStatus @default(DRAFT)
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id                String        @id @default(uuid()) @db.Uuid
+  productCode       String        @unique @map("product_code") @db.VarChar(50)
+  name              String        @db.VarChar(255)
+  slug              String        @unique @db.VarChar(100)
+  basePrice         Decimal       @map("base_price") @db.Decimal(10, 2)
+  compareAtPrice    Decimal?      @map("compare_at_price") @db.Decimal(10, 2)
+  costPrice         Decimal?      @map("cost_price") @db.Decimal(10, 2)
+  currency          String        @default("USD") @db.VarChar(3)
+  sku               String?       @db.VarChar(100)
+  description       String?
+  descriptionBlocks Json          @default("[]") @map("description_blocks") @db.JsonB
+  shippingInfo      Json          @default("{}") @map("shipping_info") @db.JsonB
+  tags              Json          @default("[]") @db.JsonB
+  status            ProductStatus @default(DRAFT)
+  images            Json          @default("[]") @db.JsonB
+  optionDefinitions Json          @default("[]") @map("option_definitions") @db.JsonB
+  quantityCosts     Json          @default("[]") @map("quantity_costs") @db.JsonB
+  allowOutOfStockPurchase Boolean  @default(false) @map("allow_out_of_stock_purchase")
+  rating            Decimal       @default(0) @db.Decimal(2, 1) // 0.0–5.0 (aggregated)
+  reviewCount       Int           @default(0) @map("review_count")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   variants     ProductVariant[]
   labels       ProductProductLabel[]
@@ -189,7 +234,9 @@ model Product {
   sellpages    Sellpage[]
   orderItems   OrderItem[]
   creatives    Creative[]
+  reviews      Review[]
 
+  @@index([status, createdAt(sort: Desc)])
   @@map("products")
 }
 
@@ -201,6 +248,9 @@ model ProductVariant {
   priceOverride  Decimal? @map("price_override") @db.Decimal(10, 2)
   compareAtPrice Decimal? @map("compare_at_price") @db.Decimal(10, 2)
   options        Json     @default("{}") @db.JsonB
+  costPrice      Decimal? @map("cost_price") @db.Decimal(10, 2)
+  fulfillmentCost Decimal? @map("fulfillment_cost") @db.Decimal(10, 2)
+  image          String?  @db.VarChar(500)
   stockQuantity  Int      @default(0) @map("stock_quantity")
   isActive       Boolean  @default(true) @map("is_active")
   position       Int      @default(0)
@@ -271,6 +321,12 @@ enum CreativeType {
   IMAGE_AD
   TEXT_ONLY
   UGC_BUNDLE
+  // Simple single-purpose types (v2)
+  ADTEXT
+  VIDEO
+  THUMBNAIL
+  HEADLINE
+  DESCRIPTION
 
   @@map("creative_type")
 }
@@ -287,18 +343,18 @@ enum CreativeAssetRole {
 }
 
 model AssetMedia {
-  id        String    @id @default(uuid()) @db.Uuid
-  productId String    @map("product_id") @db.Uuid
-  version   String    @db.VarChar(20)
-  url       String    @db.VarChar(1000)
-  mediaType MediaType @map("media_type")
-  durationSec Int?    @map("duration_sec")
-  fileSize  Int?      @map("file_size")
-  width     Int?
-  height    Int?
-  position  Int       @default(0)
-  isCurrent Boolean   @default(false) @map("is_current")
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id          String    @id @default(uuid()) @db.Uuid
+  productId   String    @map("product_id") @db.Uuid
+  version     String    @db.VarChar(20)
+  url         String    @db.VarChar(1000)
+  mediaType   MediaType @map("media_type")
+  durationSec Int?      @map("duration_sec")
+  fileSize    Int?      @map("file_size")
+  width       Int?
+  height      Int?
+  position    Int       @default(0)
+  isCurrent   Boolean   @default(false) @map("is_current")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   product Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   adPosts AdPost[]
@@ -342,17 +398,17 @@ model AssetAdtext {
 }
 
 model PricingRule {
-  id                 String    @id @default(uuid()) @db.Uuid
-  productId          String?   @map("product_id") @db.Uuid
-  suggestedRetail    Decimal   @map("suggested_retail") @db.Decimal(10, 2)
-  sellerTakePercent  Decimal   @map("seller_take_percent") @db.Decimal(5, 2)
-  sellerTakeFixed    Decimal?  @map("seller_take_fixed") @db.Decimal(10, 2)
-  holdPercent        Decimal   @default(0) @map("hold_percent") @db.Decimal(5, 2)
-  holdDurationDays   Int       @default(7) @map("hold_duration_days")
-  effectiveFrom      DateTime  @map("effective_from") @db.Timestamptz
-  effectiveUntil     DateTime? @map("effective_until") @db.Timestamptz
-  isActive           Boolean   @default(true) @map("is_active")
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id                String    @id @default(uuid()) @db.Uuid
+  productId         String?   @map("product_id") @db.Uuid
+  suggestedRetail   Decimal   @map("suggested_retail") @db.Decimal(10, 2)
+  sellerTakePercent Decimal   @map("seller_take_percent") @db.Decimal(5, 2)
+  sellerTakeFixed   Decimal?  @map("seller_take_fixed") @db.Decimal(10, 2)
+  holdPercent       Decimal   @default(0) @map("hold_percent") @db.Decimal(5, 2)
+  holdDurationDays  Int       @default(7) @map("hold_duration_days")
+  effectiveFrom     DateTime  @map("effective_from") @db.Timestamptz
+  effectiveUntil    DateTime? @map("effective_until") @db.Timestamptz
+  isActive          Boolean   @default(true) @map("is_active")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
@@ -386,6 +442,7 @@ model Sellpage {
   customDomain        String?        @map("custom_domain") @db.VarChar(255)
   sellpageType        SellpageType   @default(SINGLE) @map("sellpage_type")
   status              SellpageStatus @default(DRAFT)
+  variant             String?        @db.VarChar(10)
   titleOverride       String?        @map("title_override") @db.VarChar(255)
   descriptionOverride String?        @map("description_override")
   seoTitle            String?        @map("seo_title") @db.VarChar(255)
@@ -399,15 +456,18 @@ model Sellpage {
   createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller    Seller        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  product   Product       @relation(fields: [productId], references: [id])
-  domain    SellerDomain? @relation(fields: [domainId], references: [id], onDelete: SetNull)
+  seller    Seller               @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  product   Product              @relation(fields: [productId], references: [id])
+  domain    SellerDomain?        @relation(fields: [domainId], references: [id], onDelete: SetNull)
   campaigns Campaign[]
   orders    Order[]
   stats     SellpageStatsDaily[]
+  discounts Discount[]
+  storefrontEvents StorefrontEvent[]
 
   @@unique([sellerId, slug], name: "uq_sellpage_slug")
   @@index([sellerId, status])
+  @@index([domainId])
   @@map("sellpages")
 }
 
@@ -423,28 +483,31 @@ enum FbConnectionType {
 }
 
 model FbConnection {
-  id              String           @id @default(uuid()) @db.Uuid
-  sellerId        String           @map("seller_id") @db.Uuid
-  connectionType  FbConnectionType @map("connection_type")
-  externalId      String           @map("external_id") @db.VarChar(255)
-  name            String           @db.VarChar(255)
-  accessTokenEnc  String?          @map("access_token_enc")
-  parentId        String?          @map("parent_id") @db.Uuid
-  isPrimary       Boolean          @default(false) @map("is_primary")
-  isActive        Boolean          @default(true) @map("is_active")
-  metadata        Json             @default("{}") @db.JsonB
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id                String           @id @default(uuid()) @db.Uuid
+  sellerId          String           @map("seller_id") @db.Uuid
+  connectedByUserId String?          @map("connected_by_user_id") @db.Uuid
+  connectionType    FbConnectionType @map("connection_type")
+  externalId        String           @map("external_id") @db.VarChar(255)
+  name              String           @db.VarChar(255)
+  accessTokenEnc    String?          @map("access_token_enc")
+  parentId          String?          @map("parent_id") @db.Uuid
+  isPrimary         Boolean          @default(false) @map("is_primary")
+  isActive          Boolean          @default(true) @map("is_active")
+  metadata          Json             @default("{}") @db.JsonB
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller   Seller        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  parent   FbConnection? @relation("FbConnectionParent", fields: [parentId], references: [id], onDelete: SetNull)
-  children FbConnection[] @relation("FbConnectionParent")
-  campaigns Campaign[]
-  adPosts  AdPost[]
+  seller         Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  connectedByUser User?         @relation(fields: [connectedByUserId], references: [id], onDelete: SetNull)
+  parent         FbConnection?  @relation("FbConnectionParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children       FbConnection[] @relation("FbConnectionParent")
+  campaigns      Campaign[]
+  adPosts        AdPost[]
 
   @@unique([sellerId, connectionType, externalId], name: "uq_fb_connection")
   @@index([sellerId, connectionType])
   @@index([sellerId, isActive])
+  @@index([connectedByUserId])
   @@map("fb_connections")
 }
 
@@ -484,7 +547,7 @@ enum CampaignStatus {
 model Campaign {
   id                 String         @id @default(uuid()) @db.Uuid
   sellerId           String         @map("seller_id") @db.Uuid
-  sellpageId         String         @map("sellpage_id") @db.Uuid
+  sellpageId         String?        @map("sellpage_id") @db.Uuid
   adAccountId        String         @map("ad_account_id") @db.Uuid
   adStrategyId       String?        @map("ad_strategy_id") @db.Uuid
   externalCampaignId String?        @map("external_campaign_id") @db.VarChar(255)
@@ -498,15 +561,16 @@ model Campaign {
   createdAt          DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt          DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller     Seller        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  sellpage   Sellpage      @relation(fields: [sellpageId], references: [id])
-  adAccount  FbConnection  @relation(fields: [adAccountId], references: [id])
-  adStrategy AdStrategy?   @relation(fields: [adStrategyId], references: [id], onDelete: SetNull)
+  seller     Seller             @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellpage   Sellpage?          @relation(fields: [sellpageId], references: [id], onDelete: SetNull)
+  adAccount  FbConnection       @relation(fields: [adAccountId], references: [id])
+  adStrategy AdStrategy?        @relation(fields: [adStrategyId], references: [id], onDelete: SetNull)
   adsets     Adset[]
   creatives  CampaignCreative[]
 
   @@index([sellerId, sellpageId])
   @@index([sellerId, status])
+  @@index([adAccountId])
   @@map("campaigns")
 }
 
@@ -569,6 +633,7 @@ model AdPost {
   assetMediaId     String?    @map("asset_media_id") @db.Uuid
   assetThumbnailId String?    @map("asset_thumbnail_id") @db.Uuid
   assetAdtextId    String?    @map("asset_adtext_id") @db.Uuid
+  creativeConfig   Json       @default("{}") @map("creative_config") @db.JsonB
   createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -607,6 +672,7 @@ model Order {
   customerName    String?     @map("customer_name") @db.VarChar(255)
   customerPhone   String?     @map("customer_phone") @db.VarChar(50)
   shippingAddress Json        @default("{}") @map("shipping_address") @db.JsonB
+  billingAddress  Json?       @map("billing_address") @db.JsonB
   subtotal        Decimal     @default(0) @db.Decimal(10, 2)
   shippingCost    Decimal     @default(0) @map("shipping_cost") @db.Decimal(10, 2)
   taxAmount       Decimal     @default(0) @map("tax_amount") @db.Decimal(10, 2)
@@ -620,18 +686,30 @@ model Order {
   trackingNumber  String?     @map("tracking_number") @db.VarChar(255)
   trackingUrl     String?     @map("tracking_url") @db.VarChar(1000)
   notes           String?
+  // ── Attribution (Task B3) ─────────────────────────────────────────────
+  source          String?     @db.VarChar(50)
+  transactionId   String?     @map("transaction_id") @db.VarChar(255)
+  paymentGatewayId String?    @map("payment_gateway_id") @db.Uuid
+  utmSource       String?     @map("utm_source") @db.VarChar(255)
+  utmMedium       String?     @map("utm_medium") @db.VarChar(255)
+  utmCampaign     String?     @map("utm_campaign") @db.VarChar(255)
+  utmTerm         String?     @map("utm_term") @db.VarChar(255)
+  utmContent      String?     @map("utm_content") @db.VarChar(255)
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller   Seller     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  sellpage Sellpage?  @relation(fields: [sellpageId], references: [id], onDelete: SetNull)
-  items    OrderItem[]
-  events   OrderEvent[]
+  seller         Seller          @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sellpage       Sellpage?       @relation(fields: [sellpageId], references: [id], onDelete: SetNull)
+  paymentGateway PaymentGateway? @relation(fields: [paymentGatewayId], references: [id], onDelete: SetNull)
+  items          OrderItem[]
+  events         OrderEvent[]
+  reviews        Review[]
 
   @@unique([sellerId, orderNumber], name: "uq_order_number")
   @@index([sellerId, status])
+  @@index([sellerId, source])
   @@index([sellerId, sellpageId])
-  @@index([sellerId, createdAt])
+  @@index([sellerId, createdAt(sort: Desc)])
   @@map("orders")
 }
 
@@ -828,18 +906,18 @@ model Asset {
 // Status lifecycle: DRAFT → READY (via validate endpoint) → ARCHIVED
 // creativeType drives which asset slots are required for READY validation.
 model Creative {
-  id             String         @id @default(uuid()) @db.Uuid
-  sellerId       String         @map("seller_id") @db.Uuid
-  productId      String?        @map("product_id") @db.Uuid
-  name           String         @db.VarChar(255)
-  status         CreativeStatus @default(DRAFT)
-  creativeType   CreativeType   @default(VIDEO_AD) @map("creative_type")
-  metadata       Json           @default("{}") @db.JsonB
-  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id           String         @id @default(uuid()) @db.Uuid
+  sellerId     String         @map("seller_id") @db.Uuid
+  productId    String?        @map("product_id") @db.Uuid
+  name         String         @db.VarChar(255)
+  status       CreativeStatus @default(DRAFT)
+  creativeType CreativeType   @default(VIDEO_AD) @map("creative_type")
+  metadata     Json           @default("{}") @db.JsonB
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  seller    Seller            @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  product   Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  seller    Seller             @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  product   Product?           @relation(fields: [productId], references: [id], onDelete: SetNull)
   assets    CreativeAsset[]
   campaigns CampaignCreative[]
 
@@ -884,4 +962,364 @@ model CampaignCreative {
   @@unique([campaignId, creativeId], name: "uq_campaign_creative")
   @@index([creativeId])
   @@map("campaign_creatives")
+}
+
+// ─── REVIEWS ─────────────────────────────────────────
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+
+  @@map("review_status")
+}
+
+model Review {
+  id          String       @id @default(uuid()) @db.Uuid
+  sellerId    String       @map("seller_id") @db.Uuid
+  productId   String       @map("product_id") @db.Uuid
+  orderId     String?      @map("order_id") @db.Uuid
+  authorName  String       @map("author_name") @db.VarChar(255)
+  authorEmail String       @map("author_email") @db.VarChar(255)
+  rating      Int          // 1-5
+  title       String       @db.VarChar(255)
+  body        String
+  images      Json         @default("[]") @db.JsonB // string[] of image URLs
+  isVerified  Boolean      @default(false) @map("is_verified") // Linked to a confirmed order
+  status      ReviewStatus @default(PENDING)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller  Seller  @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([orderId, productId], name: "uq_review_order_product") // One review per order+product
+  @@index([productId, status])
+  @@index([sellerId, createdAt])
+  @@index([sellerId, status, createdAt(sort: Desc)])
+  @@map("reviews")
+}
+
+// ─── ADMIN PORTAL MODELS ─────────────────────────────
+
+model PaymentGateway {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  type        String   @db.VarChar(50) // 'stripe' | 'paypal'
+  status      String   @default("ACTIVE") @db.VarChar(20) // 'ACTIVE' | 'INACTIVE'
+  environment String   @default("sandbox") @db.VarChar(20) // 'live' | 'sandbox'
+  credentials Json     @default("{}") @db.JsonB // encrypted API keys
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  sellersPaypal     Seller[] @relation("SellerPaypal")
+  sellersCreditCard Seller[] @relation("SellerCreditCard")
+  orders            Order[]
+
+  @@map("payment_gateways")
+}
+
+model Discount {
+  id         String    @id @default(uuid()) @db.Uuid
+  code       String    @unique @db.VarChar(50)
+  type       String    @db.VarChar(20) // 'PERCENT' | 'FIXED'
+  value      Decimal   @db.Decimal(10, 2)
+  uses       Int       @default(0)
+  usageLimit Int?      @map("usage_limit")
+  status     String    @default("ACTIVE") @db.VarChar(20) // 'ACTIVE' | 'EXPIRED' | 'DISABLED'
+  sellpageId String?   @map("sellpage_id") @db.Uuid
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  sellpage Sellpage? @relation(fields: [sellpageId], references: [id], onDelete: SetNull)
+
+  @@index([sellpageId])
+  @@map("discounts")
+}
+
+model PlatformSettings {
+  id              String   @id @default(uuid()) @db.Uuid
+  platformName    String   @default("PixEcom") @map("platform_name") @db.VarChar(255)
+  defaultCurrency String   @default("USD") @map("default_currency") @db.VarChar(3)
+  defaultTimezone String   @default("UTC") @map("default_timezone") @db.VarChar(64)
+  defaultLanguage String   @default("en") @map("default_language") @db.VarChar(10)
+  supportEmail    String?  @map("support_email") @db.VarChar(255)
+  logoUrl         String?  @map("logo_url") @db.VarChar(500)
+  smtpConfig      Json     @default("{}") @map("smtp_config") @db.JsonB
+  smsConfig       Json     @default("{}") @map("sms_config") @db.JsonB
+  legalPages      Json     @default("{}") @map("legal_pages") @db.JsonB
+  billingConfig   Json     @default("{}") @map("billing_config") @db.JsonB
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("platform_settings")
+}
+
+// ─── Webhook Outbound ──────────────────────────────────────────────────────────
+
+model WebhookEndpoint {
+  id          String    @id @default(uuid()) @db.Uuid
+  sellerId    String    @db.Uuid
+  url         String    @db.VarChar(1000)
+  secret      String    @db.VarChar(255)
+  description String?   @db.VarChar(500)
+  events      String[]  @default([])         // e.g., ["order.confirmed", "order.refunded"]
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @db.Timestamptz()
+  updatedAt   DateTime  @updatedAt @db.Timestamptz()
+
+  seller      Seller    @relation(fields: [sellerId], references: [id])
+  deliveries  WebhookDelivery[]
+
+  @@index([sellerId, isActive])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id             String    @id @default(uuid()) @db.Uuid
+  endpointId     String    @db.Uuid
+  eventType      String    @db.VarChar(100)
+  payload        Json      @default("{}")
+  statusCode     Int?
+  responseBody   String?   @db.VarChar(2000)
+  success        Boolean   @default(false)
+  attempts       Int       @default(1)
+  error          String?   @db.VarChar(1000)
+  duration       Int?      // Response time in ms
+  createdAt      DateTime  @default(now()) @db.Timestamptz()
+
+  endpoint       WebhookEndpoint @relation(fields: [endpointId], references: [id])
+
+  @@index([endpointId, createdAt(sort: Desc)])
+  @@index([success, createdAt])
+  @@map("webhook_deliveries")
+}
+
+// ─── AUDIT LOG ──────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  event     String   @db.VarChar(50) // LOGIN_SUCCESS, LOGIN_FAILED, LOGOUT, SSO_LOGIN, REGISTER
+  userId    String?  @map("user_id")
+  email     String?  @db.VarChar(255)
+  ipAddress String?  @map("ip_address") @db.VarChar(45)
+  userAgent String?  @map("user_agent") @db.VarChar(500)
+  metadata  Json?    @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([event, createdAt])
+  @@index([userId, createdAt])
+  @@index([email, createdAt])
+  @@map("audit_logs")
+}
+
+// ─── STOREFRONT EVENT TRACKING ──────────────────────
+
+model StorefrontEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  sellerId    String   @map("seller_id") @db.Uuid
+  sellpageId  String?  @map("sellpage_id") @db.Uuid
+  eventType   String   @map("event_type") @db.VarChar(50)
+  productId   String?  @map("product_id") @db.Uuid
+  variantId   String?  @map("variant_id") @db.Uuid
+  value       Decimal? @db.Decimal(15, 2)
+  quantity    Int?
+  sessionId   String?  @map("session_id") @db.VarChar(100)
+  utmSource   String?  @map("utm_source") @db.VarChar(100)
+  utmCampaign String?  @map("utm_campaign") @db.VarChar(255)
+  email       String?  @db.VarChar(255)
+  ipHash      String?  @map("ip_hash") @db.VarChar(64)
+  userAgent   String?  @map("user_agent") @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  seller   Seller    @relation(fields: [sellerId], references: [id])
+  sellpage Sellpage? @relation(fields: [sellpageId], references: [id])
+
+  @@index([sellerId, eventType, createdAt])
+  @@index([sellerId, sellpageId, eventType, createdAt])
+  @@index([sessionId])
+  @@map("storefront_events")
+}
+
+// ─── EMAIL MARKETING ────────────────────────────────
+
+enum EmailJobStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  FAILED
+  BOUNCED
+  COMPLAINED
+  CANCELLED
+}
+
+model EmailJob {
+  id            String         @id @default(uuid()) @db.Uuid
+  sellerId      String         @map("seller_id") @db.Uuid
+
+  // Recipient
+  toEmail       String         @map("to_email") @db.VarChar(255)
+  toName        String?        @map("to_name") @db.VarChar(255)
+  customerId    String?        @map("customer_id") @db.Uuid
+
+  // Content
+  flowId        String         @map("flow_id") @db.VarChar(100)
+  templateId    String?        @map("template_id") @db.Uuid
+  subject       String         @db.VarChar(500)
+  variables     Json           @default("{}") @db.JsonB
+
+  // Scheduling
+  scheduledAt   DateTime       @map("scheduled_at") @db.Timestamptz
+  priority      Int            @default(3) // 1=transactional, 2=recovery, 3=lifecycle, 4=marketing
+
+  // Status
+  status        EmailJobStatus @default(QUEUED)
+  attemptCount  Int            @default(0) @map("attempt_count")
+  maxAttempts   Int            @default(3) @map("max_attempts")
+  sentAt        DateTime?      @map("sent_at") @db.Timestamptz
+  error         String?        @db.Text
+
+  // Tracking
+  providerMessageId String?    @map("provider_message_id") @db.VarChar(255)
+  openedAt      DateTime?      @map("opened_at") @db.Timestamptz
+  clickedAt     DateTime?      @map("clicked_at") @db.Timestamptz
+  bouncedAt     DateTime?      @map("bounced_at") @db.Timestamptz
+  complainedAt  DateTime?      @map("complained_at") @db.Timestamptz
+  unsubscribedAt DateTime?     @map("unsubscribed_at") @db.Timestamptz
+
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller        Seller         @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  template      EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([sellerId, status])
+  @@index([scheduledAt, status])
+  @@index([toEmail, flowId])
+  @@index([customerId])
+  @@index([providerMessageId])
+  @@map("email_jobs")
+}
+
+model EmailTemplate {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String?   @map("seller_id") @db.Uuid
+
+  flowId        String    @map("flow_id") @db.VarChar(100)
+  name          String    @db.VarChar(255)
+  subject       String    @db.VarChar(500)
+  htmlBody      String    @map("html_body") @db.Text
+  textBody      String?   @map("text_body") @db.Text
+
+  isActive      Boolean   @default(true) @map("is_active")
+  isDefault     Boolean   @default(false) @map("is_default")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller        Seller?   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  emailJobs     EmailJob[]
+
+  @@unique([sellerId, flowId])
+  @@index([flowId, isDefault])
+  @@map("email_templates")
+}
+
+model EmailSuppression {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+  email         String    @db.VarChar(255)
+  reason        String    @db.VarChar(50) // unsubscribed, bounced, complained
+
+  suppressMarketing     Boolean @default(true) @map("suppress_marketing")
+  suppressTransactional Boolean @default(false) @map("suppress_transactional")
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  seller        Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, email])
+  @@index([email])
+  @@map("email_suppressions")
+}
+
+model AbandonedCart {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+
+  sessionId     String    @map("session_id") @db.VarChar(100)
+  email         String?   @db.VarChar(255)
+
+  items         Json      @default("[]") @db.JsonB
+  totalValue    Decimal   @default(0) @map("total_value") @db.Decimal(10, 2)
+
+  stage         String    @db.VarChar(20) // cart, checkout
+
+  recoveryEmailsSent  Int       @default(0) @map("recovery_emails_sent")
+  recoveredAt         DateTime? @map("recovered_at") @db.Timestamptz
+  discountCodeUsed    String?   @map("discount_code_used") @db.VarChar(100)
+
+  abandonedAt   DateTime  @map("abandoned_at") @db.Timestamptz
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller        Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@index([sellerId, stage, recoveredAt])
+  @@index([email, abandonedAt])
+  @@index([sessionId])
+  @@index([expiresAt])
+  @@map("abandoned_carts")
+}
+
+model CustomerEmailPreference {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+  email         String    @db.VarChar(255)
+
+  marketingOptIn    Boolean @default(true) @map("marketing_opt_in")
+  lifecycleOptIn    Boolean @default(true) @map("lifecycle_opt_in")
+  timezone          String? @db.VarChar(64)
+
+  lastEmailSentAt   DateTime? @map("last_email_sent_at") @db.Timestamptz
+  emailsThisWeek    Int       @default(0) @map("emails_this_week")
+  weekResetAt       DateTime? @map("week_reset_at") @db.Timestamptz
+
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  seller        Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, email])
+  @@map("customer_email_preferences")
+}
+
+// ─── DISCOUNT CODES (Recovery / Marketing) ───────
+
+model DiscountCode {
+  id            String    @id @default(uuid()) @db.Uuid
+  sellerId      String    @map("seller_id") @db.Uuid
+  code          String    @db.VarChar(50)
+  type          String    @default("PERCENTAGE") @db.VarChar(20) // PERCENTAGE, FIXED
+  value         Decimal   @db.Decimal(10, 2) // e.g., 10 for 10%
+  minOrderValue Decimal?  @map("min_order_value") @db.Decimal(10, 2)
+  maxUses       Int       @default(1) @map("max_uses")
+  usedCount     Int       @default(0) @map("used_count")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+  emailJobId    String?   @map("email_job_id") @db.Uuid // Link to the recovery email that generated it
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  seller        Seller    @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerId, code])
+  @@index([code])
+  @@map("discount_codes")
 }

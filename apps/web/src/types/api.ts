@@ -1,0 +1,785 @@
+/* ─────────────────────────────────────────────
+ *  API response types — matches backend contracts exactly
+ *  Storefront-shared config types live in @/types/storefront
+ * ───────────────────────────────────────────── */
+
+import type { GuaranteeConfig, BoostModuleConfig } from './storefront';
+
+// ── Orders ──
+export interface OrderListItem {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  sellpage: { id: string; url: string } | null;
+  customer: { email: string; name: string | null };
+  total: number;
+  currency: string;
+  status: string;
+  itemsCount: number;
+  totalQuantity: number;
+  source: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+}
+
+export interface OrderListResponse {
+  items: OrderListItem[];
+  nextCursor: string | null;
+}
+
+export interface OrderDetailItem {
+  productTitle: string;
+  variantTitle: string | null;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface OrderEvent {
+  type: string;
+  at: string;
+  note: string | null;
+}
+
+export interface OrderShippingAddress {
+  name: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+  /** @deprecated Legacy field — use line1 instead */
+  street?: string | null;
+  /** @deprecated Legacy field — use postalCode instead */
+  zip?: string | null;
+}
+
+export interface OrderAttribution {
+  source: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmTerm: string | null;
+}
+
+export interface OrderDetail {
+  id: string;
+  orderNumber: string;
+  createdAt: string;
+  sellpage: { id: string; url: string } | null;
+  customer: { email: string; name: string | null; phone: string | null };
+  totals: {
+    subtotal: number;
+    shipping: number;
+    tax: number;
+    discount: number;
+    total: number;
+    currency: string;
+  };
+  status: string;
+  items: OrderDetailItem[];
+  events: OrderEvent[];
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  shippingAddress: OrderShippingAddress | null;
+  billingAddress: OrderShippingAddress | null;
+  paymentMethod: string | null;
+  paymentId: string | null;
+  attribution: OrderAttribution | null;
+}
+
+export interface ImportTrackingResult {
+  updated: number;
+  failed: Array<{ orderNumber: string; reason: string }>;
+}
+
+// ── Ads Manager metrics shape (shared by campaign/adset/ad) ──
+export interface AdsMetrics {
+  spend: number;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  contentViews: number;
+  costPerContentView: number;
+  addToCart: number;
+  costPerAddToCart: number;
+  checkout: number;
+  costPerCheckout: number;
+  purchases: number;
+  roas: number;
+  cr: number;
+  cr1: number;
+  cr2: number;
+  storeMetricsPending: boolean;
+}
+
+export interface Campaign extends AdsMetrics {
+  id: string;
+  name: string;
+  platform: string;
+  status: string;
+  deliveryStatus: string | null;
+  budgetPerDay: number | null;
+}
+
+export interface CampaignsResponse {
+  campaigns: Campaign[];
+  summary: AdsMetrics;
+}
+
+export interface Adset extends AdsMetrics {
+  id: string;
+  campaignId: string;
+  name: string;
+  platform: string;
+  status: string;
+  deliveryStatus: string | null;
+  optimizationGoal: string | null;
+  budgetPerDay: number | null;
+}
+
+export interface AdsetsResponse {
+  adsets: Adset[];
+  summary: AdsMetrics;
+}
+
+export interface Ad extends AdsMetrics {
+  id: string;
+  adsetId: string;
+  campaignId: string;
+  name: string;
+  platform: string;
+  status: string;
+  deliveryStatus: string | null;
+  budgetPerDay: number | null;
+}
+
+export interface AdsResponse {
+  ads: Ad[];
+  summary: AdsMetrics;
+}
+
+export interface AdsFiltersResponse {
+  campaigns: { id: string; name: string; status: string }[];
+  adsets: { id: string; name: string; status: string; campaignId: string }[];
+  ads: { id: string; name: string; status: string; adsetId: string }[];
+  statusEnums: string[];
+}
+
+// ── Sellpages ──
+export interface SellpageListItem {
+  id: string;
+  sellerId: string;
+  productId: string;
+  domainId: string | null;
+  slug: string;
+  variant: string | null;
+  status: string;
+  sellpageType: string;
+  titleOverride: string | null;
+  descriptionOverride: string | null;
+  urlPreview: string;
+  stats: {
+    revenue: number;
+    cost: number;
+    youTake: number;
+    hold: number;
+    cashToBalance: number;
+  };
+  healthScore: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HealthBreakdownItem {
+  criteria: string;
+  points: number;
+  earned: number;
+  passed: boolean;
+}
+
+export interface HealthScoreResponse {
+  score: number;
+  breakdown: HealthBreakdownItem[];
+  suggestions: string[];
+}
+
+export interface SellpagesListResponse {
+  data: SellpageListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface SellerDomainItem {
+  id: string;
+  hostname: string;
+  status: string;
+  isPrimary: boolean;
+  verification: { type: string; name: string; value: string };
+  verifiedAt: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Sellpage Config Types (canonical definitions in @/types/storefront) ──
+export type {
+  GuaranteeBadgeConfig,
+  GuaranteeConfig,
+  BoostModuleConfig,
+} from './storefront';
+
+export interface SellpageDetail extends SellpageListItem {
+  product: {
+    id: string;
+    name: string;
+    slug: string;
+    basePrice: string;
+    heroImageUrl: string | null;
+  };
+  customDomain?: string | null;
+  customDomainStatus?: 'NOT_SET' | 'PENDING' | 'VERIFIED' | null;
+  domain?: { id: string; hostname: string; status: string } | null;
+  pixelId?: string | null;
+  headerConfig?: Record<string, unknown>;
+  boostModules?: BoostModuleConfig[];
+}
+
+export interface LinkedAdPost {
+  externalPostId: string | null;
+  pageId: string;
+  pageName: string | null;
+  thumbnailUrl: string | null;
+  adText: string | null;
+  createdAt: string;
+}
+
+export interface LinkedAd {
+  id: string;
+  name: string;
+  status: string;
+  adPost: LinkedAdPost | null;
+  metrics: {
+    spend: number;
+    impressions: number;
+    clicks: number;
+    purchases: number;
+    roas: number;
+  } | null;
+}
+
+export interface LinkedAdset {
+  id: string;
+  name: string;
+  status: string;
+  ads: LinkedAd[];
+}
+
+export interface LinkedCampaign {
+  id: string;
+  name: string;
+  status: string;
+  adsets: LinkedAdset[];
+}
+
+export interface LinkedAdsResponse {
+  campaigns: LinkedCampaign[];
+}
+
+export interface BulkActionResult {
+  updated: number;
+  skipped: number;
+  failed: Array<{ id: string; reason: string }>;
+}
+
+export interface SyncResult {
+  synced: { campaigns: number; adsets: number; ads: number };
+  errors: Array<{ accountName: string; reason: string }>;
+  lastSyncAt: string;
+}
+
+export interface OrderTransitionsResponse {
+  currentStatus: string;
+  validTransitions: string[];
+}
+
+export interface SellpageDomainCheckResponse {
+  available: boolean;
+}
+
+export interface SellpageDomainVerifyResponse {
+  verified: boolean;
+  domain: string;
+  expectedCname: string;
+}
+
+export interface SellpagePixelResponse {
+  pixelId: string | null;
+  pixelName: string | null;
+  pixelExternalId: string | null;
+}
+
+export interface CreateSellpageDto {
+  productId: string;
+  slug: string;
+  domainId?: string;
+  variant?: string;
+  titleOverride?: string;
+  descriptionOverride?: string;
+}
+
+export interface UpdateSellpageDto {
+  slug?: string;
+  variant?: string;
+  domainId?: string;
+  titleOverride?: string;
+  descriptionOverride?: string;
+  guaranteeConfig?: GuaranteeConfig;
+  boostModules?: BoostModuleConfig[];
+}
+
+// ── Products ──
+export interface ProductLabel {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+export interface ProductCardItem {
+  id: string;
+  code: string;
+  name: string;
+  slug: string;
+  heroImageUrl: string | null;
+  /** Prisma Decimal serialized as string — use Number() */
+  suggestedRetailPrice: string;
+  /** Prisma Decimal serialized as string | null */
+  youTakeEstimate: string | null;
+  labels: ProductLabel[];
+  stats?: {
+    ordersCount: number;
+    revenue: number;
+    spend: number;
+    roas: number;
+  };
+}
+
+export interface ProductsListResponse {
+  data: ProductCardItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface ProductVariant {
+  id: string;
+  name: string;
+  sku: string | null;
+  /** Prisma Decimal serialized as string */
+  effectivePrice: string;
+  /** Prisma Decimal serialized as string | null */
+  compareAtPrice: string | null;
+  options: Record<string, unknown>;
+  stockQuantity: number;
+  isActive: boolean;
+  position: number;
+}
+
+export interface SellpageSection {
+  id: string;
+  type: string;
+  content: string;
+  imageUrl?: string;
+}
+
+export interface ProductSellpageInfo {
+  id: string;
+  slug: string;
+  variant: string | null;
+  status: string;
+  titleOverride: string | null;
+  descriptionOverride: string | null;
+  sections: SellpageSection[];
+}
+
+export interface ProductDetail extends ProductCardItem {
+  productCode: string;
+  description: string | null;
+  descriptionBlocks: unknown[];
+  shippingInfo: Record<string, unknown>;
+  tags: string[];
+  currency: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  variants: ProductVariant[];
+  sellpages: ProductSellpageInfo[];
+}
+
+// ── Seller Settings ──
+export interface SellerProfile {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  faviconUrl: string | null;
+  isActive: boolean;
+}
+
+export interface SellerSettings {
+  brandName: string;
+  defaultCurrency: string;
+  timezone: string;
+  supportEmail: string;
+  metaPixelId: string;
+  googleAnalyticsId: string;
+}
+
+export interface UpdateSellerDto {
+  name?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+}
+
+export interface UpdateSellerSettingsDto {
+  brandName?: string;
+  defaultCurrency?: string;
+  timezone?: string;
+  supportEmail?: string;
+  metaPixelId?: string;
+  googleAnalyticsId?: string;
+}
+
+// ── Assets ──
+export interface UploadUrlResponse {
+  uploadUrl: string;
+  publicUrl: string;
+  storageKey: string;
+  expiresInSeconds: number;
+}
+
+// ── Creatives ──
+export type CreativeType =
+  | 'VIDEO_AD' | 'IMAGE_AD' | 'TEXT_ONLY' | 'UGC_BUNDLE'
+  | 'ADTEXT' | 'VIDEO' | 'THUMBNAIL' | 'HEADLINE' | 'DESCRIPTION';
+export type AssetRole = 'PRIMARY_VIDEO' | 'THUMBNAIL' | 'PRIMARY_TEXT' | 'HEADLINE' | 'DESCRIPTION' | 'EXTRA';
+
+export interface CreativeAsset {
+  id: string;
+  assetId: string;
+  role: AssetRole;
+  asset: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    url: string;
+  };
+}
+
+export interface CreativeListItem {
+  id: string;
+  name: string;
+  creativeType: CreativeType;
+  status: string;
+  productId: string | null;
+  product: { id: string; name: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreativeDetail extends CreativeListItem {
+  metadata: Record<string, unknown> | null;
+  assets: CreativeAsset[];
+}
+
+export interface CreativesListResponse {
+  data: CreativeListItem[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface CreateCreativeDto {
+  name: string;
+  creativeType: CreativeType;
+  productId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdateCreativeDto {
+  name?: string;
+  creativeType?: CreativeType;
+  productId?: string;
+  status?: string;
+  metadata?: Record<string, unknown>;
+}
+
+// ── FB Connections ──
+export interface FbConnection {
+  id: string;
+  sellerId: string;
+  connectionType: 'AD_ACCOUNT' | 'PAGE' | 'PIXEL';
+  externalId: string;
+  name: string;
+  parentId: string | null;
+  isPrimary: boolean;
+  isActive: boolean;
+  provider: 'META';
+  fbUserId: string | null;
+  fbUserName: string | null;
+  // Ad account metadata
+  accountStatus: number | null;
+  accountStatusLabel: string | null;
+  spendCap: string | null;
+  amountSpent: string | null;
+  currency: string | null;
+  timezone: string | null;
+  // Page metadata
+  category: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FbConnectionsResponse {
+  data: FbConnection[];
+}
+
+export interface MetaAuthUrlResponse {
+  url: string;
+}
+
+export interface AdAccountLiveDetails {
+  accountStatus: number;
+  accountStatusLabel: string;
+  spendCap: string | null;
+  amountSpent: string | null;
+  currency: string;
+  timezone: string;
+  disableReason: number | null;
+  name: string;
+}
+
+// ── Campaigns ──
+export type CampaignStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+export type BudgetType = 'DAILY' | 'LIFETIME';
+
+export interface CampaignListItem {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  externalCampaignId: string | null;
+  budgetPerDay: number | null;
+  budgetType: BudgetType;
+  startDate: string | null;
+  endDate: string | null;
+  sellpageId: string;
+  sellpage: { id: string; slug: string; urlPreview: string } | null;
+  adAccountId: string;
+  adAccountName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CampaignDetail extends CampaignListItem {
+  sellerId: string;
+  platform: string;
+  deliveryStatus: string | null;
+}
+
+export interface CampaignsListResponse {
+  items: CampaignListItem[];
+  nextCursor: string | null;
+}
+
+export interface CreateCampaignDto {
+  name: string;
+  sellpageId: string;
+  adAccountId: string;
+  budget: number;
+  budgetType: BudgetType;
+  startDate?: string;
+  endDate?: string;
+}
+
+export type AdFormat = 'VIDEO_AD' | 'IMAGE_AD';
+
+export interface AdCreativeConfig {
+  adFormat: AdFormat;
+  videoId?: string;       // Creative of type VIDEO
+  thumbnailId?: string;   // Creative of type THUMBNAIL
+  adtextId?: string;      // Creative of type ADTEXT
+  headlineId?: string;    // Creative of type HEADLINE
+  descriptionId?: string; // Creative of type DESCRIPTION
+}
+
+export interface CreateCampaignBatchDto {
+  nameTemplate: string;
+  sellpageId: string;
+  adAccountId: string;
+  budget: number;
+  budgetType: BudgetType;
+  count: number;
+  initialStatus: 'ACTIVE' | 'PAUSED';
+  adsetsPerCampaign: number;
+  adsPerAdset: number;
+  pageId?: string;
+  targeting?: Record<string, unknown>;
+  adCreatives?: AdCreativeConfig[];
+  startTime?: string;
+  endTime?: string;
+  advancedMode?: boolean;
+  performanceGoal?: string;
+  attributionModel?: {
+    clickWindowDays?: number;
+    viewWindowDays?: number;
+  };
+}
+
+export interface BatchCreateResponse {
+  campaigns: Array<{ id: string; name: string; adsetsCount: number; adsCount: number }>;
+  totalCampaigns: number;
+}
+
+export interface UpdateCampaignDto {
+  name?: string;
+  budget?: number;
+  budgetType?: BudgetType;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+/** Pre-launch: PAUSED status with no externalCampaignId */
+export function isDraftCampaign(c: Pick<CampaignListItem, 'status' | 'externalCampaignId'>): boolean {
+  return c.status === 'PAUSED' && !c.externalCampaignId;
+}
+
+// ── Ad Units (Campaign management — distinct from analytics Adset/Ad above) ──
+export type AdUnitStatus = 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+export type OptimizationGoal = 'CONVERSIONS' | 'LINK_CLICKS' | 'IMPRESSIONS' | 'REACH';
+
+export interface AdsetUnit {
+  id: string;
+  name: string;
+  status: AdUnitStatus;
+  externalAdsetId: string | null;
+  optimizationGoal: OptimizationGoal | null;
+  targeting: Record<string, unknown> | null;
+  campaignId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdsetUnitDetail extends AdsetUnit {
+  ads?: AdUnit[];
+}
+
+export interface AdsetUnitsListResponse {
+  data: AdsetUnit[];
+  nextCursor: string | null;
+}
+
+export interface AdUnit {
+  id: string;
+  name: string;
+  status: AdUnitStatus;
+  externalAdId: string | null;
+  adsetId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdPostItem {
+  id: string;
+  adId: string;
+  pageId: string;
+  pageName: string | null;
+  externalPostId: string | null;
+  assetMediaId: string | null;
+  assetThumbnailId: string | null;
+  assetAdtextId: string | null;
+  createdAt: string;
+}
+
+export interface AdUnitDetail extends AdUnit {
+  adPosts: AdPostItem[];
+}
+
+export interface AdUnitsListResponse {
+  data: AdUnit[];
+  nextCursor: string | null;
+}
+
+export interface CreateAdsetDto {
+  name: string;
+  optimizationGoal?: OptimizationGoal;
+  targeting?: Record<string, unknown>;
+}
+
+export interface CreateAdDto {
+  name: string;
+}
+
+export interface CreateAdPostDto {
+  pageId: string;
+  externalPostId?: string;
+  assetMediaId?: string;
+  assetThumbnailId?: string;
+  assetAdtextId?: string;
+}
+
+/** Pre-launch adset/ad: PAUSED + no externalId */
+export function isDraftAdUnit(c: { status: AdUnitStatus; externalAdsetId?: string | null; externalAdId?: string | null }): boolean {
+  const extId = c.externalAdsetId ?? c.externalAdId ?? null;
+  return c.status === 'PAUSED' && !extId;
+}
+
+// ── Live Preview ──
+export interface LivePreviewCampaign {
+  campaignId: string;
+  campaignName: string;
+  contentViews: number;
+  addToCart: number;
+  checkout: number;
+  purchases: number;
+  spend: number;
+  revenue: number;
+  cr1: number;
+  cr2: number;
+  cr: number;
+}
+
+export interface LivePreviewTotals {
+  contentViews: number;
+  addToCart: number;
+  checkout: number;
+  purchases: number;
+  spend: number;
+  revenue: number;
+  cr1: number;
+  cr2: number;
+  cr: number;
+  roas: number;
+}
+
+export interface LivePreviewResponse {
+  activeVisitors: number;
+  totals: LivePreviewTotals;
+  byCampaign: LivePreviewCampaign[];
+  updatedAt: string;
+  windowMinutes: number;
+}
+
+// ── Health ──
+export interface HealthResponse {
+  status: string;
+  service: string;
+  timestamp: string;
+  requestId: string;
+  db: string;
+  redis: string;
+}

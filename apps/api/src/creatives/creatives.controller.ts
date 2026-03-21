@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -33,8 +34,23 @@ export class CreativesController {
 
   // ─── GET /api/creatives ───────────────────────────────────────────────────
   @Get()
-  listCreatives(@CurrentUser() user: AuthUser) {
-    return this.service.listCreatives(user.sellerId);
+  listCreatives(
+    @CurrentUser() user: AuthUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('creativeType') creativeType?: string,
+    @Query('q') q?: string,
+    @Query('productId') productId?: string,
+  ) {
+    return this.service.listCreatives(user.sellerId, {
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      status,
+      creativeType,
+      q,
+      productId,
+    });
   }
 
   // ─── GET /api/creatives/:id ───────────────────────────────────────────────

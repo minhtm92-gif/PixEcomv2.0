@@ -50,7 +50,6 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 | 2.3.4-C | [MILESTONE-2.3.4-C-WORKING-LOG.md](./MILESTONE-2.3.4-C-WORKING-LOG.md) | Analytics Overview — seller KPI dashboard (revenue, cost, money model) | `feature/2.3.4c-analytics-overview` | `2dc6a7a` | 240 E2E ✅ (227 + 13 new) |
 | 2.3.4-D | [MILESTONE-2.3.4-D-WORKING-LOG.md](./MILESTONE-2.3.4-D-WORKING-LOG.md) | Orders Read Layer — list + detail, keyset pagination, no-leak contract | `feature/2.3.4d-orders-read-layer` | `46242c4` | 241 E2E ✅ (227 + 14 new) |
 | 2.3.4-B | [MILESTONE-2.3.4-B-WORKING-LOG.md](./MILESTONE-2.3.4-B-WORKING-LOG.md) | Ads Manager 3-Tier Read Layer — Campaign/Adset/Ad + metrics contract | `feature/2.3.4b-ads-manager-3tier` | `6dd681c` | 257 E2E ✅ (241 + 16 new) |
-| 2.3.7 | [MILESTONE-2.3.7-WORKING-LOG.md](./MILESTONE-2.3.7-WORKING-LOG.md) | Stability Hardening — E2E fixes + RequestId + exception filter + health + timing | `feature/2.3.7-stability-hardening` | `338b5e5` | 257/257 ✅ (0 failing, all green) |
 
 ---
 
@@ -83,7 +82,17 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 | **2.3.4-C** | **240** | +13 *(off develop base 227)* |
 | **2.3.4-D** | **241** | +14 *(off develop base 227)* |
 | **2.3.4-B** | **257** | +16 *(off develop base 241)* |
-| **2.3.7** | **257** | 0 delta (E2E fixes only — 5 failures → 0) |
+
+---
+
+## Phase 2.4 — Frontend Preview & Admin Portal
+
+| Task | Log | Description | Branch | Commits | Build |
+|------|-----|-------------|--------|---------|-------|
+| C2-Frontend | [TASK-C2-FRONTEND-WORKING-LOG.md](./TASK-C2-FRONTEND-WORKING-LOG.md) | Ads Manager inline actions + bulk + sync; Sellpage domain/pixel/linked-ads; Orders status transitions; C2-FIX (3 regression bugs) | `feature/2.4.2-alpha-ads-seed-v1` | `0e27205`, `0c874de` | GREEN (34 routes) |
+| D-PREVIEW-1 | [TASK-D-PREVIEW-1-WORKING-LOG.md](./TASK-D-PREVIEW-1-WORKING-LOG.md) | Admin portal UI — 20 pages with static mock data (Dashboard, Sellers, Orders, Products, Stores, Analytics, Settings hub + 10 sub-pages) | `feature/2.4.2-alpha-ads-seed-v1` | `4749b51` | GREEN (35 routes) |
+| D-PREVIEW-2 | [TASK-D-PREVIEW-2-WORKING-LOG.md](./TASK-D-PREVIEW-2-WORKING-LOG.md) | Customer-facing Storefront UI — LynsieCharm sellpage + cart + checkout + tracking + policy pages (light theme, 13 components, 5 page types) | `feature/2.4.2-alpha-ads-seed-v1` | `98537d9` | GREEN (45 routes) |
+| D-PREVIEW-3A | [TASK-D-PREVIEW-3A-WORKING-LOG.md](./TASK-D-PREVIEW-3A-WORKING-LOG.md) | Preview mode bypass — NEXT_PUBLIC_PREVIEW_MODE flag skips admin auth; /preview hub landing page; cross-nav (AdminSidebar ↔ StorefrontFooter) | `feature/2.4.2-alpha-ads-seed-v1` | `64cc142` | GREEN (46 routes) |
 
 ---
 
@@ -92,8 +101,8 @@ All milestone working logs are in this `docs/working-logs/` directory. Each log 
 | Milestone | Description | Spec | Status |
 |-----------|-------------|------|--------|
 | **2.3.4-B** | Ads Manager 3-Tier Read Layer (Campaign/Adset/Ad + metrics contract) | — | ✅ Done |
-| **2.3.7** | Stability Hardening — E2E fixes, RequestId, exception filter, health, timing | — | ✅ Done |
-| **2.4** | Frontend wiring — Next.js seller dashboard | — | 🔄 Pending |
+| **2.3.X** | Ads Manager Full Read Layer + Store Funnel Join + Orders Tracking Upgrade | [`TECH-SPEC-V1-ADDENDUM-2.3.X.md`](../TECH-SPEC-V1-ADDENDUM-2.3.X.md) | 🔄 Pending |
+| **D-PREVIEW-3** | Admin portal + Seller portal API wiring (replace mock data with real endpoints) | — | Pending |
 
 ### 2.3.X Phase Tracker
 

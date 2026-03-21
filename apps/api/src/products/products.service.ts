@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { safeDivide } from '../ads-manager/ads-manager.constants';
 import { PrismaService } from '../prisma/prisma.service';
-import { ProductCardDto, ProductLabelDto } from './dto/product-card.dto';
+import { CreateProductDto } from './dto/create-product.dto';
+import { ProductCardDto, ProductLabelDto, ProductStatsDto } from './dto/product-card.dto';
 import { ProductDetailDto, ProductVariantDto } from './dto/product-detail.dto';
 import { ListProductsDto } from './dto/list-products.dto';
 
@@ -10,6 +12,35 @@ const MAX_PAGE_LIMIT = 100;
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CREATE
+  // ─────────────────────────────────────────────────────────────────────────
+
+  async create(dto: CreateProductDto): Promise<Record<string, unknown>> {
+    const slug = dto.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 90);
+
+    const productCode = `PRD-${Date.now()}`;
+
+    const uniqueSuffix = `-${Math.random().toString(36).slice(2, 8)}`;
+    const uniqueSlug = `${slug}${uniqueSuffix}`;
+
+    return this.prisma.product.create({
+      data: {
+        name: dto.name,
+        productCode,
+        slug: uniqueSlug,
+        basePrice: dto.price ?? 0,
+        description: dto.description,
+        images: dto.images ?? [],
+        status: 'DRAFT',
+      },
+    });
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // LIST
@@ -22,7 +53,7 @@ export class ProductsService {
    *  - label  → products must have the label with this slug attached
    *  - q      → case-insensitive contains match on product name OR productCode
    */
-  async listProducts(dto: ListProductsDto): Promise<{
+  async listProducts(dto: ListProductsDto, sellerId: string): Promise<{
     data: ProductCardDto[];
     total: number;
     page: number;
@@ -47,6 +78,7 @@ export class ProductsService {
           name: true,
           slug: true,
           basePrice: true,
+          createdAt: true,
           // Active pricing rules (may be multiple, we pick the latest)
           pricingRules: {
             where: {
@@ -65,6 +97,7 @@ export class ProductsService {
               sellerTakeFixed: true,
             },
           },
+          images: true, // JSON field fallback for heroImageUrl
           // Hero image: first isCurrent thumbnail, or first thumbnail
           assetThumbs: {
             orderBy: [{ isCurrent: 'desc' }, { position: 'asc' }],
@@ -83,12 +116,57 @@ export class ProductsService {
       this.prisma.product.count({ where }),
     ]);
 
+    // ── Seller-scoped stats (ordersCount + revenue) per product ───────────────
+    const statsMap = await this.fetchProductStats(products.map(p => p.id), sellerId);
+
     return {
-      data: products.map((p) => this.mapToCard(p)),
+      data: products.map((p) => ({
+        ...this.mapToCard(p),
+        stats: statsMap.get(p.id) ?? { ordersCount: 0, revenue: 0, spend: 0, roas: 0 },
+      })),
       total,
       page,
       limit,
     };
+  }
+
+  /**
+   * Fetches per-product order count + revenue for the given seller.
+   * Uses Prisma groupBy on OrderItem filtered by the seller's orders.
+   * Returns a Map<productId, ProductStatsDto>.
+   *
+   * Phase 1: spend = 0, roas = 0 (no Product→Campaign→AdStatsDaily link yet).
+   */
+  private async fetchProductStats(
+    productIds: string[],
+    sellerId: string,
+  ): Promise<Map<string, ProductStatsDto>> {
+    if (productIds.length === 0) return new Map();
+
+    const rows = await this.prisma.orderItem.groupBy({
+      by: ['productId'],
+      where: {
+        productId: { in: productIds },
+        order: { sellerId },
+      },
+      _sum: { lineTotal: true },
+      // Counts OrderItem rows per productId — equivalent to ordersCount when
+      // each order has at most one line per product (standard e-commerce pattern).
+      _count: { orderId: true },
+    });
+
+    const map = new Map<string, ProductStatsDto>();
+    for (const row of rows) {
+      if (!row.productId) continue;
+      const revenue = Number(row._sum.lineTotal ?? 0);
+      map.set(row.productId, {
+        ordersCount: row._count.orderId,
+        revenue,
+        spend: 0,
+        roas: safeDivide(revenue, 0), // always 0 in Phase 1
+      });
+    }
+    return map;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -114,6 +192,7 @@ export class ProductsService {
         descriptionBlocks: true,
         shippingInfo: true,
         tags: true,
+        images: true,
         status: true,
         createdAt: true,
         updatedAt: true,
@@ -161,6 +240,18 @@ export class ProductsService {
             position: true,
           },
         },
+        sellpages: {
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            slug: true,
+            variant: true,
+            status: true,
+            titleOverride: true,
+            descriptionOverride: true,
+            sections: true,
+          },
+        },
       },
     });
 
@@ -184,6 +275,15 @@ export class ProductsService {
       variants: product.variants.map((v) =>
         this.mapToVariant(v, product.basePrice),
       ),
+      sellpages: product.sellpages.map((sp) => ({
+        id: sp.id,
+        slug: sp.slug,
+        variant: sp.variant,
+        status: sp.status,
+        titleOverride: sp.titleOverride,
+        descriptionOverride: sp.descriptionOverride,
+        sections: sp.sections as unknown[],
+      })),
     };
   }
 
@@ -264,45 +364,56 @@ export class ProductsService {
    *   - If active rule has sellerTakeFixed set  → use fixed amount directly
    *   - Else                                    → suggestedRetail * (sellerTakePercent / 100)
    *   - If no active rule                       → null
+   *
+   * All Decimal fields are converted to plain numbers via Number() before
+   * returning, so JSON serialization never produces Prisma Decimal objects
+   * (which can appear as {} and cause $NaN in the frontend).
    */
   private mapToCard(product: {
     id: string;
     productCode: string;
     name: string;
     slug: string;
-    basePrice: { toString(): string };
+    basePrice: { toNumber(): number } | number;
     pricingRules: Array<{
-      suggestedRetail: { toString(): string };
-      sellerTakePercent: { toString(): string };
-      sellerTakeFixed: { toString(): string } | null;
+      suggestedRetail: { toNumber(): number } | number;
+      sellerTakePercent: { toNumber(): number } | number;
+      sellerTakeFixed: ({ toNumber(): number } | number) | null;
     }>;
     assetThumbs: Array<{ url: string }>;
+    images?: unknown;
     labels: Array<{ label: { id: string; name: string; slug: string } }>;
   }): ProductCardDto {
     const rule = product.pricingRules[0] ?? null;
 
+    // Convert Prisma Decimals to plain JS numbers first to avoid {} serialization
+    const basePrice = Number(product.basePrice);
+    const suggestedRetail = rule ? Number(rule.suggestedRetail) : basePrice;
+
     // suggestedRetailPrice: prefer pricing rule's suggested retail, else product basePrice
-    const suggestedRetailPrice = rule
-      ? rule.suggestedRetail.toString()
-      : product.basePrice.toString();
+    const suggestedRetailPrice = suggestedRetail.toFixed(2);
 
     // youTakeEstimate — deterministic, no order/ad-spend involved
     let youTakeEstimate: string | null = null;
     if (rule) {
       if (rule.sellerTakeFixed !== null) {
         // Fixed override takes precedence over percentage
-        youTakeEstimate = rule.sellerTakeFixed.toString();
+        youTakeEstimate = Number(rule.sellerTakeFixed).toFixed(2);
       } else {
         // Percentage of suggested retail
         const pct = Number(rule.sellerTakePercent) / 100;
-        const estimate = Number(rule.suggestedRetail) * pct;
-        // Round to 2 decimal places, return as string (consistent with Prisma { toString(): string })
+        const estimate = suggestedRetail * pct;
         youTakeEstimate = estimate.toFixed(2);
       }
     }
 
-    const heroImageUrl =
-      product.assetThumbs.length > 0 ? product.assetThumbs[0].url : null;
+    // Hero image: prefer assetThumbs, fallback to product.images JSON field
+    let heroImageUrl: string | null = null;
+    if (product.assetThumbs.length > 0) {
+      heroImageUrl = product.assetThumbs[0].url;
+    } else if (Array.isArray(product.images) && (product.images as string[]).length > 0) {
+      heroImageUrl = (product.images as string[])[0];
+    }
 
     const labels: ProductLabelDto[] = product.labels.map((pl) => ({
       id: pl.label.id,
@@ -326,32 +437,35 @@ export class ProductsService {
    * Maps a Prisma variant row to ProductVariantDto.
    *
    * effectivePrice = priceOverride if set, else product.basePrice
+   * Decimal fields converted to Number to prevent {} JSON serialization.
    */
   private mapToVariant(
     variant: {
       id: string;
       name: string;
       sku: string | null;
-      priceOverride: { toString(): string } | null;
-      compareAtPrice: { toString(): string } | null;
+      priceOverride: ({ toNumber(): number } | number) | null;
+      compareAtPrice: ({ toNumber(): number } | number) | null;
       options: unknown;
       stockQuantity: number;
       isActive: boolean;
       position: number;
     },
-    basePrice: { toString(): string },
+    basePrice: { toNumber(): number } | number,
   ): ProductVariantDto {
     const effectivePrice =
       variant.priceOverride !== null
-        ? variant.priceOverride.toString()
-        : basePrice.toString();
+        ? Number(variant.priceOverride).toFixed(2)
+        : Number(basePrice).toFixed(2);
 
     return {
       id: variant.id,
       name: variant.name,
       sku: variant.sku,
       effectivePrice,
-      compareAtPrice: variant.compareAtPrice?.toString() ?? null,
+      compareAtPrice: variant.compareAtPrice != null
+        ? Number(variant.compareAtPrice).toFixed(2)
+        : null,
       options: variant.options as Record<string, unknown>,
       stockQuantity: variant.stockQuantity,
       isActive: variant.isActive,

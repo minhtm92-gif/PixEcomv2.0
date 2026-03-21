@@ -6,7 +6,10 @@ import {
   IsIn,
 } from 'class-validator';
 
-const CREATIVE_TYPES = ['VIDEO_AD', 'IMAGE_AD', 'TEXT_ONLY', 'UGC_BUNDLE'] as const;
+const CREATIVE_TYPES = [
+  'VIDEO_AD', 'IMAGE_AD', 'TEXT_ONLY', 'UGC_BUNDLE',
+  'ADTEXT', 'VIDEO', 'THUMBNAIL', 'HEADLINE', 'DESCRIPTION',
+] as const;
 
 export class UpdateCreativeDto {
   @IsOptional()
