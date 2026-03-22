@@ -17,8 +17,37 @@ export const UTM_NA = 'N/A';
 /**
  * Derive date range WHERE clause from optional YYYY-MM-DD strings.
  * Returns { gte, lte } using start-of-day / end-of-day UTC boundaries.
+ *
+ * Timezone coverage: Meta stores stats dates in the ad account's timezone
+ * (e.g. America/Los_Angeles). A user in UTC+7 requesting "today" (March 22)
+ * may need data from March 21 in the ad account's timezone. We expand the
+ * `gte` boundary by 1 day to ensure no data is missed due to the timezone
+ * offset between the user and the ad account. The extra day is harmless for
+ * aggregate queries (getCampaigns/getAdsets/getAds) because the data simply
+ * sums correctly, and getDailyStats handles per-day grouping separately.
  */
 export function buildDateRange(
+  dateFrom?: string,
+  dateTo?: string,
+): { gte?: Date; lte?: Date } {
+  const range: { gte?: Date; lte?: Date } = {};
+  if (dateFrom) {
+    const d = new Date(`${dateFrom}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() - 1); // Expand 1 day back for timezone coverage
+    range.gte = d;
+  }
+  if (dateTo) {
+    range.lte = new Date(`${dateTo}T23:59:59.999Z`);
+  }
+  return range;
+}
+
+/**
+ * Original date range without timezone expansion — used internally when
+ * the caller needs the exact user-requested boundaries (e.g. getDailyStats
+ * which handles timezone adjustment itself).
+ */
+export function buildExactDateRange(
   dateFrom?: string,
   dateTo?: string,
 ): { gte?: Date; lte?: Date } {

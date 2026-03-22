@@ -151,6 +151,7 @@ export async function statsSyncProcessor(
       sellerId: true,
       externalId: true,
       accessTokenEnc: true,
+      metadata: true,
     },
   });
 
@@ -170,6 +171,10 @@ export async function statsSyncProcessor(
 
       // 2a. Decrypt token
       const accessToken = decryptToken(account.accessTokenEnc, encKey);
+
+      // 2a2. Extract ad account timezone from metadata (stored during FB OAuth)
+      const meta = account.metadata as Record<string, unknown> | null;
+      const accountTimezone = (meta?.timezone as string) || null;
 
       // 2b. Fetch Meta insights
       const fetchResult = await statsProvider.fetchForAccount(
@@ -262,6 +267,7 @@ export async function statsSyncProcessor(
             purchaseValue: s.purchaseValue,
             costPerPurchase: s.costPerPurchase,
             roas: s.roas,
+            accountTimezone,
           },
           create: {
             sellerId: account.sellerId,
@@ -281,6 +287,7 @@ export async function statsSyncProcessor(
             purchaseValue: s.purchaseValue,
             costPerPurchase: s.costPerPurchase,
             roas: s.roas,
+            accountTimezone,
           },
         });
       }

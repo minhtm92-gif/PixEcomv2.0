@@ -806,17 +806,27 @@ export class AdsManagerReadService {
    * Funnel metrics (CV, ATC, CO, purchases) from StorefrontEvent.
    */
   async getDailyStats(sellerId: string, days = 7) {
+    // User-requested boundary (e.g. "last 7 days" means today - 6 days)
     const since = new Date();
     since.setDate(since.getDate() - (days - 1));
     since.setHours(0, 0, 0, 0);
+    const sinceKey = since.toISOString().slice(0, 10); // e.g. "2026-03-16"
+
+    // Expand ad stats query by 1 day back to cover timezone overlap.
+    // Meta stores statDate in the ad account's timezone (e.g. America/Los_Angeles).
+    // A user in UTC+7 requesting "March 22" may need March 21 ad account data,
+    // because March 22 00:00 UTC+7 = March 21 10:00 Pacific.
+    const adStatsSince = new Date(since);
+    adStatsSince.setDate(adStatsSince.getDate() - 1);
 
     // 1. Aggregate ad_stats_daily by statDate — ad platform metrics only
+    //    Query with expanded range, filter output to user-requested range below.
     const adRows = await this.prisma.adStatsDaily.groupBy({
       by: ['statDate'],
       where: {
         sellerId,
         entityType: 'CAMPAIGN',
-        statDate: { gte: since },
+        statDate: { gte: adStatsSince },
       },
       _sum: {
         spend: true,
@@ -829,6 +839,7 @@ export class AdsManagerReadService {
     // 2. Query StorefrontEvent grouped by date for real funnel metrics
     //    Uses COUNT(DISTINCT COALESCE(session_id, id::text)) for consistency
     //    with Ads Manager and Live Preview counting methods.
+    //    StorefrontEvent uses server UTC timestamps, so no timezone expansion needed.
     const storefrontRows = await this.prisma.$queryRawUnsafe<
       Array<{ stat_date: Date; event_type: string; event_count: bigint; total_value: string }>
     >(
@@ -910,6 +921,7 @@ export class AdsManagerReadService {
     );
 
     const daily = [...allDates]
+      .filter((dateKey) => dateKey >= sinceKey) // Filter out expanded-range dates
       .sort((a, b) => b.localeCompare(a)) // desc
       .map((dateKey) => {
         const ad = adByDate.get(dateKey) ?? { spend: 0, impressions: 0, linkClicks: 0 };
