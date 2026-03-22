@@ -491,6 +491,7 @@ model FbConnection {
   externalId        String           @map("external_id") @db.VarChar(255)
   name              String           @db.VarChar(255)
   accessTokenEnc    String?          @map("access_token_enc")
+  tokenExpiresAt    DateTime?        @map("token_expires_at") @db.Timestamptz
   parentId          String?          @map("parent_id") @db.Uuid
   isPrimary         Boolean          @default(false) @map("is_primary")
   isActive          Boolean          @default(true) @map("is_active")

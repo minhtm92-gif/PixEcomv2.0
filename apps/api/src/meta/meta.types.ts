@@ -35,6 +35,14 @@ export interface MetaOAuthTokenResponse {
   expires_in?: number;
 }
 
+/** Response from the long-lived token exchange endpoint. */
+export interface MetaLongLivedTokenResponse {
+  access_token: string;
+  token_type: string;
+  /** Seconds until expiration. Typically ~5,184,000 (60 days). */
+  expires_in?: number;
+}
+
 // ─── Campaign ────────────────────────────────────────────────────────────────
 
 export interface MetaCampaign {

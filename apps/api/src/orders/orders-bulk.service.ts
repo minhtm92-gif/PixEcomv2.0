@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
+import { PixanaTrackingService } from '../pixana-tracking/pixana-tracking.service';
 import { BulkStatusDto } from './dto/bulk-status.dto';
 import { canTransition } from './orders.service';
 
@@ -28,6 +29,7 @@ export class OrdersBulkService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly webhookOutbound: WebhookOutboundService,
+    private readonly pixanaTracking: PixanaTrackingService,
   ) {}
 
   /**
@@ -98,6 +100,11 @@ export class OrdersBulkService {
         this.webhookOutbound
           .dispatchOrderEvent(sellerId, `order.${dto.status.toLowerCase()}`, orderId)
           .catch(() => {}); // Silent — bulk ops don't log individual webhook failures
+
+        // BUG-001 FIX: Send status change to PixAna (fire-and-forget)
+        this.pixanaTracking
+          .sendOrderEvent(`order.${dto.status.toLowerCase()}`, orderId)
+          .catch(() => {});
       } catch {
         failed.push({ orderId, reason: 'Internal error processing order' });
       }

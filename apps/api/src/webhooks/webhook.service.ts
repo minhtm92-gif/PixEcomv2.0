@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { EmailSendService } from '../email-marketing/email-send.service';
 import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
+import { PixanaTrackingService } from '../pixana-tracking/pixana-tracking.service';
 
 /**
  * Shared service for webhook handlers — order confirmation + stock decrement.
@@ -19,6 +20,7 @@ export class WebhookService {
     private readonly email: EmailService,
     private readonly emailSend: EmailSendService,
     private readonly webhookOutbound: WebhookOutboundService,
+    private readonly pixanaTracking: PixanaTrackingService,
     private readonly config: ConfigService,
   ) {
     this.emailMarketingEnabled =
@@ -136,6 +138,11 @@ export class WebhookService {
       this.webhookOutbound.dispatchOrderEvent(order.sellerId, 'order.confirmed', order.id).catch((err) =>
         this.logger.error(`Webhook outbound failed: ${err.message}`),
       );
+
+      // BUG-001 FIX: Send order.paid to PixAna for revenue attribution (fire-and-forget)
+      this.pixanaTracking.sendOrderEvent('order.paid', order.id).catch((err) =>
+        this.logger.error(`PixAna order.paid tracking failed: ${err.message}`),
+      );
     }
 
     return { success: true, orderNumber: order.orderNumber };
@@ -238,6 +245,11 @@ export class WebhookService {
     // Dispatch outbound webhook (fire-and-forget)
     this.webhookOutbound.dispatchOrderEvent(order.sellerId, 'order.refunded', order.id).catch((err) =>
       this.logger.error(`Webhook outbound failed: ${err.message}`),
+    );
+
+    // BUG-001 FIX: Send order.refunded to PixAna to reverse revenue attribution (fire-and-forget)
+    this.pixanaTracking.sendOrderEvent('order.refunded', order.id).catch((err) =>
+      this.logger.error(`PixAna order.refunded tracking failed: ${err.message}`),
     );
 
     this.logger.log(

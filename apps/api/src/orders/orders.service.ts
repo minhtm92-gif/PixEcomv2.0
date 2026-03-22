@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { EmailSendService } from '../email-marketing/email-send.service';
 import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
+import { PixanaTrackingService } from '../pixana-tracking/pixana-tracking.service';
 import { ListOrdersQueryDto } from './dto/list-orders.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 
@@ -159,6 +160,7 @@ export class OrdersService {
     private readonly email: EmailService,
     private readonly emailSend: EmailSendService,
     private readonly webhookOutbound: WebhookOutboundService,
+    private readonly pixanaTracking: PixanaTrackingService,
     private readonly config: ConfigService,
   ) {
     this.emailMarketingEnabled =
@@ -467,6 +469,12 @@ export class OrdersService {
     // Dispatch outbound webhook (fire-and-forget)
     this.webhookOutbound.dispatchOrderEvent(sellerId, `order.${target.toLowerCase()}`, orderId).catch((err) =>
       this.logger.error(`Webhook outbound failed: ${err.message}`),
+    );
+
+    // BUG-001 FIX: Send status change to PixAna (shipped, delivered, refunded, cancelled)
+    // Keeps PixAna fact_order status in sync for accurate analytics.
+    this.pixanaTracking.sendOrderEvent(`order.${target.toLowerCase()}`, orderId).catch((err) =>
+      this.logger.error(`PixAna tracking failed for order.${target.toLowerCase()}: ${err.message}`),
     );
 
     return updated;

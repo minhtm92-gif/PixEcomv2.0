@@ -17,10 +17,15 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { OrdersService, ORDER_TRANSITIONS, canTransition } from './orders.service';
 import { OrdersBulkService } from './orders-bulk.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
+import { EmailSendService } from '../email-marketing/email-send.service';
+import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
+import { PixanaTrackingService } from '../pixana-tracking/pixana-tracking.service';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -56,6 +61,11 @@ describe('OrdersService — status change (Task C)', () => {
       providers: [
         OrdersService,
         { provide: PrismaService, useValue: mockPrisma },
+        { provide: EmailService, useValue: {} },
+        { provide: EmailSendService, useValue: {} },
+        { provide: WebhookOutboundService, useValue: { dispatchOrderEvent: jest.fn().mockResolvedValue(undefined) } },
+        { provide: PixanaTrackingService, useValue: { sendOrderEvent: jest.fn().mockResolvedValue(undefined) } },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
     }).compile();
 
@@ -194,6 +204,8 @@ describe('OrdersBulkService — transition validation (C.2)', () => {
       providers: [
         OrdersBulkService,
         { provide: PrismaService, useValue: bulkPrisma },
+        { provide: WebhookOutboundService, useValue: { dispatchOrderEvent: jest.fn().mockResolvedValue(undefined) } },
+        { provide: PixanaTrackingService, useValue: { sendOrderEvent: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

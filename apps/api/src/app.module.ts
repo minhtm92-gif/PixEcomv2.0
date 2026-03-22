@@ -28,6 +28,7 @@ import { PaymentGatewaysModule } from './payment-gateways/payment-gateways.modul
 import { WebhookOutboundModule } from './webhook-outbound/webhook-outbound.module';
 import { InternalModule } from './internal/internal.module';
 import { EmailMarketingModule } from './email-marketing/email-marketing.module';
+import { PixanaTrackingModule } from './pixana-tracking/pixana-tracking.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { EmailMarketingModule } from './email-marketing/email-marketing.module';
     PaymentGatewaysModule,
     InternalModule,
     EmailMarketingModule,
+    PixanaTrackingModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

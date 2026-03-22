@@ -125,7 +125,12 @@ export class StorefrontController {
     @Headers('user-agent') userAgent?: string,
     @Req() req?: any,
   ) {
-    return this.storefront.trackEvent(sellerSlug, dto, userAgent, req?.ip);
+    // Use CF-Connecting-IP (Cloudflare) or X-Forwarded-For to get real visitor IP
+    const realIp =
+      req?.headers?.['cf-connecting-ip'] ||
+      (req?.headers?.['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+      req?.ip;
+    return this.storefront.trackEvent(sellerSlug, dto, userAgent, realIp);
   }
 
   /**

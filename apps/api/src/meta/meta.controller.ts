@@ -16,7 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUser } from '../auth/strategies/jwt.strategy';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetaTokenService } from './meta-token.service';
-import { MetaAdAccount, MetaOAuthTokenResponse, MetaPage, MetaPixel } from './meta.types';
+import { MetaAdAccount, MetaLongLivedTokenResponse, MetaOAuthTokenResponse, MetaPage, MetaPixel } from './meta.types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -114,16 +114,20 @@ export class MetaController {
       // 1. Decrypt + validate state
       const sellerId = this.decryptState(state);
 
-      // 2. Exchange code for access token
-      const accessToken = await this.exchangeCodeForToken(code);
+      // 2. Exchange code for short-lived access token
+      const shortLivedToken = await this.exchangeCodeForToken(code);
 
-      // 3. Fetch Facebook user profile + ad accounts
+      // 3. Exchange short-lived token for long-lived token (60 days)
+      const { accessToken, expiresAt } =
+        await this.exchangeForLongLivedToken(shortLivedToken);
+
+      // 4. Fetch Facebook user profile + ad accounts
       const fbUser = await this.fetchFbUserProfile(accessToken);
 
-      // 4. Encrypt token
+      // 5. Encrypt token
       const encToken = this.tokenService.encrypt(accessToken);
 
-      // 5. Upsert FbConnections for ALL ad accounts
+      // 6. Upsert FbConnections for ALL ad accounts
       const adAccounts = await this.fetchAdAccounts(accessToken);
 
       if (adAccounts.length > 0) {
@@ -139,6 +143,7 @@ export class MetaController {
             },
             update: {
               accessTokenEnc: encToken,
+              tokenExpiresAt: expiresAt,
               name: acc.name,
               isActive: true,
               metadata: {
@@ -157,6 +162,7 @@ export class MetaController {
               externalId: acc.id.replace('act_', ''),
               name: acc.name,
               accessTokenEnc: encToken,
+              tokenExpiresAt: expiresAt,
               isPrimary: i === 0,
               isActive: true,
               metadata: {
@@ -183,6 +189,7 @@ export class MetaController {
           },
           update: {
             accessTokenEnc: encToken,
+            tokenExpiresAt: expiresAt,
             name: fbUser.name,
             isActive: true,
             metadata: { fbUserId: fbUser.id, fbUserName: fbUser.name },
@@ -193,6 +200,7 @@ export class MetaController {
             externalId: fbUser.id,
             name: fbUser.name,
             accessTokenEnc: encToken,
+            tokenExpiresAt: expiresAt,
             isPrimary: true,
             isActive: true,
             metadata: { fbUserId: fbUser.id, fbUserName: fbUser.name },
@@ -200,7 +208,9 @@ export class MetaController {
         });
       }
 
-      // 6. Upsert FbConnections for Facebook Pages (personal + business)
+      // 7. Upsert FbConnections for Facebook Pages (personal + business)
+      // Note: Page access tokens obtained via /me/accounts are already long-lived
+      // and don't expire as long as the user token remains valid.
       const pages = await this.fetchAllPages(accessToken);
       for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
@@ -217,6 +227,7 @@ export class MetaController {
           },
           update: {
             accessTokenEnc: encPageToken,
+            tokenExpiresAt: expiresAt,
             name: page.name,
             isActive: true,
             metadata: {
@@ -231,6 +242,7 @@ export class MetaController {
             externalId: page.id,
             name: page.name,
             accessTokenEnc: encPageToken,
+            tokenExpiresAt: expiresAt,
             isPrimary: i === 0,
             isActive: true,
             metadata: {
@@ -242,7 +254,7 @@ export class MetaController {
         });
       }
 
-      // 7. Upsert FbConnections for Pixels / Datasets (per ad account)
+      // 8. Upsert FbConnections for Pixels / Datasets (per ad account)
       let totalPixels = 0;
       for (const acc of adAccounts) {
         const adAccountExternalId = acc.id.replace('act_', '');
@@ -271,6 +283,7 @@ export class MetaController {
             },
             update: {
               accessTokenEnc: encToken,
+              tokenExpiresAt: expiresAt,
               name: pixel.name,
               isActive: true,
               parentId: parentConn?.id ?? null,
@@ -288,6 +301,7 @@ export class MetaController {
               externalId: pixel.id,
               name: pixel.name,
               accessTokenEnc: encToken,
+              tokenExpiresAt: expiresAt,
               parentId: parentConn?.id ?? null,
               isPrimary: false,
               isActive: true,
@@ -393,6 +407,82 @@ export class MetaController {
     }
 
     return data.access_token;
+  }
+
+  /**
+   * Exchange a short-lived token for a long-lived token (~60 days).
+   * If the exchange fails, falls back to the short-lived token with a
+   * conservative 1-hour expiry estimate.
+   *
+   * @see https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived/
+   */
+  private async exchangeForLongLivedToken(
+    shortLivedToken: string,
+  ): Promise<{ accessToken: string; expiresAt: Date }> {
+    const appId = this.config.get<string>('META_APP_ID');
+    const appSecret = this.config.get<string>('META_APP_SECRET');
+
+    if (!appId || !appSecret) {
+      this.logger.warn(
+        'META_APP_ID/META_APP_SECRET not configured — skipping long-lived token exchange',
+      );
+      return {
+        accessToken: shortLivedToken,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // fallback: 1 hour
+      };
+    }
+
+    try {
+      const params = new URLSearchParams({
+        grant_type: 'fb_exchange_token',
+        client_id: appId,
+        client_secret: appSecret,
+        fb_exchange_token: shortLivedToken,
+      });
+
+      const response = await fetch(
+        `${META_GRAPH_BASE}/oauth/access_token?${params.toString()}`,
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        this.logger.warn(
+          `Long-lived token exchange failed: ${response.status} ${body}. Falling back to short-lived token.`,
+        );
+        return {
+          accessToken: shortLivedToken,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        };
+      }
+
+      const data = (await response.json()) as MetaLongLivedTokenResponse;
+
+      if (!data.access_token) {
+        this.logger.warn(
+          'Long-lived token exchange returned no access_token. Falling back to short-lived token.',
+        );
+        return {
+          accessToken: shortLivedToken,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        };
+      }
+
+      // expires_in is in seconds; default to 60 days if not provided
+      const expiresInMs = (data.expires_in ?? 60 * 24 * 60 * 60) * 1000;
+      const expiresAt = new Date(Date.now() + expiresInMs);
+
+      this.logger.log(
+        `Successfully exchanged for long-lived token (expires: ${expiresAt.toISOString()})`,
+      );
+
+      return { accessToken: data.access_token, expiresAt };
+    } catch (err) {
+      this.logger.error('Long-lived token exchange threw an error', err);
+      return {
+        accessToken: shortLivedToken,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      };
+    }
   }
 
   /**

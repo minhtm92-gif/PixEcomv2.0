@@ -12,6 +12,7 @@ import { PayPalPaymentService, PayPalGatewayConfig } from './payments/paypal.ser
 import { ReviewsService } from './reviews.service';
 import { EmailService } from '../email/email.service';
 import { WebhookOutboundService } from '../webhook-outbound/webhook-outbound.service';
+import { PixanaTrackingService } from '../pixana-tracking/pixana-tracking.service';
 import { DiscountCodeService } from '../email-marketing/discount-code.service';
 
 // ─── Shipping cost config ──────────────────────────────────────────────────
@@ -33,6 +34,7 @@ export class StorefrontService {
     private readonly reviewsSvc: ReviewsService,
     private readonly email: EmailService,
     private readonly webhookOutbound: WebhookOutboundService,
+    private readonly pixanaTracking: PixanaTrackingService,
     private readonly discountCodeService: DiscountCodeService,
   ) {}
 
@@ -735,6 +737,11 @@ export class StorefrontService {
     // Dispatch outbound webhook for order creation (fire-and-forget)
     this.webhookOutbound.dispatchOrderEvent(seller.id, 'order.created', order.id).catch(() => {});
 
+    // BUG-001 FIX: Send order.created to PixAna for funnel analytics (fire-and-forget)
+    this.pixanaTracking.sendOrderEvent('order.created', order.id).catch((err) =>
+      this.logger.error(`PixAna order.created tracking failed: ${err.message}`),
+    );
+
     // Initiate payment
     const metadata = {
       orderId: order.id,
@@ -930,6 +937,12 @@ export class StorefrontService {
 
       // Dispatch outbound webhook (fire-and-forget)
       this.webhookOutbound.dispatchOrderEvent(seller.id, 'order.confirmed', orderId).catch(() => {});
+
+      // BUG-001 FIX: Send order.paid to PixAna for revenue attribution & ROAS (fire-and-forget)
+      // This is the PRIMARY event that drives purchase counts and ROAS in PixAna.
+      this.pixanaTracking.sendOrderEvent('order.paid', orderId).catch((err) =>
+        this.logger.error(`PixAna order.paid tracking failed: ${err.message}`),
+      );
     }
 
     return {
