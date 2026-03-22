@@ -30,6 +30,21 @@ export class AdminService {
     private readonly r2: R2Service,
   ) {}
 
+  // ─── SELLERS LIST (lightweight, for dropdowns) ─────────────────────────────
+
+  /**
+   * Returns a simple list of all active sellers: { id, name, slug }.
+   * Used by the SellerSwitcher dropdown for SUPERADMIN users.
+   */
+  async sellersListSimple(): Promise<{ id: string; name: string; slug: string }[]> {
+    const sellers = await this.prisma.seller.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, slug: true },
+      orderBy: { name: 'asc' },
+    });
+    return sellers;
+  }
+
   // ─── DASHBOARD ──────────────────────────────────────────────────────────────
 
   async getDashboard(): Promise<any> {

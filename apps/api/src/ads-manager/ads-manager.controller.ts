@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdsManagerReadService } from './ads-manager-read.service';
 import { AdsManagerActionService } from './ads-manager-action.service';
@@ -7,6 +7,7 @@ import { AdsetsQueryDto } from './dto/adsets-query.dto';
 import { AdsQueryDto } from './dto/ads-query.dto';
 import { FiltersQueryDto } from './dto/filters-query.dto';
 import { BulkBudgetDto, BulkStatusDto } from './dto/bulk-action.dto';
+import type { AuthUser } from '../auth/strategies/jwt.strategy';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ads-manager')
@@ -16,48 +17,91 @@ export class AdsManagerController {
     private readonly actionService: AdsManagerActionService,
   ) {}
 
-  // ─── READ ENDPOINTS (unchanged) ──────────────────────────────────────────
+  /**
+   * Resolve the effective sellerId.
+   * - SUPERADMIN: use ?sellerId query param (required — returns 400 if missing)
+   * - Regular SELLER: always use req.user.sellerId (query param ignored)
+   */
+  private resolveSellerId(user: AuthUser, querySellerId?: string): string {
+    if (user.isSuperadmin) {
+      if (!querySellerId) {
+        throw new BadRequestException('Please select a seller first');
+      }
+      return querySellerId;
+    }
+    return user.sellerId;
+  }
+
+  // ─── READ ENDPOINTS ──────────────────────────────────────────────────────
 
   @Get('live-preview')
   getLivePreview(
     @Req() req: any,
     @Query('sellpageId') sellpageId?: string,
+    @Query('sellerId') querySellerId?: string,
   ) {
-    return this.service.getLivePreview(req.user.sellerId, sellpageId);
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.service.getLivePreview(sellerId, sellpageId);
   }
 
   @Get('daily-stats')
   getDailyStats(
     @Req() req: any,
     @Query('days') days?: string,
+    @Query('sellerId') querySellerId?: string,
   ) {
-    return this.service.getDailyStats(req.user.sellerId, days ? parseInt(days, 10) : 7);
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.service.getDailyStats(sellerId, days ? parseInt(days, 10) : 7);
   }
 
   @Get('hourly-stats')
-  getHourlyStats(@Req() req: any) {
-    return this.service.getHourlyStats(req.user.sellerId);
+  getHourlyStats(
+    @Req() req: any,
+    @Query('sellerId') querySellerId?: string,
+  ) {
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.service.getHourlyStats(sellerId);
   }
 
   @Get('campaigns')
-  getCampaigns(@Req() req: any, @Query() query: CampaignsQueryDto) {
-    return this.service.getCampaigns(req.user.sellerId, req.user.userId, query);
+  getCampaigns(
+    @Req() req: any,
+    @Query() query: CampaignsQueryDto,
+    @Query('sellerId') querySellerId?: string,
+  ) {
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.service.getCampaigns(sellerId, req.user.userId, query);
   }
 
   @Get('adsets')
-  getAdsets(@Req() req: any, @Query() query: AdsetsQueryDto) {
-    return this.service.getAdsets(req.user.sellerId, query);
+  getAdsets(
+    @Req() req: any,
+    @Query() query: AdsetsQueryDto,
+    @Query('sellerId') querySellerId?: string,
+  ) {
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.service.getAdsets(sellerId, query);
   }
 
   @Get('ads')
-  getAds(@Req() req: any, @Query() query: AdsQueryDto) {
-    return this.service.getAds(req.user.sellerId, query);
+  getAds(
+    @Req() req: any,
+    @Query() query: AdsQueryDto,
+    @Query('sellerId') querySellerId?: string,
+  ) {
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.service.getAds(sellerId, query);
   }
 
   @Get('filters')
-  getFilters(@Req() req: any, @Query() query: FiltersQueryDto) {
+  getFilters(
+    @Req() req: any,
+    @Query() query: FiltersQueryDto,
+    @Query('sellerId') querySellerId?: string,
+  ) {
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
     return this.service.getFilters(
-      req.user.sellerId,
+      sellerId,
       query.campaignId,
       query.adsetId,
     );
@@ -72,8 +116,13 @@ export class AdsManagerController {
    */
   @Patch('bulk-status')
   @HttpCode(200)
-  bulkStatus(@Req() req: any, @Body() dto: BulkStatusDto) {
-    return this.actionService.bulkStatus(req.user.sellerId, dto);
+  bulkStatus(
+    @Req() req: any,
+    @Body() dto: BulkStatusDto,
+    @Query('sellerId') querySellerId?: string,
+  ) {
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.actionService.bulkStatus(sellerId, dto);
   }
 
   // ─── BULK BUDGET ──────────────────────────────────────────────────────────
@@ -85,8 +134,13 @@ export class AdsManagerController {
    */
   @Patch('bulk-budget')
   @HttpCode(200)
-  bulkBudget(@Req() req: any, @Body() dto: BulkBudgetDto) {
-    return this.actionService.bulkBudget(req.user.sellerId, dto);
+  bulkBudget(
+    @Req() req: any,
+    @Body() dto: BulkBudgetDto,
+    @Query('sellerId') querySellerId?: string,
+  ) {
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.actionService.bulkBudget(sellerId, dto);
   }
 
   // ─── MANUAL SYNC ─────────────────────────────────────────────────────────
@@ -98,7 +152,12 @@ export class AdsManagerController {
    */
   @Post('sync')
   @HttpCode(200)
-  sync(@Req() req: any, @Body('adAccountId') adAccountId?: string) {
-    return this.actionService.syncFromMeta(req.user.sellerId, adAccountId);
+  sync(
+    @Req() req: any,
+    @Body('adAccountId') adAccountId?: string,
+    @Query('sellerId') querySellerId?: string,
+  ) {
+    const sellerId = this.resolveSellerId(req.user, querySellerId);
+    return this.actionService.syncFromMeta(sellerId, adAccountId);
   }
 }

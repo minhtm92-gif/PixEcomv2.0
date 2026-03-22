@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import { apiGet, apiPatch, apiPost, type ApiError } from '@/lib/apiClient';
 import { toastApiError, useToastStore } from '@/stores/toastStore';
+import { useAuthStore } from '@/stores/authStore';
 import type { FbConnection } from '@/types/api';
 import { PageShell } from '@/components/PageShell';
+import { SellerSwitcher } from '@/components/SellerSwitcher';
 import { AdsMetricsTable, SummaryBar } from '@/components/AdsMetricsTable';
 import { today, daysAgo } from '@/lib/format';
 import type {
@@ -45,6 +47,11 @@ export default function AdsManagerPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const addToast = useToastStore((s) => s.add);
+  const user = useAuthStore((s) => s.user);
+  const isSuperadmin = user?.isSuperadmin === true;
+
+  // SUPERADMIN seller override — stored in localStorage by SellerSwitcher
+  const [sellerIdOverride, setSellerIdOverride] = useState<string>('');
 
   // Determine tier from query params
   const campaignId = searchParams.get('campaignId');
@@ -133,6 +140,14 @@ export default function AdsManagerPage() {
   }, [syncCooldown]);
 
   const fetchData = useCallback(async () => {
+    // SUPERADMIN must select a seller before data can load
+    if (isSuperadmin && !sellerIdOverride) {
+      setRows([]);
+      setSummary(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -142,6 +157,7 @@ export default function AdsManagerPage() {
     if (status !== 'ALL') params.set('status', status);
     if (adAccountId) params.set('adAccountId', adAccountId);
     if (searchQuery) params.set('search', searchQuery);
+    if (isSuperadmin && sellerIdOverride) params.set('sellerId', sellerIdOverride);
 
     try {
       if (tier === 'campaigns') {
@@ -166,7 +182,7 @@ export default function AdsManagerPage() {
     } finally {
       setLoading(false);
     }
-  }, [tier, campaignId, adsetId, dateFrom, dateTo, status, adAccountId, searchQuery]);
+  }, [tier, campaignId, adsetId, dateFrom, dateTo, status, adAccountId, searchQuery, isSuperadmin, sellerIdOverride]);
 
   useEffect(() => {
     fetchData();
@@ -210,7 +226,8 @@ export default function AdsManagerPage() {
     if (syncCooldown > 0 || syncLoading) return;
     setSyncLoading(true);
     try {
-      const res = await apiPost<SyncResult>('/ads-manager/sync', {
+      const syncParams = isSuperadmin && sellerIdOverride ? `?sellerId=${sellerIdOverride}` : '';
+      const res = await apiPost<SyncResult>(`/ads-manager/sync${syncParams}`, {
         ...(adAccountId ? { adAccountId } : {}),
       });
       const { synced } = res;
@@ -238,6 +255,7 @@ export default function AdsManagerPage() {
     if (!bulkAction || selectedIds.length === 0) return;
     setBulkLoading(true);
     try {
+      const bulkParams = isSuperadmin && sellerIdOverride ? `?sellerId=${sellerIdOverride}` : '';
       let result: BulkActionResult;
       if (bulkAction === 'budget') {
         const budget = parseFloat(bulkBudgetInput);
@@ -246,12 +264,12 @@ export default function AdsManagerPage() {
           setBulkLoading(false);
           return;
         }
-        result = await apiPatch<BulkActionResult>('/ads-manager/bulk-budget', {
+        result = await apiPatch<BulkActionResult>(`/ads-manager/bulk-budget${bulkParams}`, {
           campaignIds: selectedIds,
           budget,
         });
       } else {
-        result = await apiPatch<BulkActionResult>('/ads-manager/bulk-status', {
+        result = await apiPatch<BulkActionResult>(`/ads-manager/bulk-status${bulkParams}`, {
           entityType: tier === 'campaigns' ? 'campaign' : tier === 'adsets' ? 'adset' : 'ad',
           entityIds: selectedIds,
           action: bulkAction,
@@ -336,6 +354,14 @@ export default function AdsManagerPage() {
               <span className="text-foreground">{adsetName}</span>
             </>
           )}
+        </div>
+      )}
+
+      {/* Seller Switcher — SUPERADMIN only */}
+      {isSuperadmin && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+          <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">Viewing as</span>
+          <SellerSwitcher onSellerChange={setSellerIdOverride} />
         </div>
       )}
 

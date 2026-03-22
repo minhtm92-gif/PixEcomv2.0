@@ -17,7 +17,9 @@ import {
 } from 'lucide-react';
 import { apiGet, type ApiError } from '@/lib/apiClient';
 import { toastApiError } from '@/stores/toastStore';
+import { useAuthStore } from '@/stores/authStore';
 import { PageShell } from '@/components/PageShell';
+import { SellerSwitcher } from '@/components/SellerSwitcher';
 import { KpiCard } from '@/components/KpiCard';
 import { DataTable, type Column } from '@/components/DataTable';
 import { num, moneyWhole, pct } from '@/lib/format';
@@ -44,6 +46,12 @@ function getCrColor(value: number, type: 'cr1' | 'cr2' | 'cr'): string {
 }
 
 export default function LivePreviewPage() {
+  const user = useAuthStore((s) => s.user);
+  const isSuperadmin = user?.isSuperadmin === true;
+
+  // SUPERADMIN seller override
+  const [sellerIdOverride, setSellerIdOverride] = useState<string>('');
+
   const [data, setData] = useState<LivePreviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,11 +96,15 @@ export default function LivePreviewPage() {
   // Load hourly stats for today (refreshes with main data)
   // Only show loading skeleton on first load, silently update data on refreshes
   const fetchHourlyStats = useCallback(async () => {
+    // SUPERADMIN must select a seller before data can load
+    if (isSuperadmin && !sellerIdOverride) return;
+
     if (!initialHourlyLoadDone.current) {
       setHourlyLoading(true);
     }
     try {
-      const result = await apiGet<HourlyStatsResponse>('/ads-manager/hourly-stats');
+      const sellerParam = isSuperadmin && sellerIdOverride ? `?sellerId=${sellerIdOverride}` : '';
+      const result = await apiGet<HourlyStatsResponse>(`/ads-manager/hourly-stats${sellerParam}`);
       setHourlyStats(result.hourly ?? []);
       setTodaySpend(result.todaySpend ?? 0);
       setServerCurrentHour(result.currentHour ?? -1);
@@ -104,9 +116,16 @@ export default function LivePreviewPage() {
         initialHourlyLoadDone.current = true;
       }
     }
-  }, []);
+  }, [isSuperadmin, sellerIdOverride]);
 
   const fetchData = useCallback(async (showRefreshing = false) => {
+    // SUPERADMIN must select a seller before data can load
+    if (isSuperadmin && !sellerIdOverride) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+
     if (showRefreshing) {
       setRefreshing(true);
     } else if (!initialLoadDone.current) {
@@ -117,6 +136,7 @@ export default function LivePreviewPage() {
     try {
       const params = new URLSearchParams();
       if (sellpageId) params.set('sellpageId', sellpageId);
+      if (isSuperadmin && sellerIdOverride) params.set('sellerId', sellerIdOverride);
       const result = await apiGet<LivePreviewResponse>(
         `/ads-manager/live-preview${params.toString() ? `?${params}` : ''}`,
       );
@@ -133,7 +153,7 @@ export default function LivePreviewPage() {
       }
       setRefreshing(false);
     }
-  }, [sellpageId]);
+  }, [sellpageId, isSuperadmin, sellerIdOverride]);
 
   // Auto-refresh every 10s
   useEffect(() => {
@@ -334,6 +354,14 @@ export default function LivePreviewPage() {
         </div>
       }
     >
+      {/* Seller Switcher — SUPERADMIN only */}
+      {isSuperadmin && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+          <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">Viewing as</span>
+          <SellerSwitcher onSellerChange={setSellerIdOverride} />
+        </div>
+      )}
+
       {error && (
         <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
           {error}
