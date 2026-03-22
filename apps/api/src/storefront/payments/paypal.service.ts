@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 export interface PayPalGatewayConfig {
   clientId: string;
   clientSecret: string;
-  mode: 'sandbox' | 'live';
+  mode: 'live';
 }
 
 interface PayPalAccessToken {
@@ -29,18 +29,15 @@ export class PayPalPaymentService {
   private tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
   constructor(private readonly config: ConfigService) {
-    const mode = this.config.get<string>('PAYPAL_MODE', 'sandbox');
     this.fallbackConfig = {
       clientId: this.config.get<string>('PAYPAL_CLIENT_ID', ''),
       clientSecret: this.config.get<string>('PAYPAL_CLIENT_SECRET', ''),
-      mode: mode === 'live' ? 'live' : 'sandbox',
+      mode: 'live',
     };
   }
 
-  private getBaseUrl(mode: 'sandbox' | 'live'): string {
-    return mode === 'live'
-      ? 'https://api-m.paypal.com'
-      : 'https://api-m.sandbox.paypal.com';
+  private getBaseUrl(): string {
+    return 'https://api-m.paypal.com';
   }
 
   async createOrder(
@@ -50,7 +47,7 @@ export class PayPalPaymentService {
     gatewayConfig?: PayPalGatewayConfig,
   ): Promise<{ paypalOrderId: string; approvalUrl: string }> {
     const cfg = gatewayConfig ?? this.fallbackConfig;
-    const baseUrl = this.getBaseUrl(cfg.mode);
+    const baseUrl = this.getBaseUrl();
     const token = await this.getAccessToken(cfg);
 
     const res = await fetch(`${baseUrl}/v2/checkout/orders`, {
@@ -88,7 +85,7 @@ export class PayPalPaymentService {
     const data = (await res.json()) as PayPalOrderResponse;
     const approvalLink = data.links.find((l) => l.rel === 'approve');
 
-    this.logger.log(`PayPal order created: ${data.id} (mode=${cfg.mode})`);
+    this.logger.log(`PayPal order created: ${data.id} (mode=live)`);
 
     return {
       paypalOrderId: data.id,
@@ -101,7 +98,7 @@ export class PayPalPaymentService {
     gatewayConfig?: PayPalGatewayConfig,
   ): Promise<{ status: string; transactionId: string }> {
     const cfg = gatewayConfig ?? this.fallbackConfig;
-    const baseUrl = this.getBaseUrl(cfg.mode);
+    const baseUrl = this.getBaseUrl();
     const token = await this.getAccessToken(cfg);
 
     const res = await fetch(
@@ -142,7 +139,7 @@ export class PayPalPaymentService {
       return cached.token;
     }
 
-    const baseUrl = this.getBaseUrl(cfg.mode);
+    const baseUrl = this.getBaseUrl();
     const credentials = Buffer.from(
       `${cfg.clientId}:${cfg.clientSecret}`,
     ).toString('base64');

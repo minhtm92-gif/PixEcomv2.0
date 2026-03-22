@@ -1228,7 +1228,7 @@ export class AdminService {
         name: dto.name,
         type: dto.type,
         status: dto.status ?? 'ACTIVE',
-        environment: dto.environment ?? 'sandbox',
+        environment: 'live',
         credentials: (dto.credentials ?? {}) as any,
       },
     });

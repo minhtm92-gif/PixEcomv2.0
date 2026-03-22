@@ -146,7 +146,7 @@ function AddProviderForm({
   onSaved: () => void;
 }) {
   const [name, setName] = useState('');
-  const [environment, setEnvironment] = useState<'sandbox' | 'live'>('sandbox');
+  const environment = 'live';
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [showFields, setShowFields] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -187,7 +187,7 @@ function AddProviderForm({
     } finally {
       setSaving(false);
     }
-  }, [name, environment, credentials, provider, onSaved]);
+  }, [name, credentials, provider, onSaved]);
 
   return (
     <div>
@@ -231,32 +231,13 @@ function AddProviderForm({
             />
           </div>
 
-          {/* Environment */}
+          {/* Environment — always live (sandbox not allowed per CEO directive) */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Environment</label>
             <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setEnvironment('sandbox')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                  environment === 'sandbox'
-                    ? 'border-amber-500 bg-amber-500/10 text-amber-400'
-                    : 'border-border text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Sandbox
-              </button>
-              <button
-                type="button"
-                onClick={() => setEnvironment('live')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                  environment === 'live'
-                    ? 'border-green-500 bg-green-500/10 text-green-400'
-                    : 'border-border text-muted-foreground hover:text-foreground'
-                }`}
-              >
+              <div className="px-4 py-2 rounded-lg text-sm font-medium border border-green-500 bg-green-500/10 text-green-400">
                 Live
-              </button>
+              </div>
             </div>
           </div>
 
@@ -342,14 +323,8 @@ function GatewayCard({
           >
             {isActive ? 'Active' : 'Inactive'}
           </span>
-          <span
-            className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-              gw.environment === 'live'
-                ? 'bg-green-500/15 text-green-400'
-                : 'bg-amber-500/15 text-amber-400'
-            }`}
-          >
-            {gw.environment === 'live' ? 'Live' : 'Sandbox'}
+          <span className="px-2 py-0.5 text-xs rounded-full font-medium bg-green-500/15 text-green-400">
+            Live
           </span>
         </div>
 

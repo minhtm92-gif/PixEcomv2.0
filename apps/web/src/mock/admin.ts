@@ -94,7 +94,7 @@ export interface MockPaymentGateway {
   name: string;
   type: 'stripe' | 'paypal';
   status: 'ACTIVE' | 'INACTIVE';
-  environment: 'live' | 'sandbox';
+  environment: 'live';
   assignedSellers: string[];
   createdAt: string;
 }
@@ -718,10 +718,10 @@ export const MOCK_PAYMENT_GATEWAYS: MockPaymentGateway[] = [
   },
   {
     id: 'gw_02',
-    name: 'Stripe Test',
+    name: 'Stripe Secondary',
     type: 'stripe',
     status: 'ACTIVE',
-    environment: 'sandbox',
+    environment: 'live',
     assignedSellers: ['Gamma Goods'],
     createdAt: '2025-06-01',
   },
@@ -732,15 +732,6 @@ export const MOCK_PAYMENT_GATEWAYS: MockPaymentGateway[] = [
     status: 'ACTIVE',
     environment: 'live',
     assignedSellers: ['Beta Commerce'],
-    createdAt: '2025-08-15',
-  },
-  {
-    id: 'gw_04',
-    name: 'PayPal Sandbox',
-    type: 'paypal',
-    status: 'INACTIVE',
-    environment: 'sandbox',
-    assignedSellers: [],
     createdAt: '2025-08-15',
   },
 ];

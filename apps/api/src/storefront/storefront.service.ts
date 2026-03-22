@@ -1102,12 +1102,15 @@ export class StorefrontService {
     gateway: { credentials: unknown; environment: string; status: string } | null,
   ): PayPalGatewayConfig | null {
     if (!gateway || gateway.status !== 'ACTIVE') return null;
+    if (gateway.environment === 'sandbox') {
+      throw new BadRequestException('Sandbox payment gateways are not allowed');
+    }
     const creds = gateway.credentials as { clientId?: string; clientSecret?: string } | null;
     if (!creds?.clientId || !creds?.clientSecret) return null;
     return {
       clientId: creds.clientId,
       clientSecret: creds.clientSecret,
-      mode: gateway.environment === 'live' ? 'live' : 'sandbox',
+      mode: 'live',
     };
   }
 
