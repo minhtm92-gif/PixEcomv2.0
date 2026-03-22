@@ -21,4 +21,8 @@ export class CampaignsQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  sellerId?: string;
 }
