@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   Eye,
   ShoppingCart,
@@ -12,6 +12,8 @@ import {
   TrendingUp,
   Users,
   Clock,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { apiGet, type ApiError } from '@/lib/apiClient';
 import { toastApiError } from '@/stores/toastStore';
@@ -52,6 +54,21 @@ export default function LivePreviewPage() {
   const [hourlyStats, setHourlyStats] = useState<HourlyStatsRow[]>([]);
   const [hourlyLoading, setHourlyLoading] = useState(true);
   const [todaySpend, setTodaySpend] = useState(0);
+  const [serverCurrentHour, setServerCurrentHour] = useState<number>(-1);
+  const [hourlyOpen, setHourlyOpen] = useState(false);
+  const [campaignOpen, setCampaignOpen] = useState(false);
+
+  // Track whether initial load is done — skip loading skeletons on subsequent refreshes
+  const initialLoadDone = useRef(false);
+  const initialHourlyLoadDone = useRef(false);
+
+  // When sellpageId changes, reset so the next fetch shows loading skeletons
+  // (this is a new filter query, not a silent refresh)
+  const prevSellpageId = useRef(sellpageId);
+  if (prevSellpageId.current !== sellpageId) {
+    prevSellpageId.current = sellpageId;
+    initialLoadDone.current = false;
+  }
 
   // Load sellpages for filter dropdown
   useEffect(() => {
@@ -69,22 +86,33 @@ export default function LivePreviewPage() {
   }, []);
 
   // Load hourly stats for today (refreshes with main data)
+  // Only show loading skeleton on first load, silently update data on refreshes
   const fetchHourlyStats = useCallback(async () => {
-    setHourlyLoading(true);
+    if (!initialHourlyLoadDone.current) {
+      setHourlyLoading(true);
+    }
     try {
       const result = await apiGet<HourlyStatsResponse>('/ads-manager/hourly-stats');
       setHourlyStats(result.hourly ?? []);
       setTodaySpend(result.todaySpend ?? 0);
+      setServerCurrentHour(result.currentHour ?? -1);
     } catch {
       // Non-critical: hourly stats table won't populate
     } finally {
-      setHourlyLoading(false);
+      if (!initialHourlyLoadDone.current) {
+        setHourlyLoading(false);
+        initialHourlyLoadDone.current = true;
+      }
     }
   }, []);
 
   const fetchData = useCallback(async (showRefreshing = false) => {
-    if (showRefreshing) setRefreshing(true);
-    else setLoading(true);
+    if (showRefreshing) {
+      setRefreshing(true);
+    } else if (!initialLoadDone.current) {
+      // Only show full loading skeleton on the very first load
+      setLoading(true);
+    }
     setError(null);
     try {
       const params = new URLSearchParams();
@@ -99,7 +127,10 @@ export default function LivePreviewPage() {
       setError(e.message ?? 'Failed to fetch live data');
       toastApiError(e);
     } finally {
-      setLoading(false);
+      if (!initialLoadDone.current) {
+        setLoading(false);
+        initialLoadDone.current = true;
+      }
       setRefreshing(false);
     }
   }, [sellpageId]);
@@ -117,8 +148,8 @@ export default function LivePreviewPage() {
 
   const t = data?.totals;
 
-  // Campaign table columns
-  const campaignCols: Column<LivePreviewCampaign>[] = [
+  // Memoize column definitions to prevent DataTable re-renders from new array references
+  const campaignCols: Column<LivePreviewCampaign>[] = useMemo(() => [
     {
       key: 'campaignName',
       label: 'Campaign',
@@ -186,24 +217,19 @@ export default function LivePreviewPage() {
       className: 'text-right',
       render: (r) => <span className={`font-mono text-xs font-semibold ${getCrColor(r.cr, 'cr')}`}>{pct(r.cr)}</span>,
     },
-  ];
+  ], []);
 
-  const currentHour = new Date().getHours();
-  const todayDate = new Date().toISOString().split('T')[0];
-
-  // Hourly stats table columns
-  const hourlyCols: Column<HourlyStatsRow>[] = [
+  // Memoize hourly column definitions
+  const hourlyCols: Column<HourlyStatsRow>[] = useMemo(() => [
     {
       key: 'hour',
       label: 'Time',
       render: (r) => {
-        const isToday = r.date === todayDate;
-        const isNow = isToday && r.hour === currentHour;
+        const isLive = r.hour === serverCurrentHour;
         return (
           <span className="text-foreground font-medium text-xs font-mono">
-            {!isToday && <span className="text-muted-foreground mr-1 text-[10px]">Ytd</span>}
             {String(r.hour).padStart(2, '0')}:00
-            {isNow && <span className="ml-1 text-[10px] text-green-400">● Now</span>}
+            {isLive && <span className="ml-1.5 text-[10px] text-green-400 font-semibold">{'\u25CF'} Live</span>}
           </span>
         );
       },
@@ -252,7 +278,16 @@ export default function LivePreviewPage() {
       className: 'text-right',
       render: (r) => <span className={`font-mono text-xs font-semibold ${getCrColor(r.cr, 'cr')}`}>{pct(r.cr)}</span>,
     },
-  ];
+  ], [serverCurrentHour]);
+
+  // Stable rowKey callbacks
+  const hourlyRowKey = useCallback((r: HourlyStatsRow) => `${r.date}_${r.hour}`, []);
+  const campaignRowKey = useCallback((r: LivePreviewCampaign) => r.campaignName, []);
+
+  // Highlight the current hour row with green background
+  const hourlyRowClassName = useCallback((r: HourlyStatsRow) => {
+    return r.hour === serverCurrentHour ? 'bg-emerald-950/40' : '';
+  }, [serverCurrentHour]);
 
   return (
     <PageShell
@@ -432,47 +467,60 @@ export default function LivePreviewPage() {
         </div>
       </div>
 
-      {/* Hourly Statistics Table */}
+      {/* Hourly Statistics Table (collapsible) */}
       <div className="mb-6">
-        <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setHourlyOpen((v) => !v)}
+          className="w-full text-left text-sm font-medium text-foreground mb-3 flex items-center gap-2 hover:text-foreground/80 transition-colors"
+        >
+          {hourlyOpen ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronRight size={14} className="text-muted-foreground" />}
           <Clock size={14} className="text-muted-foreground" />
-          Hourly Statistics
-          <span className="text-muted-foreground font-normal">(Last 24 hours)</span>
+          Hourly Statistics (Today)
           {todaySpend > 0 && (
             <span className="text-muted-foreground font-normal ml-2">
               — Spend: {moneyWhole(todaySpend)}
             </span>
           )}
-        </h2>
-        <DataTable
-          columns={hourlyCols}
-          data={hourlyStats}
-          loading={hourlyLoading}
-          rowKey={(r) => `${r.date}_${r.hour}`}
-          emptyMessage="No activity today yet."
-          skeletonRows={6}
-          rowClassName={(r) => (r.hour === currentHour && r.date === todayDate) ? 'bg-emerald-950/40' : ''}
-        />
+        </button>
+        {hourlyOpen && (
+          <DataTable
+            columns={hourlyCols}
+            data={hourlyStats}
+            loading={hourlyLoading}
+            rowKey={hourlyRowKey}
+            emptyMessage="No activity today yet."
+            skeletonRows={6}
+            rowClassName={hourlyRowClassName}
+          />
+        )}
       </div>
 
-      {/* Campaign Breakdown Table */}
+      {/* Campaign Breakdown Table (collapsible) */}
       <div className="mb-6">
-        <h2 className="text-sm font-medium text-foreground mb-3">
+        <button
+          type="button"
+          onClick={() => setCampaignOpen((v) => !v)}
+          className="w-full text-left text-sm font-medium text-foreground mb-3 flex items-center gap-2 hover:text-foreground/80 transition-colors"
+        >
+          {campaignOpen ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronRight size={14} className="text-muted-foreground" />}
           Campaign Breakdown
           {data?.byCampaign && (
             <span className="text-muted-foreground font-normal ml-2">
               ({data.byCampaign.length} campaign{data.byCampaign.length !== 1 ? 's' : ''})
             </span>
           )}
-        </h2>
-        <DataTable
-          columns={campaignCols}
-          data={data?.byCampaign ?? []}
-          loading={loading}
-          rowKey={(r) => r.campaignName}
-          emptyMessage="No campaign activity today."
-          skeletonRows={4}
-        />
+        </button>
+        {campaignOpen && (
+          <DataTable
+            columns={campaignCols}
+            data={data?.byCampaign ?? []}
+            loading={loading}
+            rowKey={campaignRowKey}
+            emptyMessage="No campaign activity today."
+            skeletonRows={4}
+          />
+        )}
       </div>
     </PageShell>
   );

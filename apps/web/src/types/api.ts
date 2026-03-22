@@ -811,6 +811,7 @@ export interface HourlyStatsRow {
 export interface HourlyStatsResponse {
   hourly: HourlyStatsRow[];
   todaySpend: number;
+  currentHour: number; // 0-23, the current hour in seller's timezone
 }
 
 // ── Health ──

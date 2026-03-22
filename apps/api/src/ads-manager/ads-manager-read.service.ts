@@ -153,8 +153,10 @@ export class AdsManagerReadService {
     if (dateRange.gte) createdAtFilter.gte = dateRange.gte;
     if (dateRange.lte) createdAtFilter.lte = dateRange.lte;
 
-    // Query StorefrontEvent counting UNIQUE visitors (by ipHash) per campaign+event
-    // This filters out Meta crawler bots that generate hundreds of events from one IP
+    // Query StorefrontEvent counting UNIQUE sessions per campaign+event.
+    // Uses session_id (unique per browser visit) instead of ip_hash to avoid
+    // over-deduplication — multiple real users on the same IP (e.g. household)
+    // each get their own session. Falls back to event ID if no session.
     const dateWhere = Object.keys(createdAtFilter).length > 0
       ? `AND se."created_at" >= '${createdAtFilter.gte?.toISOString() ?? ''}' ${createdAtFilter.lte ? `AND se."created_at" <= '${createdAtFilter.lte.toISOString()}'` : ''}`
       : '';
@@ -164,7 +166,7 @@ export class AdsManagerReadService {
         SELECT
           se."utm_campaign",
           se."event_type",
-          COUNT(DISTINCT COALESCE(se."ip_hash", se."session_id", se."id"::text)) AS unique_count,
+          COUNT(DISTINCT COALESCE(se."session_id", se."id"::text)) AS unique_count,
           SUM(se."value") AS total_value
         FROM "storefront_events" se
         WHERE se."seller_id" = '${sellerId}'
@@ -625,12 +627,12 @@ export class AdsManagerReadService {
     // Active visitors still uses 10-min sliding window (real-time indicator)
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
 
-    // 1. PixelxLab events (CV, ATC, CO) since midnight — unique visitors by ipHash
+    // 1. PixelxLab events (CV, ATC, CO) since midnight — unique sessions
     const eventRows: Array<{ event_type: string; unique_count: string }> =
       await this.prisma.$queryRawUnsafe(
         `SELECT
            event_type,
-           COUNT(DISTINCT COALESCE(ip_hash, session_id, id::text)) AS unique_count
+           COUNT(DISTINCT COALESCE(session_id, id::text)) AS unique_count
          FROM storefront_events
          WHERE seller_id = $1::uuid
            AND created_at >= $2
@@ -698,16 +700,23 @@ export class AdsManagerReadService {
     const roas = safeDivide(revenue, spend);
 
     // 6. Campaign breakdown — group storefront events by utm_campaign since midnight
-    const campaignEvents = await this.prisma.storefrontEvent.groupBy({
-      by: ['utmCampaign', 'eventType'],
-      where: {
+    //    Uses COUNT(DISTINCT COALESCE(session_id, id::text)) for consistency with
+    //    top-level totals and Ads Manager funnel counts.
+    const campaignEvents: Array<{ utm_campaign: string; event_type: string; unique_count: string }> =
+      await this.prisma.$queryRawUnsafe(
+        `SELECT
+           utm_campaign,
+           event_type,
+           COUNT(DISTINCT COALESCE(session_id, id::text)) AS unique_count
+         FROM storefront_events
+         WHERE seller_id = $1::uuid
+           AND created_at >= $2
+           AND utm_campaign IS NOT NULL
+           ${sellpageId ? `AND sellpage_id = '${sellpageId}'` : ''}
+         GROUP BY utm_campaign, event_type`,
         sellerId,
-        ...(sellpageId ? { sellpageId } : {}),
-        createdAt: { gte: todayMidnight },
-        utmCampaign: { not: null },
-      },
-      _count: true,
-    });
+        todayMidnight,
+      );
 
     // Merge with FB ad spend data — load campaign names
     const campaignIds = adStats.map(s => s.entityId);
@@ -720,7 +729,7 @@ export class AdsManagerReadService {
     // UTM uses campaign UUID → resolve to campaign name for display.
     // Collect all unique utm_campaign UUIDs from events to resolve names.
     const utmCampaignIds = [...new Set(
-      campaignEvents.map(ce => ce.utmCampaign).filter((v): v is string => !!v && v !== ''),
+      campaignEvents.map(ce => ce.utm_campaign).filter((v): v is string => !!v && v !== ''),
     )];
     // Load campaign names for UTM IDs not already in fbCampaignMap
     const missingIds = utmCampaignIds.filter(id => !fbCampaignMap.has(id));
@@ -737,16 +746,17 @@ export class AdsManagerReadService {
     // Build campaign breakdown map — keyed by campaign NAME (resolved from UUID)
     const campaignMap = new Map<string, { cv: number; atc: number; co: number; po: number; id: string }>();
     for (const ce of campaignEvents) {
-      const utmVal = ce.utmCampaign || '';
+      const utmVal = ce.utm_campaign || '';
       if (utmVal === '') continue;
       // Resolve: if utm_campaign is a UUID that maps to a campaign name, use the name
       const displayName = fbCampaignMap.get(utmVal) || utmVal;
       if (!campaignMap.has(displayName)) campaignMap.set(displayName, { cv: 0, atc: 0, co: 0, po: 0, id: utmVal });
       const entry = campaignMap.get(displayName)!;
-      if (ce.eventType === 'content_view') entry.cv = ce._count;
-      else if (ce.eventType === 'add_to_cart') entry.atc = ce._count;
-      else if (ce.eventType === 'checkout') entry.co = ce._count;
-      else if (ce.eventType === 'purchase') entry.po = ce._count;
+      const count = Number(ce.unique_count);
+      if (ce.event_type === 'content_view') entry.cv = count;
+      else if (ce.event_type === 'add_to_cart') entry.atc = count;
+      else if (ce.event_type === 'checkout') entry.co = count;
+      else if (ce.event_type === 'purchase') entry.po = count;
     }
 
     // Add FB campaigns with spend that have no storefront events yet
@@ -817,10 +827,13 @@ export class AdsManagerReadService {
     });
 
     // 2. Query StorefrontEvent grouped by date for real funnel metrics
+    //    Uses COUNT(DISTINCT COALESCE(session_id, id::text)) for consistency
+    //    with Ads Manager and Live Preview counting methods.
     const storefrontRows = await this.prisma.$queryRawUnsafe<
       Array<{ stat_date: Date; event_type: string; event_count: bigint; total_value: string }>
     >(
-      `SELECT DATE(created_at) as stat_date, event_type, COUNT(*) as event_count,
+      `SELECT DATE(created_at) as stat_date, event_type,
+              COUNT(DISTINCT COALESCE(session_id, id::text)) as event_count,
               COALESCE(SUM(value), 0) as total_value
        FROM storefront_events
        WHERE seller_id = $1::uuid AND created_at >= $2
@@ -923,106 +936,123 @@ export class AdsManagerReadService {
   // ── Hourly Stats (Today's hourly breakdown) ─────────────────────────────
 
   /**
-   * Returns per-hour breakdown for today (since midnight).
+   * Returns per-hour breakdown for TODAY (0:00-23:00) in the seller's timezone.
    * Funnel metrics (CV, ATC, CO, purchases) from StorefrontEvent grouped by hour.
    * Ad spend per hour is derived from SpendSnapshot deltas (cumulative snapshots
    * recorded every ~15 min by the stats-sync worker).
    */
   async getHourlyStats(sellerId: string) {
-    const now = new Date();
-    // Rolling 24h window: from (now - 24h) to now
-    const twentyFourAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    // ── Resolve seller timezone ──────────────────────────────────────────────
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId },
+      select: { timezone: true },
+    });
+    const tz = settings?.timezone || 'UTC';
 
-    // 1. Get total ad spend for the 24h window (may span 2 calendar days)
-    const todayStr = now.toISOString().split('T')[0];
-    const yesterdayStr = twentyFourAgo.toISOString().split('T')[0];
-    const statDates = [new Date(`${yesterdayStr}T00:00:00.000Z`)];
-    if (todayStr !== yesterdayStr) statDates.push(new Date(`${todayStr}T00:00:00.000Z`));
+    // Compute "now" in seller's timezone
+    const nowUtc = new Date();
+    const sellerNow = new Date(nowUtc.toLocaleString('en-US', { timeZone: tz }));
+    const currentHour = sellerNow.getHours();
 
+    // Today's date string in seller TZ (YYYY-MM-DD)
+    const todayStr = nowUtc.toLocaleDateString('en-CA', { timeZone: tz }); // en-CA gives YYYY-MM-DD
+
+    // Compute midnight in seller TZ as a UTC Date for DB queries
+    const utcMidnight = new Date(`${todayStr}T00:00:00Z`);
+    const sampleUtc = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const sampleLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: tz }));
+    const offsetMs = sampleLocal.getTime() - sampleUtc.getTime();
+    const todayStartUtc = new Date(utcMidnight.getTime() - offsetMs);
+
+    // 1. Get total ad spend for today
+    const statDate = new Date(`${todayStr}T00:00:00.000Z`);
     const adStats = await this.prisma.adStatsDaily.aggregate({
       where: {
         sellerId,
         entityType: 'CAMPAIGN',
-        statDate: { in: statDates },
+        statDate,
       },
       _sum: { spend: true },
     });
     const todaySpend = Number(adStats._sum.spend ?? 0);
 
-    // 2. Query SpendSnapshot for both days to derive hourly spend deltas
+    // 2. Query SpendSnapshot for today to derive hourly spend deltas
     const snapshots = await this.prisma.spendSnapshot.findMany({
       where: {
         sellerId,
-        recordedAt: { gte: twentyFourAgo },
+        recordedAt: { gte: todayStartUtc },
       },
       orderBy: { recordedAt: 'asc' },
       select: { cumulativeSpend: true, recordedAt: true, statDate: true },
     });
 
-    // Key snapshots by "YYYY-MM-DD_HH" to handle cross-day correctly
-    const snapshotBySlot = new Map<string, number>();
+    // Key snapshots by hour (in seller TZ)
+    const snapshotByHour = new Map<number, number>();
     for (const snap of snapshots) {
-      const d = snap.recordedAt.toISOString().split('T')[0];
-      const h = snap.recordedAt.getHours();
-      const key = `${d}_${h}`;
-      snapshotBySlot.set(key, Number(snap.cumulativeSpend)); // last wins
+      const localH = Number(
+        new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false })
+          .format(snap.recordedAt),
+      );
+      snapshotByHour.set(localH, Number(snap.cumulativeSpend)); // last wins
     }
 
-    // Calculate deltas between consecutive slots
-    const sortedSlots = Array.from(snapshotBySlot.keys()).sort();
-    const spendDeltas = new Map<string, number>();
-    for (let i = 0; i < sortedSlots.length; i++) {
-      const key = sortedSlots[i];
-      const cumulative = snapshotBySlot.get(key)!;
+    // Calculate deltas between consecutive hours
+    const sortedHours = Array.from(snapshotByHour.keys()).sort((a, b) => a - b);
+    const spendDeltas = new Map<number, number>();
+    for (let i = 0; i < sortedHours.length; i++) {
+      const h = sortedHours[i];
+      const cumulative = snapshotByHour.get(h)!;
       if (i === 0) {
-        spendDeltas.set(key, cumulative);
+        spendDeltas.set(h, cumulative);
       } else {
-        const prev = snapshotBySlot.get(sortedSlots[i - 1])!;
-        spendDeltas.set(key, Math.max(0, cumulative - prev));
+        const prev = snapshotByHour.get(sortedHours[i - 1])!;
+        spendDeltas.set(h, Math.max(0, cumulative - prev));
       }
     }
 
-    // 3. Query StorefrontEvent grouped by date+hour for rolling 24h
+    // 3. Query StorefrontEvent grouped by hour for today (using seller TZ)
+    //    Uses COUNT(DISTINCT COALESCE(session_id, id::text)) for consistency
+    //    with Ads Manager, Live Preview, and Daily Stats counting methods.
     const storefrontRows = await this.prisma.$queryRawUnsafe<
-      Array<{ day: string; hour_num: string; event_type: string; unique_count: string; total_value: string }>
+      Array<{ hour_num: string; event_type: string; unique_count: string; total_value: string }>
     >(
       `SELECT
-         created_at::date::text AS day,
-         EXTRACT(HOUR FROM created_at)::int AS hour_num,
+         EXTRACT(HOUR FROM created_at AT TIME ZONE $3)::int AS hour_num,
          event_type,
-         COUNT(DISTINCT COALESCE(ip_hash, session_id, id::text)) AS unique_count,
+         COUNT(DISTINCT COALESCE(session_id, id::text)) AS unique_count,
          COALESCE(SUM(value), 0) AS total_value
        FROM storefront_events
        WHERE seller_id = $1::uuid AND created_at >= $2
-       GROUP BY created_at::date, EXTRACT(HOUR FROM created_at), event_type
-       ORDER BY day, hour_num`,
+       GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE $3), event_type
+       ORDER BY hour_num`,
       sellerId,
-      twentyFourAgo,
+      todayStartUtc,
+      tz,
     );
 
-    // 4. Get order revenue per date+hour
+    // 4. Get order revenue per hour for today
     const orderRows = await this.prisma.$queryRawUnsafe<
-      Array<{ day: string; hour_num: string; order_count: string; total_revenue: string }>
+      Array<{ hour_num: string; order_count: string; total_revenue: string }>
     >(
       `SELECT
-         created_at::date::text AS day,
-         EXTRACT(HOUR FROM created_at)::int AS hour_num,
+         EXTRACT(HOUR FROM created_at AT TIME ZONE $3)::int AS hour_num,
          COUNT(*) AS order_count,
          COALESCE(SUM(total), 0) AS total_revenue
        FROM orders
        WHERE seller_id = $1::uuid AND created_at >= $2
          AND status IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
-       GROUP BY created_at::date, EXTRACT(HOUR FROM created_at)`,
+       GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE $3)`,
       sellerId,
-      twentyFourAgo,
+      todayStartUtc,
+      tz,
     );
 
-    // 5. Build per-slot funnel map (keyed by "YYYY-MM-DD_HH")
-    const slotMap = new Map<string, { cv: number; atc: number; co: number; po: number; revenue: number }>();
+    // 5. Build per-hour funnel map (keyed by hour 0-23)
+    const hourMap = new Map<number, { cv: number; atc: number; co: number; po: number; revenue: number }>();
     for (const row of storefrontRows) {
-      const key = `${row.day}_${Number(row.hour_num)}`;
-      if (!slotMap.has(key)) slotMap.set(key, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
-      const f = slotMap.get(key)!;
+      const h = Number(row.hour_num);
+      if (!hourMap.has(h)) hourMap.set(h, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
+      const f = hourMap.get(h)!;
       const count = Number(row.unique_count);
       switch (row.event_type) {
         case 'content_view': f.cv = count; break;
@@ -1035,19 +1065,19 @@ export class AdsManagerReadService {
       }
     }
     for (const row of orderRows) {
-      const key = `${row.day}_${Number(row.hour_num)}`;
-      if (!slotMap.has(key)) slotMap.set(key, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
-      const f = slotMap.get(key)!;
+      const h = Number(row.hour_num);
+      if (!hourMap.has(h)) hourMap.set(h, { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 });
+      const f = hourMap.get(h)!;
       const rev = parseFloat(row.total_revenue) || 0;
       const cnt = Number(row.order_count);
       if (rev > f.revenue) f.revenue = rev;
       if (cnt > f.po) f.po = cnt;
     }
 
-    // 6. Build 24 hourly rows — rolling window, most recent first
+    // 6. Build 24 hourly rows (0-23 ascending) — today only
     const hourly: Array<{
       hour: number;
-      date: string; // YYYY-MM-DD
+      date: string; // YYYY-MM-DD (seller TZ)
       spend: number;
       revenue: number;
       contentViews: number;
@@ -1058,17 +1088,12 @@ export class AdsManagerReadService {
       cr: number;
     }> = [];
 
-    const currentHour = now.getHours();
-    for (let i = 0; i < 24; i++) {
-      const slotTime = new Date(now.getTime() - i * 60 * 60 * 1000);
-      const h = slotTime.getHours();
-      const d = slotTime.toISOString().split('T')[0];
-      const key = `${d}_${h}`;
-      const f = slotMap.get(key) ?? { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 };
-      const hourSpend = spendDeltas.get(key) ?? 0;
+    for (let h = 0; h < 24; h++) {
+      const f = hourMap.get(h) ?? { cv: 0, atc: 0, co: 0, po: 0, revenue: 0 };
+      const hourSpend = spendDeltas.get(h) ?? 0;
       hourly.push({
         hour: h,
-        date: d,
+        date: todayStr,
         spend: hourSpend,
         revenue: f.revenue,
         contentViews: f.cv,
@@ -1080,7 +1105,7 @@ export class AdsManagerReadService {
       });
     }
 
-    return { hourly, todaySpend };
+    return { hourly, todaySpend, currentHour };
   }
 
   // ── Filters ────────────────────────────────────────────────────────────────
