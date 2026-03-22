@@ -40,7 +40,7 @@ function botExclude(sellerId: string, dateExpr: string): string {
   return `AND (ip_hash IS NULL OR ip_hash NOT IN (
     SELECT ip_hash FROM storefront_events
     WHERE seller_id = '${sellerId}' AND ip_hash IS NOT NULL ${dateExpr}
-    GROUP BY ip_hash HAVING COUNT(DISTINCT COALESCE(session_id, id::text)) > 10
+    GROUP BY ip_hash HAVING COUNT(DISTINCT COALESCE(session_id, id::text)) > 50
   ))`;
 }
 
@@ -197,7 +197,7 @@ export class AdsManagerReadService {
             WHERE "seller_id" = '${sellerId}' AND "ip_hash" IS NOT NULL
               ${botDateWhere}
             GROUP BY "ip_hash"
-            HAVING COUNT(DISTINCT COALESCE("session_id", "id"::text)) > 10
+            HAVING COUNT(DISTINCT COALESCE("session_id", "id"::text)) > 50
           ))
         GROUP BY se."utm_campaign", se."event_type"
       `);
