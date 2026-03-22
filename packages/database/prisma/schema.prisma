@@ -106,6 +106,7 @@ model Seller {
   abandonedCarts   AbandonedCart[]
   customerEmailPreferences CustomerEmailPreference[]
   discountCodes    DiscountCode[]
+  spendSnapshots   SpendSnapshot[]
 
   @@map("sellers")
 }
@@ -825,6 +826,7 @@ model AdStatsDaily {
   purchaseValue     Decimal         @default(0) @map("purchase_value") @db.Decimal(10, 2)
   costPerPurchase   Decimal         @default(0) @map("cost_per_purchase") @db.Decimal(10, 2)
   roas              Decimal         @default(0) @db.Decimal(8, 4)
+  accountTimezone   String?         @map("account_timezone") @db.VarChar(64)
   updatedAt         DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
@@ -1322,4 +1324,19 @@ model DiscountCode {
   @@unique([sellerId, code])
   @@index([code])
   @@map("discount_codes")
+}
+
+// ─── SPEND SNAPSHOTS (Hourly ad spend tracking) ──
+
+model SpendSnapshot {
+  id              String   @id @default(uuid()) @db.Uuid
+  sellerId        String   @map("seller_id") @db.Uuid
+  cumulativeSpend Decimal  @map("cumulative_spend") @db.Decimal(15, 2)
+  recordedAt      DateTime @default(now()) @map("recorded_at")
+  statDate        DateTime @map("stat_date") @db.Date
+
+  seller Seller @relation(fields: [sellerId], references: [id])
+
+  @@index([sellerId, statDate, recordedAt])
+  @@map("spend_snapshots")
 }

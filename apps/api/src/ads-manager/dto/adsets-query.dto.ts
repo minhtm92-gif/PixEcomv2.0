@@ -23,4 +23,8 @@ export class AdsetsQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  sellerId?: string;
 }

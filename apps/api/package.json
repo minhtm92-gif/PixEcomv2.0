@@ -27,8 +27,12 @@
     "@pixecom/database": "workspace:*",
     "@pixecom/types": "workspace:*",
 <<<<<<< HEAD
+<<<<<<< HEAD
     "@types/ioredis": "^5.0.0",
     "axios": "^1.13.5",
+=======
+    "@sendgrid/mail": "^8.1.6",
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 =======
     "@sendgrid/mail": "^8.1.6",
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1
@@ -37,7 +41,11 @@
     "class-validator": "^0.14.1",
     "cookie-parser": "^1.4.7",
 <<<<<<< HEAD
+<<<<<<< HEAD
     "ioredis": "^5.3.2",
+=======
+    "express": "^5.2.1",
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 =======
     "express": "^5.2.1",
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1

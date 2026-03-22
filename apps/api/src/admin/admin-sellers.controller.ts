@@ -20,6 +20,19 @@ import { UpdateSellerDto } from './dto/update-seller.dto';
 export class AdminSellersController {
   constructor(private readonly adminService: AdminService) {}
 
+<<<<<<< HEAD
+=======
+  /**
+   * GET /api/admin/sellers/list-simple
+   * Lightweight list of active sellers for dropdown (SellerSwitcher).
+   * Returns: [{ id, name, slug }]
+   */
+  @Get('list-simple')
+  listSellersSimple() {
+    return this.adminService.sellersListSimple();
+  }
+
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   @Get()
   listSellers(@Query() query: AdminQueryDto) {
     return this.adminService.listSellers(query);

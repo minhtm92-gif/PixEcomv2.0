@@ -1,6 +1,10 @@
 'use client';
 
+<<<<<<< HEAD
 import { useEffect, useState, useCallback } from 'react';
+=======
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 import {
   Eye,
   ShoppingCart,
@@ -11,16 +15,33 @@ import {
   DollarSign,
   TrendingUp,
   Users,
+<<<<<<< HEAD
 } from 'lucide-react';
 import { apiGet, type ApiError } from '@/lib/apiClient';
 import { toastApiError } from '@/stores/toastStore';
 import { PageShell } from '@/components/PageShell';
+=======
+  Clock,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
+import { apiGet, type ApiError } from '@/lib/apiClient';
+import { toastApiError } from '@/stores/toastStore';
+import { useAuthStore } from '@/stores/authStore';
+import { PageShell } from '@/components/PageShell';
+import { SellerSwitcher } from '@/components/SellerSwitcher';
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 import { KpiCard } from '@/components/KpiCard';
 import { DataTable, type Column } from '@/components/DataTable';
 import { num, moneyWhole, pct } from '@/lib/format';
 import type {
   LivePreviewResponse,
   LivePreviewCampaign,
+<<<<<<< HEAD
+=======
+  HourlyStatsResponse,
+  HourlyStatsRow,
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   SellpageListItem,
   SellpagesListResponse,
 } from '@/types/api';
@@ -39,6 +60,15 @@ function getCrColor(value: number, type: 'cr1' | 'cr2' | 'cr'): string {
 }
 
 export default function LivePreviewPage() {
+<<<<<<< HEAD
+=======
+  const user = useAuthStore((s) => s.user);
+  const isSuperadmin = user?.isSuperadmin === true;
+
+  // SUPERADMIN seller override
+  const [sellerIdOverride, setSellerIdOverride] = useState<string>('');
+
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   const [data, setData] = useState<LivePreviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +76,27 @@ export default function LivePreviewPage() {
   const [sellpages, setSellpages] = useState<Array<{ id: string; name: string }>>([]);
   const [lastUpdated, setLastUpdated] = useState<string>('');
   const [refreshing, setRefreshing] = useState(false);
+<<<<<<< HEAD
+=======
+  const [hourlyStats, setHourlyStats] = useState<HourlyStatsRow[]>([]);
+  const [hourlyLoading, setHourlyLoading] = useState(true);
+  const [todaySpend, setTodaySpend] = useState(0);
+  const [serverCurrentHour, setServerCurrentHour] = useState<number>(-1);
+  const [hourlyOpen, setHourlyOpen] = useState(false);
+  const [campaignOpen, setCampaignOpen] = useState(false);
+
+  // Track whether initial load is done — skip loading skeletons on subsequent refreshes
+  const initialLoadDone = useRef(false);
+  const initialHourlyLoadDone = useRef(false);
+
+  // When sellpageId changes, reset so the next fetch shows loading skeletons
+  // (this is a new filter query, not a silent refresh)
+  const prevSellpageId = useRef(sellpageId);
+  if (prevSellpageId.current !== sellpageId) {
+    prevSellpageId.current = sellpageId;
+    initialLoadDone.current = false;
+  }
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 
   // Load sellpages for filter dropdown
   useEffect(() => {
@@ -62,13 +113,59 @@ export default function LivePreviewPage() {
       });
   }, []);
 
+<<<<<<< HEAD
   const fetchData = useCallback(async (showRefreshing = false) => {
     if (showRefreshing) setRefreshing(true);
     else setLoading(true);
+=======
+  // Load hourly stats for today (refreshes with main data)
+  // Only show loading skeleton on first load, silently update data on refreshes
+  const fetchHourlyStats = useCallback(async () => {
+    // SUPERADMIN must select a seller before data can load
+    if (isSuperadmin && !sellerIdOverride) return;
+
+    if (!initialHourlyLoadDone.current) {
+      setHourlyLoading(true);
+    }
+    try {
+      const sellerParam = isSuperadmin && sellerIdOverride ? `?sellerId=${sellerIdOverride}` : '';
+      const result = await apiGet<HourlyStatsResponse>(`/ads-manager/hourly-stats${sellerParam}`);
+      setHourlyStats(result.hourly ?? []);
+      setTodaySpend(result.todaySpend ?? 0);
+      setServerCurrentHour(result.currentHour ?? -1);
+    } catch {
+      // Non-critical: hourly stats table won't populate
+    } finally {
+      if (!initialHourlyLoadDone.current) {
+        setHourlyLoading(false);
+        initialHourlyLoadDone.current = true;
+      }
+    }
+  }, [isSuperadmin, sellerIdOverride]);
+
+  const fetchData = useCallback(async (showRefreshing = false) => {
+    // SUPERADMIN must select a seller before data can load
+    if (isSuperadmin && !sellerIdOverride) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+
+    if (showRefreshing) {
+      setRefreshing(true);
+    } else if (!initialLoadDone.current) {
+      // Only show full loading skeleton on the very first load
+      setLoading(true);
+    }
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
     setError(null);
     try {
       const params = new URLSearchParams();
       if (sellpageId) params.set('sellpageId', sellpageId);
+<<<<<<< HEAD
+=======
+      if (isSuperadmin && sellerIdOverride) params.set('sellerId', sellerIdOverride);
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
       const result = await apiGet<LivePreviewResponse>(
         `/ads-manager/live-preview${params.toString() ? `?${params}` : ''}`,
       );
@@ -79,6 +176,7 @@ export default function LivePreviewPage() {
       setError(e.message ?? 'Failed to fetch live data');
       toastApiError(e);
     } finally {
+<<<<<<< HEAD
       setLoading(false);
       setRefreshing(false);
     }
@@ -95,6 +193,31 @@ export default function LivePreviewPage() {
 
   // Campaign table columns
   const campaignCols: Column<LivePreviewCampaign>[] = [
+=======
+      if (!initialLoadDone.current) {
+        setLoading(false);
+        initialLoadDone.current = true;
+      }
+      setRefreshing(false);
+    }
+  }, [sellpageId, isSuperadmin, sellerIdOverride]);
+
+  // Auto-refresh every 10s
+  useEffect(() => {
+    fetchData();
+    fetchHourlyStats();
+    const interval = setInterval(() => {
+      fetchData(true);
+      fetchHourlyStats();
+    }, 10_000);
+    return () => clearInterval(interval);
+  }, [fetchData, fetchHourlyStats]);
+
+  const t = data?.totals;
+
+  // Memoize column definitions to prevent DataTable re-renders from new array references
+  const campaignCols: Column<LivePreviewCampaign>[] = useMemo(() => [
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
     {
       key: 'campaignName',
       label: 'Campaign',
@@ -162,12 +285,90 @@ export default function LivePreviewPage() {
       className: 'text-right',
       render: (r) => <span className={`font-mono text-xs font-semibold ${getCrColor(r.cr, 'cr')}`}>{pct(r.cr)}</span>,
     },
+<<<<<<< HEAD
   ];
+=======
+  ], []);
+
+  // Memoize hourly column definitions
+  const hourlyCols: Column<HourlyStatsRow>[] = useMemo(() => [
+    {
+      key: 'hour',
+      label: 'Time',
+      render: (r) => {
+        const isLive = r.hour === serverCurrentHour;
+        return (
+          <span className="text-foreground font-medium text-xs font-mono">
+            {String(r.hour).padStart(2, '0')}:00
+            {isLive && <span className="ml-1.5 text-[10px] text-green-400 font-semibold">{'\u25CF'} Live</span>}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'spend',
+      label: 'Spent',
+      className: 'text-right',
+      render: (r) => <span className="font-mono text-foreground text-xs">{moneyWhole(r.spend)}</span>,
+    },
+    {
+      key: 'revenue',
+      label: 'Revenue',
+      className: 'text-right',
+      render: (r) => <span className="font-mono text-foreground text-xs">{moneyWhole(r.revenue)}</span>,
+    },
+    {
+      key: 'contentViews',
+      label: 'CV',
+      className: 'text-right',
+      render: (r) => <span className="font-mono text-foreground text-xs">{num(r.contentViews)}</span>,
+    },
+    {
+      key: 'addToCart',
+      label: 'ATC',
+      className: 'text-right',
+      hiddenOnMobile: true,
+      render: (r) => <span className="font-mono text-foreground text-xs">{num(r.addToCart)}</span>,
+    },
+    {
+      key: 'checkout',
+      label: 'CO',
+      className: 'text-right',
+      hiddenOnMobile: true,
+      render: (r) => <span className="font-mono text-foreground text-xs">{num(r.checkout)}</span>,
+    },
+    {
+      key: 'purchases',
+      label: 'PO',
+      className: 'text-right',
+      render: (r) => <span className="font-mono text-foreground text-xs">{num(r.purchases)}</span>,
+    },
+    {
+      key: 'cr',
+      label: 'CR',
+      className: 'text-right',
+      render: (r) => <span className={`font-mono text-xs font-semibold ${getCrColor(r.cr, 'cr')}`}>{pct(r.cr)}</span>,
+    },
+  ], [serverCurrentHour]);
+
+  // Stable rowKey callbacks
+  const hourlyRowKey = useCallback((r: HourlyStatsRow) => `${r.date}_${r.hour}`, []);
+  const campaignRowKey = useCallback((r: LivePreviewCampaign) => r.campaignName, []);
+
+  // Highlight the current hour row with green background
+  const hourlyRowClassName = useCallback((r: HourlyStatsRow) => {
+    return r.hour === serverCurrentHour ? 'bg-emerald-950/40' : '';
+  }, [serverCurrentHour]);
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 
   return (
     <PageShell
       title="Live Preview"
+<<<<<<< HEAD
       subtitle="Last 10 minutes — live visitor activity"
+=======
+      subtitle="Today — live visitor activity"
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
       icon={<Activity size={22} />}
       actions={
         <div className="flex items-center gap-3">
@@ -209,6 +410,17 @@ export default function LivePreviewPage() {
         </div>
       }
     >
+<<<<<<< HEAD
+=======
+      {/* Seller Switcher — SUPERADMIN only */}
+      {isSuperadmin && (
+        <div className="mb-4 flex items-center gap-3 px-4 py-3 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+          <span className="text-xs font-medium text-amber-400 uppercase tracking-wider">Viewing as</span>
+          <SellerSwitcher onSellerChange={setSellerIdOverride} />
+        </div>
+      )}
+
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
       {error && (
         <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
           {error}
@@ -281,7 +493,11 @@ export default function LivePreviewPage() {
           value={loading ? '' : moneyWhole(t?.revenue ?? 0)}
           icon={<DollarSign size={16} />}
           loading={loading}
+<<<<<<< HEAD
           sub="Last 10 minutes"
+=======
+          sub="Today"
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
         />
       </div>
 
@@ -342,15 +558,56 @@ export default function LivePreviewPage() {
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Campaign Breakdown Table */}
       <div className="mb-6">
         <h2 className="text-sm font-medium text-foreground mb-3">
+=======
+      {/* Hourly Statistics Table (collapsible) */}
+      <div className="mb-6">
+        <button
+          type="button"
+          onClick={() => setHourlyOpen((v) => !v)}
+          className="w-full text-left text-sm font-medium text-foreground mb-3 flex items-center gap-2 hover:text-foreground/80 transition-colors"
+        >
+          {hourlyOpen ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronRight size={14} className="text-muted-foreground" />}
+          <Clock size={14} className="text-muted-foreground" />
+          Hourly Statistics (Today)
+          {todaySpend > 0 && (
+            <span className="text-muted-foreground font-normal ml-2">
+              — Spend: {moneyWhole(todaySpend)}
+            </span>
+          )}
+        </button>
+        {hourlyOpen && (
+          <DataTable
+            columns={hourlyCols}
+            data={hourlyStats}
+            loading={hourlyLoading}
+            rowKey={hourlyRowKey}
+            emptyMessage="No activity today yet."
+            skeletonRows={6}
+            rowClassName={hourlyRowClassName}
+          />
+        )}
+      </div>
+
+      {/* Campaign Breakdown Table (collapsible) */}
+      <div className="mb-6">
+        <button
+          type="button"
+          onClick={() => setCampaignOpen((v) => !v)}
+          className="w-full text-left text-sm font-medium text-foreground mb-3 flex items-center gap-2 hover:text-foreground/80 transition-colors"
+        >
+          {campaignOpen ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronRight size={14} className="text-muted-foreground" />}
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
           Campaign Breakdown
           {data?.byCampaign && (
             <span className="text-muted-foreground font-normal ml-2">
               ({data.byCampaign.length} campaign{data.byCampaign.length !== 1 ? 's' : ''})
             </span>
           )}
+<<<<<<< HEAD
         </h2>
         <DataTable
           columns={campaignCols}
@@ -360,6 +617,19 @@ export default function LivePreviewPage() {
           emptyMessage="No activity in the last 10 minutes."
           skeletonRows={4}
         />
+=======
+        </button>
+        {campaignOpen && (
+          <DataTable
+            columns={campaignCols}
+            data={data?.byCampaign ?? []}
+            loading={loading}
+            rowKey={campaignRowKey}
+            emptyMessage="No campaign activity today."
+            skeletonRows={4}
+          />
+        )}
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
       </div>
     </PageShell>
   );

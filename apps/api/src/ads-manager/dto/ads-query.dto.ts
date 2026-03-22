@@ -23,4 +23,8 @@ export class AdsQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  sellerId?: string;
 }

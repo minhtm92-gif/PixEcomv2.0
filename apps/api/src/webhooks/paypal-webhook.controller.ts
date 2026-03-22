@@ -38,11 +38,15 @@ export class PayPalWebhookController {
     private readonly config: ConfigService,
     private readonly webhookService: WebhookService,
   ) {
+<<<<<<< HEAD
     const mode = this.config.get<string>('PAYPAL_MODE', 'sandbox');
     this.baseUrl =
       mode === 'live'
         ? 'https://api-m.paypal.com'
         : 'https://api-m.sandbox.paypal.com';
+=======
+    this.baseUrl = 'https://api-m.paypal.com';
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
     this.clientId = this.config.get<string>('PAYPAL_CLIENT_ID', '');
     this.clientSecret = this.config.get<string>('PAYPAL_CLIENT_SECRET', '');
     this.webhookId = this.config.get<string>('PAYPAL_WEBHOOK_ID', '');

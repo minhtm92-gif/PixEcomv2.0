@@ -151,6 +151,7 @@ export async function statsSyncProcessor(
       sellerId: true,
       externalId: true,
       accessTokenEnc: true,
+      metadata: true,
     },
   });
 
@@ -170,6 +171,10 @@ export async function statsSyncProcessor(
 
       // 2a. Decrypt token
       const accessToken = decryptToken(account.accessTokenEnc, encKey);
+
+      // 2a2. Extract ad account timezone from metadata (stored during FB OAuth)
+      const meta = account.metadata as Record<string, unknown> | null;
+      const accountTimezone = (meta?.timezone as string) || null;
 
       // 2b. Fetch Meta insights
       const fetchResult = await statsProvider.fetchForAccount(
@@ -262,6 +267,7 @@ export async function statsSyncProcessor(
             purchaseValue: s.purchaseValue,
             costPerPurchase: s.costPerPurchase,
             roas: s.roas,
+            accountTimezone,
           },
           create: {
             sellerId: account.sellerId,
@@ -281,6 +287,7 @@ export async function statsSyncProcessor(
             purchaseValue: s.purchaseValue,
             costPerPurchase: s.costPerPurchase,
             roas: s.roas,
+            accountTimezone,
           },
         });
       }
@@ -290,6 +297,9 @@ export async function statsSyncProcessor(
 
       // 4. Sync campaign metadata (name, status, budget) from Meta
       await syncCampaignMetadata(prisma, accessToken, account.externalId, account.sellerId, logger);
+
+      // 5. Record spend snapshot for hourly tracking
+      await recordSpendSnapshot(prisma, account.sellerId, logger);
 
       processed++;
       logger.log(`Processed account ${account.externalId}: ${fetchResult.entities.length} entity-day rows`);
@@ -481,6 +491,52 @@ function mapMetaStatus(effectiveStatus: string): 'ACTIVE' | 'PAUSED' | 'DELETED'
       return 'PAUSED';
   }
 }
+
+// ─── Spend snapshot for hourly tracking ──────────────────────────────────────
+
+/**
+ * After stats sync completes for a seller, record a snapshot of today's
+ * cumulative ad spend. By comparing consecutive snapshots we can derive
+ * per-hour spend deltas (Meta only provides daily totals).
+ */
+async function recordSpendSnapshot(
+  prisma: PrismaClient,
+  sellerId: string,
+  logger: { log: (msg: string) => void; error: (msg: string, err?: unknown) => void },
+): Promise<void> {
+  try {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const statDate = new Date(`${today}T00:00:00.000Z`);
+
+    // Sum today's spend across all CAMPAIGN rows for this seller
+    const agg = await prisma.adStatsDaily.aggregate({
+      where: {
+        sellerId,
+        entityType: 'CAMPAIGN',
+        statDate,
+      },
+      _sum: { spend: true },
+    });
+
+    const cumulativeSpend = agg._sum.spend ?? 0;
+
+    await prisma.spendSnapshot.create({
+      data: {
+        sellerId,
+        cumulativeSpend,
+        recordedAt: now,
+        statDate,
+      },
+    });
+
+    logger.log(`Spend snapshot recorded for seller ${sellerId}: $${cumulativeSpend} at ${now.toISOString()}`);
+  } catch (err) {
+    logger.error(`Failed to record spend snapshot for seller ${sellerId}`, err);
+  }
+}
+
+// ─── Campaign metadata sync from Meta ─────────────────────────────────────────
 
 async function syncCampaignMetadata(
   prisma: PrismaClient,

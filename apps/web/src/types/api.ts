@@ -774,6 +774,49 @@ export interface LivePreviewResponse {
   windowMinutes: number;
 }
 
+<<<<<<< HEAD
+=======
+// ── Daily Stats (Live Preview companion) ──
+export interface DailyStatsRow {
+  date: string;
+  spend: number;
+  revenue: number;
+  contentViews: number;
+  addToCart: number;
+  checkout: number;
+  purchases: number;
+  roas: number;
+  cr1: number;
+  cr2: number;
+  cr: number;
+}
+
+export interface DailyStatsResponse {
+  daily: DailyStatsRow[];
+  days: number;
+}
+
+// ── Hourly Stats (Live Preview — today's hourly breakdown) ──
+export interface HourlyStatsRow {
+  hour: number; // 0-23
+  date: string; // YYYY-MM-DD
+  spend: number;
+  revenue: number;
+  contentViews: number;
+  addToCart: number;
+  checkout: number;
+  purchases: number;
+  roas: number;
+  cr: number;
+}
+
+export interface HourlyStatsResponse {
+  hourly: HourlyStatsRow[];
+  todaySpend: number;
+  currentHour: number; // 0-23, the current hour in seller's timezone
+}
+
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 // ── Health ──
 export interface HealthResponse {
   status: string;

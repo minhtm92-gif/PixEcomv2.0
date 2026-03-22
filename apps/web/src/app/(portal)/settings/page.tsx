@@ -14,8 +14,11 @@ import {
   Pencil,
   X,
   Check,
+<<<<<<< HEAD
   ToggleLeft,
   ToggleRight,
+=======
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   ExternalLink,
   Upload,
   Image as ImageIcon,
@@ -62,6 +65,46 @@ const inputCls =
 const selectCls =
   'w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
 
+<<<<<<< HEAD
+=======
+/** Inline toggle switch component */
+function ToggleSwitch({
+  checked,
+  loading,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  loading?: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      disabled={disabled || loading}
+      className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 focus:ring-offset-card disabled:opacity-50 disabled:cursor-not-allowed ${
+        checked ? 'bg-green-500' : 'bg-muted-foreground/30'
+      }`}
+      title={checked ? 'Active - click to deactivate' : 'Inactive - click to activate'}
+    >
+      <span
+        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
+      >
+        {loading && (
+          <Loader2 size={10} className="animate-spin text-muted-foreground m-[3px]" />
+        )}
+      </span>
+    </button>
+  );
+}
+
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 export default function SettingsPage() {
   const addToast = useToastStore((s) => s.add);
 
@@ -136,7 +179,11 @@ export default function SettingsPage() {
   const fetchConnections = useCallback(async () => {
     setConnectionsLoading(true);
     try {
+<<<<<<< HEAD
       const res = await apiGet<FbConnection[]>('/fb/connections');
+=======
+      const res = await apiGet<FbConnection[]>('/fb/connections?includeInactive=true');
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
       setConnections(res ?? []);
     } catch (err) {
       toastApiError(err as ApiError);
@@ -631,7 +678,11 @@ export default function SettingsPage() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-border text-left">
+<<<<<<< HEAD
                             <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-8" />
+=======
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-12">Status</th>
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
                             <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Name</th>
                             <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">External ID</th>
                             <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Account Status</th>
@@ -642,6 +693,7 @@ export default function SettingsPage() {
                         </thead>
                         <tbody className="divide-y divide-border">
                           {adAccounts.map((conn) => (
+<<<<<<< HEAD
                             <tr key={conn.id} className={conn.isActive ? '' : 'opacity-50'}>
                               <td className="py-2.5">
                                 <button
@@ -658,6 +710,15 @@ export default function SettingsPage() {
                                     <ToggleLeft size={16} />
                                   )}
                                 </button>
+=======
+                            <tr key={conn.id} className={conn.isActive ? '' : 'opacity-40'}>
+                              <td className="py-2.5">
+                                <ToggleSwitch
+                                  checked={conn.isActive}
+                                  loading={togglingId === conn.id}
+                                  onChange={() => handleToggle(conn)}
+                                />
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
                               </td>
                               <td className="py-2.5">
                                 {editingId === conn.id ? (
@@ -754,7 +815,11 @@ export default function SettingsPage() {
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-border text-left">
+<<<<<<< HEAD
                             <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-8" />
+=======
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-12">Status</th>
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
                             <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Name</th>
                             <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Page ID</th>
                             <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Category</th>
@@ -763,6 +828,7 @@ export default function SettingsPage() {
                         </thead>
                         <tbody className="divide-y divide-border">
                           {pages.map((conn) => (
+<<<<<<< HEAD
                             <tr key={conn.id} className={conn.isActive ? '' : 'opacity-50'}>
                               <td className="py-2.5">
                                 <button
@@ -779,6 +845,15 @@ export default function SettingsPage() {
                                     <ToggleLeft size={16} />
                                   )}
                                 </button>
+=======
+                            <tr key={conn.id} className={conn.isActive ? '' : 'opacity-40'}>
+                              <td className="py-2.5">
+                                <ToggleSwitch
+                                  checked={conn.isActive}
+                                  loading={togglingId === conn.id}
+                                  onChange={() => handleToggle(conn)}
+                                />
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
                               </td>
                               <td className="py-2.5">
                                 {editingId === conn.id ? (
@@ -838,6 +913,103 @@ export default function SettingsPage() {
                   </div>
                 );
               })()}
+<<<<<<< HEAD
+=======
+
+              {/* Pixels / Datasets Table */}
+              {(() => {
+                const pixels = connections.filter((c) => c.connectionType === 'PIXEL');
+                if (pixels.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3">
+                      Datasets / Pixels ({pixels.length})
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border text-left">
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-12">Status</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Name</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Pixel ID</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Parent Ad Account</th>
+                            <th className="pb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium w-20">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {pixels.map((conn) => {
+                            const parentConn = conn.parentId
+                              ? connections.find((c) => c.id === conn.parentId)
+                              : null;
+                            return (
+                              <tr key={conn.id} className={conn.isActive ? '' : 'opacity-40'}>
+                                <td className="py-2.5">
+                                  <ToggleSwitch
+                                    checked={conn.isActive}
+                                    loading={togglingId === conn.id}
+                                    onChange={() => handleToggle(conn)}
+                                  />
+                                </td>
+                                <td className="py-2.5">
+                                  {editingId === conn.id ? (
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        type="text"
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        className="px-2 py-0.5 bg-input border border-border rounded text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 w-36"
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleSaveName(conn);
+                                          if (e.key === 'Escape') cancelEditName();
+                                        }}
+                                      />
+                                      <button onClick={() => handleSaveName(conn)} disabled={editSaving} className="text-green-400 hover:text-green-300 disabled:opacity-50">
+                                        {editSaving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                      </button>
+                                      <button onClick={cancelEditName} disabled={editSaving} className="text-muted-foreground hover:text-foreground disabled:opacity-50">
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <p className="text-sm font-medium text-foreground">{conn.name}</p>
+                                  )}
+                                </td>
+                                <td className="py-2.5">
+                                  <code className="text-[11px] font-mono text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                                    {conn.externalId}
+                                  </code>
+                                </td>
+                                <td className="py-2.5 text-sm text-muted-foreground">
+                                  {parentConn ? parentConn.name : '\u2014'}
+                                </td>
+                                <td className="py-2.5">
+                                  <div className="flex items-center gap-1">
+                                    {editingId !== conn.id && (
+                                      <button onClick={() => startEditName(conn)} className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors" title="Rename">
+                                        <Pencil size={12} />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleDelete(conn)}
+                                      disabled={deletingId === conn.id}
+                                      className="p-1 text-muted-foreground hover:text-red-400 rounded transition-colors disabled:opacity-50"
+                                      title="Remove"
+                                    >
+                                      {deletingId === conn.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
             </div>
           )}
         </div>

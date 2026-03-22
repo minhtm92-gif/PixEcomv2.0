@@ -4,9 +4,12 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
 import { TimingInterceptor } from "./common/interceptors/timing.interceptor";
 =======
+=======
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 import { PrismaService } from "./prisma/prisma.service";
 
 // ─── Dynamic CORS for custom domains ────────────────────────────────────────
@@ -35,6 +38,9 @@ async function isVerifiedDomain(
     return false;
   }
 }
+<<<<<<< HEAD
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
+=======
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1
 
 async function bootstrap() {

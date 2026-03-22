@@ -4,7 +4,11 @@ import { ConfigService } from '@nestjs/config';
 export interface PayPalGatewayConfig {
   clientId: string;
   clientSecret: string;
+<<<<<<< HEAD
   mode: 'sandbox' | 'live';
+=======
+  mode: 'live';
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 }
 
 interface PayPalAccessToken {
@@ -29,6 +33,7 @@ export class PayPalPaymentService {
   private tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
   constructor(private readonly config: ConfigService) {
+<<<<<<< HEAD
     const mode = this.config.get<string>('PAYPAL_MODE', 'sandbox');
     this.fallbackConfig = {
       clientId: this.config.get<string>('PAYPAL_CLIENT_ID', ''),
@@ -41,6 +46,17 @@ export class PayPalPaymentService {
     return mode === 'live'
       ? 'https://api-m.paypal.com'
       : 'https://api-m.sandbox.paypal.com';
+=======
+    this.fallbackConfig = {
+      clientId: this.config.get<string>('PAYPAL_CLIENT_ID', ''),
+      clientSecret: this.config.get<string>('PAYPAL_CLIENT_SECRET', ''),
+      mode: 'live',
+    };
+  }
+
+  private getBaseUrl(): string {
+    return 'https://api-m.paypal.com';
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   }
 
   async createOrder(
@@ -50,7 +66,11 @@ export class PayPalPaymentService {
     gatewayConfig?: PayPalGatewayConfig,
   ): Promise<{ paypalOrderId: string; approvalUrl: string }> {
     const cfg = gatewayConfig ?? this.fallbackConfig;
+<<<<<<< HEAD
     const baseUrl = this.getBaseUrl(cfg.mode);
+=======
+    const baseUrl = this.getBaseUrl();
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
     const token = await this.getAccessToken(cfg);
 
     const res = await fetch(`${baseUrl}/v2/checkout/orders`, {
@@ -88,7 +108,11 @@ export class PayPalPaymentService {
     const data = (await res.json()) as PayPalOrderResponse;
     const approvalLink = data.links.find((l) => l.rel === 'approve');
 
+<<<<<<< HEAD
     this.logger.log(`PayPal order created: ${data.id} (mode=${cfg.mode})`);
+=======
+    this.logger.log(`PayPal order created: ${data.id} (mode=live)`);
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 
     return {
       paypalOrderId: data.id,
@@ -101,7 +125,11 @@ export class PayPalPaymentService {
     gatewayConfig?: PayPalGatewayConfig,
   ): Promise<{ status: string; transactionId: string }> {
     const cfg = gatewayConfig ?? this.fallbackConfig;
+<<<<<<< HEAD
     const baseUrl = this.getBaseUrl(cfg.mode);
+=======
+    const baseUrl = this.getBaseUrl();
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
     const token = await this.getAccessToken(cfg);
 
     const res = await fetch(
@@ -142,7 +170,11 @@ export class PayPalPaymentService {
       return cached.token;
     }
 
+<<<<<<< HEAD
     const baseUrl = this.getBaseUrl(cfg.mode);
+=======
+    const baseUrl = this.getBaseUrl();
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
     const credentials = Buffer.from(
       `${cfg.clientId}:${cfg.clientSecret}`,
     ).toString('base64');

@@ -21,6 +21,10 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   onRowClick?: (row: T) => void;
   rowKey: (row: T) => string;
+<<<<<<< HEAD
+=======
+  rowClassName?: (row: T, idx: number) => string;
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 }
 
 export function DataTable<T>({
@@ -28,6 +32,10 @@ export function DataTable<T>({
   data,
   loading = false,
   skeletonRows = 5,
+<<<<<<< HEAD
+=======
+  rowClassName,
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   emptyMessage = 'No data found.',
   onRowClick,
   rowKey,
@@ -79,6 +87,10 @@ export function DataTable<T>({
                   className={cn(
                     'border-b border-border last:border-0 transition-colors',
                     onRowClick && 'cursor-pointer hover:bg-muted/40',
+<<<<<<< HEAD
+=======
+                    rowClassName?.(row, idx),
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
                   )}
                 >
                   {columns.map((col) => (

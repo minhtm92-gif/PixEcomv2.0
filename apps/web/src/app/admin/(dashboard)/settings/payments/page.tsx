@@ -146,7 +146,11 @@ function AddProviderForm({
   onSaved: () => void;
 }) {
   const [name, setName] = useState('');
+<<<<<<< HEAD
   const [environment, setEnvironment] = useState<'sandbox' | 'live'>('sandbox');
+=======
+  const environment = 'live';
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   const [showFields, setShowFields] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -187,7 +191,11 @@ function AddProviderForm({
     } finally {
       setSaving(false);
     }
+<<<<<<< HEAD
   }, [name, environment, credentials, provider, onSaved]);
+=======
+  }, [name, credentials, provider, onSaved]);
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 
   return (
     <div>
@@ -231,6 +239,7 @@ function AddProviderForm({
             />
           </div>
 
+<<<<<<< HEAD
           {/* Environment */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">Environment</label>
@@ -257,6 +266,15 @@ function AddProviderForm({
               >
                 Live
               </button>
+=======
+          {/* Environment — always live (sandbox not allowed per CEO directive) */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Environment</label>
+            <div className="flex gap-3">
+              <div className="px-4 py-2 rounded-lg text-sm font-medium border border-green-500 bg-green-500/10 text-green-400">
+                Live
+              </div>
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
             </div>
           </div>
 
@@ -342,6 +360,7 @@ function GatewayCard({
           >
             {isActive ? 'Active' : 'Inactive'}
           </span>
+<<<<<<< HEAD
           <span
             className={`px-2 py-0.5 text-xs rounded-full font-medium ${
               gw.environment === 'live'
@@ -350,6 +369,10 @@ function GatewayCard({
             }`}
           >
             {gw.environment === 'live' ? 'Live' : 'Sandbox'}
+=======
+          <span className="px-2 py-0.5 text-xs rounded-full font-medium bg-green-500/15 text-green-400">
+            Live
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
           </span>
         </div>
 

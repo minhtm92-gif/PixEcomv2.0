@@ -94,7 +94,11 @@ export interface MockPaymentGateway {
   name: string;
   type: 'stripe' | 'paypal';
   status: 'ACTIVE' | 'INACTIVE';
+<<<<<<< HEAD
   environment: 'live' | 'sandbox';
+=======
+  environment: 'live';
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   assignedSellers: string[];
   createdAt: string;
 }
@@ -718,10 +722,17 @@ export const MOCK_PAYMENT_GATEWAYS: MockPaymentGateway[] = [
   },
   {
     id: 'gw_02',
+<<<<<<< HEAD
     name: 'Stripe Test',
     type: 'stripe',
     status: 'ACTIVE',
     environment: 'sandbox',
+=======
+    name: 'Stripe Secondary',
+    type: 'stripe',
+    status: 'ACTIVE',
+    environment: 'live',
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
     assignedSellers: ['Gamma Goods'],
     createdAt: '2025-06-01',
   },
@@ -734,6 +745,7 @@ export const MOCK_PAYMENT_GATEWAYS: MockPaymentGateway[] = [
     assignedSellers: ['Beta Commerce'],
     createdAt: '2025-08-15',
   },
+<<<<<<< HEAD
   {
     id: 'gw_04',
     name: 'PayPal Sandbox',
@@ -743,6 +755,8 @@ export const MOCK_PAYMENT_GATEWAYS: MockPaymentGateway[] = [
     assignedSellers: [],
     createdAt: '2025-08-15',
   },
+=======
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 ];
 
 // ── Dashboard KPIs ────────────────────────────────────────────────────────

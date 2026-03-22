@@ -10,7 +10,11 @@ interface DailyBreakdown {
   aov: number;
 }
 
+<<<<<<< HEAD
 interface RevenueResponse {
+=======
+export interface RevenueResponse {
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   totalRevenue: number;
   totalOrders: number;
   averageOrderValue: number;
@@ -18,7 +22,11 @@ interface RevenueResponse {
   dailyBreakdown: DailyBreakdown[];
 }
 
+<<<<<<< HEAD
 interface ProductStatsResponse {
+=======
+export interface ProductStatsResponse {
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   productId: string;
   productName: string;
   revenue: number;
@@ -33,7 +41,11 @@ interface ProductStatsResponse {
   cpc: number;
 }
 
+<<<<<<< HEAD
 interface OverviewResponse {
+=======
+export interface OverviewResponse {
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   totalRevenue: number;
   totalOrders: number;
   totalCustomers: number;

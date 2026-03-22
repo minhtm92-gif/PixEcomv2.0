@@ -1,5 +1,6 @@
 /**
 <<<<<<< HEAD
+<<<<<<< HEAD
  * PixEcom Worker — Milestone 2.3.7 (WS2)
  *
  * Structured JSON logging for all worker events.
@@ -70,6 +71,45 @@ function log(
  *   Processor: lifecycleSchedulerProcessor (processors/lifecycle-scheduler.processor.ts)
  */
 
+=======
+ * PixEcom Worker
+ *
+ * BullMQ worker that processes six queues:
+ *   1. "stats-sync"                    — Meta ad stats (every 15 min)
+ *   2. "storefront-stats"              — Storefront event aggregation (every 15 min)
+ *   3. "pixecom-email-send"            — Send individual email jobs (on-demand, concurrency 3)
+ *   4. "pixecom-cart-tracker"          — Detect abandoned carts/checkouts (every 5 min)
+ *   5. "pixecom-email-scheduler"       — Schedule recovery emails (every 5 min)
+ *   6. "pixecom-lifecycle-scheduler"   — Schedule lifecycle emails (every 30 min)
+ *
+ * Architecture:
+ *   Queue:  stats-sync (Redis-backed, BullMQ)
+ *   Job:    { type: 'full-sync' } — triggered every 15 min
+ *   Processor: statsSyncProcessor (processors/stats-sync.processor.ts)
+ *   Stats provider: MetaStatsProvider (providers/meta-stats.provider.ts)
+ *
+ *   Queue:  storefront-stats (Redis-backed, BullMQ)
+ *   Job:    { type: 'aggregate' } — triggered every 15 min
+ *   Processor: storefrontStatsProcessor (processors/storefront-stats.processor.ts)
+ *
+ *   Queue:  pixecom-email-send (Redis-backed, BullMQ)
+ *   Job:    { emailJobId: string } — pushed by API or email-scheduler
+ *   Processor: emailSendProcessor (processors/email-send.processor.ts)
+ *
+ *   Queue:  pixecom-cart-tracker (Redis-backed, BullMQ)
+ *   Job:    { type: 'detect' } — triggered every 5 min
+ *   Processor: cartTrackerProcessor (processors/cart-tracker.processor.ts)
+ *
+ *   Queue:  pixecom-email-scheduler (Redis-backed, BullMQ)
+ *   Job:    { type: 'schedule' } — triggered every 5 min
+ *   Processor: emailSchedulerProcessor (processors/email-scheduler.processor.ts)
+ *
+ *   Queue:  pixecom-lifecycle-scheduler (Redis-backed, BullMQ)
+ *   Job:    { type: 'lifecycle' } — triggered every 30 min
+ *   Processor: lifecycleSchedulerProcessor (processors/lifecycle-scheduler.processor.ts)
+ */
+
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 import { PrismaClient } from '@pixecom/database';
 import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
@@ -96,6 +136,9 @@ const LIFECYCLE_CRON_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const CONCURRENCY = 5;
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
+<<<<<<< HEAD
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
+=======
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1
 
 async function bootstrap() {
@@ -121,6 +164,7 @@ async function bootstrap() {
     QUEUE_NAME,
     async (job) => {
 <<<<<<< HEAD
+<<<<<<< HEAD
       const startedAt = Date.now();
       const jobId    = job.id ?? "unknown";
       // sellerId is expected in job.data — never log tokens or URLs
@@ -136,6 +180,9 @@ async function bootstrap() {
 =======
       await statsSyncProcessor(job, prisma, statsProvider);
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1
+=======
+      await statsSyncProcessor(job, prisma, statsProvider);
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
     },
     {
       connection: connection as any,
@@ -143,6 +190,7 @@ async function bootstrap() {
     },
   );
 
+<<<<<<< HEAD
 <<<<<<< HEAD
   worker.on("completed", (job) => {
     log("info", "Job marked completed", { jobId: job.id });
@@ -169,6 +217,16 @@ async function bootstrap() {
     console.error(`[Worker] Job ${job?.id} (${job?.name}) failed:`, err.message);
   });
 
+=======
+  worker.on('completed', (job) => {
+    console.log(`[Worker] Job ${job.id} (${job.name}) completed`);
+  });
+
+  worker.on('failed', (job, err) => {
+    console.error(`[Worker] Job ${job?.id} (${job?.name}) failed:`, err.message);
+  });
+
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   worker.on('error', (err) => {
     console.error('[Worker] Worker error:', err.message);
   });
@@ -441,12 +499,16 @@ async function bootstrap() {
     `${EMAIL_SCHEDULER_QUEUE_NAME} (concurrency: 1), ` +
     `${LIFECYCLE_SCHEDULER_QUEUE_NAME} (concurrency: 1)`,
   );
+<<<<<<< HEAD
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
+=======
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 bootstrap().catch((err) => {
+<<<<<<< HEAD
 <<<<<<< HEAD
   process.stdout.write(
     JSON.stringify({
@@ -457,6 +519,9 @@ bootstrap().catch((err) => {
       errorMsg: (err as Error).message,
     }) + "\n",
   );
+=======
+  console.error('[Worker] Failed to start:', err);
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 =======
   console.error('[Worker] Failed to start:', err);
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1

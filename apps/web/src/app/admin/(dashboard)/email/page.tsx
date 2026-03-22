@@ -61,9 +61,22 @@ interface RecoveryStats {
 }
 
 export default function EmailDashboardPage() {
+<<<<<<< HEAD
   const { data: overview, loading: loadingOverview, error: errorOverview } = useAdminApi<EmailOverview>('/email-analytics/overview');
   const { data: flowsData, loading: loadingFlows } = useAdminApi<{ flows: FlowStats[] } | FlowStats[]>('/email-analytics/flows');
   const { data: recovery, loading: loadingRecovery } = useAdminApi<RecoveryStats>('/email-analytics/recovery');
+=======
+  // Default date range: last 30 days → now (ISO 8601)
+  const dateRange = useMemo(() => {
+    const to = new Date();
+    const from = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return `from=${from.toISOString()}&to=${to.toISOString()}`;
+  }, []);
+
+  const { data: overview, loading: loadingOverview, error: errorOverview } = useAdminApi<EmailOverview>(`/email-analytics/overview?${dateRange}`);
+  const { data: flowsData, loading: loadingFlows } = useAdminApi<{ flows: FlowStats[] } | FlowStats[]>(`/email-analytics/flows?${dateRange}`);
+  const { data: recovery, loading: loadingRecovery } = useAdminApi<RecoveryStats>(`/email-analytics/recovery?${dateRange}`);
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 
   const loading = loadingOverview || loadingFlows || loadingRecovery;
 

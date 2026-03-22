@@ -30,6 +30,24 @@ export class AdminService {
     private readonly r2: R2Service,
   ) {}
 
+<<<<<<< HEAD
+=======
+  // ─── SELLERS LIST (lightweight, for dropdowns) ─────────────────────────────
+
+  /**
+   * Returns a simple list of all active sellers: { id, name, slug }.
+   * Used by the SellerSwitcher dropdown for SUPERADMIN users.
+   */
+  async sellersListSimple(): Promise<{ id: string; name: string; slug: string }[]> {
+    const sellers = await this.prisma.seller.findMany({
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, slug: true },
+      orderBy: { name: 'asc' },
+    });
+    return sellers;
+  }
+
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
   // ─── DASHBOARD ──────────────────────────────────────────────────────────────
 
   async getDashboard(): Promise<any> {
@@ -1228,7 +1246,11 @@ export class AdminService {
         name: dto.name,
         type: dto.type,
         status: dto.status ?? 'ACTIVE',
+<<<<<<< HEAD
         environment: dto.environment ?? 'sandbox',
+=======
+        environment: 'live',
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
         credentials: (dto.credentials ?? {}) as any,
       },
     });

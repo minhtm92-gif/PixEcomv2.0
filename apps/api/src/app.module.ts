@@ -1,7 +1,15 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+=======
+import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
+import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { EmailModule } from './email/email.module';
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 =======
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
@@ -29,14 +37,20 @@ import { ProductsModule } from './products/products.module';
 import { SellerModule } from './seller/seller.module';
 import { SellpagesModule } from './sellpages/sellpages.module';
 <<<<<<< HEAD
+<<<<<<< HEAD
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 =======
+=======
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 import { StorefrontModule } from './storefront/storefront.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { PaymentGatewaysModule } from './payment-gateways/payment-gateways.module';
 import { WebhookOutboundModule } from './webhook-outbound/webhook-outbound.module';
 import { InternalModule } from './internal/internal.module';
 import { EmailMarketingModule } from './email-marketing/email-marketing.module';
+<<<<<<< HEAD
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
+=======
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1
 
 @Module({
@@ -46,7 +60,11 @@ import { EmailMarketingModule } from './email-marketing/email-marketing.module';
       envFilePath: '../../.env',
     }),
 <<<<<<< HEAD
+<<<<<<< HEAD
     ScheduleModule.forRoot(),
+=======
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
+>>>>>>> feature/2.4.2-alpha-ads-seed-v1
 =======
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 20 }]),
 >>>>>>> feature/2.4.2-alpha-ads-seed-v1
