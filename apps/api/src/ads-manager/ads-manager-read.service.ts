@@ -31,19 +31,21 @@ interface StorefrontFunnel {
 
 /**
  * SQL fragment to exclude Meta link preview crawler IPs.
- * Detects bots PER CALENDAR DAY: any ip_hash with >50 distinct sessions
- * on a single day is excluded. This prevents multi-day accumulation from
- * falsely filtering real users who share Facebook's proxy IPs.
+ * Uses a correlated check: for each event's own calendar day, if that IP
+ * had >50 sessions on THAT SAME DAY, exclude it. An IP that was a bot
+ * yesterday but has normal traffic today will NOT be filtered today.
+ * Uses the outer table alias (must be "se" or no alias for simple queries).
  */
-function botExclude(sellerId: string): string {
-  return `AND (ip_hash IS NULL OR ip_hash NOT IN (
-    SELECT ip_hash FROM (
-      SELECT ip_hash, DATE(created_at) as d,
-        COUNT(DISTINCT COALESCE(session_id, id::text)) as sess
+function botExclude(sellerId: string, tableAlias = ''): string {
+  const ref = tableAlias ? `${tableAlias}.` : '';
+  return `AND (${ref}ip_hash IS NULL OR NOT EXISTS (
+    SELECT 1 FROM (
+      SELECT ip_hash, DATE(created_at) as d
       FROM storefront_events
       WHERE seller_id = '${sellerId}' AND ip_hash IS NOT NULL
       GROUP BY ip_hash, DATE(created_at)
-    ) daily WHERE daily.sess > 50
+      HAVING COUNT(DISTINCT COALESCE(session_id, id::text)) > 50
+    ) bot WHERE bot.ip_hash = ${ref}ip_hash AND bot.d = DATE(${ref}created_at)
   ))`;
 }
 
@@ -191,7 +193,7 @@ export class AdsManagerReadService {
         WHERE se."seller_id" = '${sellerId}'
           AND se."utm_campaign" IN (${campaignIds.map(id => `'${id}'`).join(',')})
           ${dateWhere}
-          ${botExclude(sellerId)}
+          ${botExclude(sellerId, 'se')}
         GROUP BY se."utm_campaign", se."event_type"
       `);
 
