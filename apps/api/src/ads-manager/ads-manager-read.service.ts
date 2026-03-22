@@ -1064,14 +1064,14 @@ export class AdsManagerReadService {
       Array<{ hour_num: string; event_type: string; unique_count: string; total_value: string }>
     >(
       `SELECT
-         EXTRACT(HOUR FROM created_at AT TIME ZONE $3)::int AS hour_num,
+         EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::int AS hour_num,
          event_type,
          COUNT(DISTINCT COALESCE(session_id, id::text)) AS unique_count,
          COALESCE(SUM(value), 0) AS total_value
        FROM storefront_events
        WHERE seller_id = $1::uuid AND created_at >= $2
          ${botExclude(sellerId)}
-       GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE $3), event_type
+       GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC' AT TIME ZONE $3), event_type
        ORDER BY hour_num`,
       sellerId,
       todayStartUtc,
@@ -1083,13 +1083,13 @@ export class AdsManagerReadService {
       Array<{ hour_num: string; order_count: string; total_revenue: string }>
     >(
       `SELECT
-         EXTRACT(HOUR FROM created_at AT TIME ZONE $3)::int AS hour_num,
+         EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)::int AS hour_num,
          COUNT(*) AS order_count,
          COALESCE(SUM(total), 0) AS total_revenue
        FROM orders
        WHERE seller_id = $1::uuid AND created_at >= $2
          AND status IN ('CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
-       GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE $3)`,
+       GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE 'UTC' AT TIME ZONE $3)`,
       sellerId,
       todayStartUtc,
       tz,
