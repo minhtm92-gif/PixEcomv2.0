@@ -9,6 +9,7 @@ import { KpiCard } from '@/components/KpiCard';
 import { DataTable, type Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
 import { moneyWhole, num, pct, today, daysAgo } from '@/lib/format';
+import { SellerSwitcher } from '@/components/SellerSwitcher';
 import type { CampaignsResponse, Campaign, SellpagesListResponse, SellpageListItem } from '@/types/api';
 
 const DATE_PRESETS = [
@@ -25,13 +26,15 @@ export default function AnalyticsPage() {
   const [dateFrom, setDateFrom] = useState(daysAgo(30));
   const [dateTo, setDateTo] = useState(today());
   const [activePreset, setActivePreset] = useState('30d');
+  const [sellerIdOverride, setSellerIdOverride] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const sellerParam = sellerIdOverride ? `&sellerId=${sellerIdOverride}` : '';
     try {
       const [campaignsRes, sellpagesRes] = await Promise.all([
-        apiGet<CampaignsResponse>(`/ads-manager/campaigns?dateFrom=${dateFrom}&dateTo=${dateTo}`),
+        apiGet<CampaignsResponse>(`/ads-manager/campaigns?dateFrom=${dateFrom}&dateTo=${dateTo}${sellerParam}`),
         apiGet<SellpagesListResponse>('/sellpages?page=1&limit=10'),
       ]);
       setCampaigns(campaignsRes);
@@ -43,7 +46,7 @@ export default function AnalyticsPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, sellerIdOverride]);
 
   useEffect(() => {
     fetchData();
@@ -86,6 +89,7 @@ export default function AnalyticsPage() {
       subtitle="Performance overview"
       icon={<BarChart3 size={22} />}
     >
+      <SellerSwitcher onSellerChange={setSellerIdOverride} />
       {/* Date presets */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {DATE_PRESETS.map((p) => (
