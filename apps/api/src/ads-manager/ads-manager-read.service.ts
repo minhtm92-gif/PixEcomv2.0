@@ -27,6 +27,23 @@ interface StorefrontFunnel {
   purchaseValue: number;
 }
 
+// ─── Bot Filter ──────────────────────────────────────────────────────────────
+
+/**
+ * SQL fragment to exclude Meta link preview crawler IPs.
+ * Any ip_hash with >10 distinct sessions in a given date range is a bot.
+ * @param sellerId - seller UUID
+ * @param dateExpr - SQL date filter e.g. `AND "created_at" >= '2026-03-22T00:00:00Z'`
+ * @param alias - table alias (default: outer table reference)
+ */
+function botExclude(sellerId: string, dateExpr: string): string {
+  return `AND (ip_hash IS NULL OR ip_hash NOT IN (
+    SELECT ip_hash FROM storefront_events
+    WHERE seller_id = '${sellerId}' AND ip_hash IS NOT NULL ${dateExpr}
+    GROUP BY ip_hash HAVING COUNT(DISTINCT COALESCE(session_id, id::text)) > 10
+  ))`;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -154,11 +171,14 @@ export class AdsManagerReadService {
     if (dateRange.lte) createdAtFilter.lte = dateRange.lte;
 
     // Query StorefrontEvent counting UNIQUE sessions per campaign+event.
-    // Uses session_id (unique per browser visit) instead of ip_hash to avoid
-    // over-deduplication — multiple real users on the same IP (e.g. household)
-    // each get their own session. Falls back to event ID if no session.
+    // Excludes bot IPs: any ip_hash with >10 distinct sessions in the date range
+    // is considered a Meta link preview crawler and filtered out.
     const dateWhere = Object.keys(createdAtFilter).length > 0
       ? `AND se."created_at" >= '${createdAtFilter.gte?.toISOString() ?? ''}' ${createdAtFilter.lte ? `AND se."created_at" <= '${createdAtFilter.lte.toISOString()}'` : ''}`
+      : '';
+
+    const botDateWhere = Object.keys(createdAtFilter).length > 0
+      ? `AND "created_at" >= '${createdAtFilter.gte?.toISOString() ?? ''}' ${createdAtFilter.lte ? `AND "created_at" <= '${createdAtFilter.lte.toISOString()}'` : ''}`
       : '';
 
     const eventRows: Array<{ utm_campaign: string; event_type: string; unique_count: string; total_value: string | null }> =
@@ -172,6 +192,13 @@ export class AdsManagerReadService {
         WHERE se."seller_id" = '${sellerId}'
           AND se."utm_campaign" IN (${campaignIds.map(id => `'${id}'`).join(',')})
           ${dateWhere}
+          AND (se."ip_hash" IS NULL OR se."ip_hash" NOT IN (
+            SELECT "ip_hash" FROM "storefront_events"
+            WHERE "seller_id" = '${sellerId}' AND "ip_hash" IS NOT NULL
+              ${botDateWhere}
+            GROUP BY "ip_hash"
+            HAVING COUNT(DISTINCT COALESCE("session_id", "id"::text)) > 10
+          ))
         GROUP BY se."utm_campaign", se."event_type"
       `);
 
@@ -647,6 +674,7 @@ export class AdsManagerReadService {
          WHERE seller_id = $1::uuid
            AND created_at >= $2
            ${sellpageId ? `AND sellpage_id = '${sellpageId}'` : ''}
+           ${botExclude(sellerId, `AND created_at >= '${todayMidnight.toISOString()}'`)}
          GROUP BY event_type`,
         sellerId,
         todayMidnight,
@@ -723,6 +751,7 @@ export class AdsManagerReadService {
            AND created_at >= $2
            AND utm_campaign IS NOT NULL
            ${sellpageId ? `AND sellpage_id = '${sellpageId}'` : ''}
+           ${botExclude(sellerId, `AND created_at >= '${todayMidnight.toISOString()}'`)}
          GROUP BY utm_campaign, event_type`,
         sellerId,
         todayMidnight,
@@ -858,6 +887,7 @@ export class AdsManagerReadService {
               COALESCE(SUM(value), 0) as total_value
        FROM storefront_events
        WHERE seller_id = $1::uuid AND created_at >= $2
+         ${botExclude(sellerId, `AND created_at >= '${since.toISOString()}'`)}
        GROUP BY DATE(created_at), event_type
        ORDER BY stat_date DESC`,
       sellerId,
@@ -1045,6 +1075,7 @@ export class AdsManagerReadService {
          COALESCE(SUM(value), 0) AS total_value
        FROM storefront_events
        WHERE seller_id = $1::uuid AND created_at >= $2
+         ${botExclude(sellerId, `AND created_at >= '${todayStartUtc.toISOString()}'`)}
        GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE $3), event_type
        ORDER BY hour_num`,
       sellerId,
