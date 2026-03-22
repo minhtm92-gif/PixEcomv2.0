@@ -305,9 +305,9 @@ export class EmailAnalyticsService {
         AND ej.created_at >= $2
         AND ej.created_at <= $3
         AND ej.status IN ('SENT','DELIVERED','OPENED','CLICKED')
-      GROUP BY email_number
-      HAVING email_number IS NOT NULL
-      ORDER BY email_number
+      GROUP BY CAST(NULLIF(regexp_replace(ej.flow_id, '^cart_recovery_', ''), ej.flow_id) AS int)
+      HAVING CAST(NULLIF(regexp_replace(ej.flow_id, '^cart_recovery_', ''), ej.flow_id) AS int) IS NOT NULL
+      ORDER BY 1
       `,
         sellerId,
         from,
