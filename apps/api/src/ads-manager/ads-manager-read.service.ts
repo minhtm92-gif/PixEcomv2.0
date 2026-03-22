@@ -620,9 +620,19 @@ export class AdsManagerReadService {
   // ── Live Preview ─────────────────────────────────────────────────────────
 
   async getLivePreview(sellerId: string, sellpageId?: string) {
-    // Today since midnight — full-day view
-    const todayMidnight = new Date();
-    todayMidnight.setHours(0, 0, 0, 0);
+    // Today since midnight in seller's timezone
+    const settings = await this.prisma.sellerSettings.findUnique({
+      where: { sellerId },
+      select: { timezone: true },
+    });
+    const tz = settings?.timezone || 'UTC';
+    const nowUtc = new Date();
+    const todayStr = nowUtc.toLocaleDateString('en-CA', { timeZone: tz });
+    const utcMidnight = new Date(`${todayStr}T00:00:00Z`);
+    const sampleUtc = new Date(nowUtc.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const sampleLocal = new Date(nowUtc.toLocaleString('en-US', { timeZone: tz }));
+    const offsetMs = sampleLocal.getTime() - sampleUtc.getTime();
+    const todayMidnight = new Date(utcMidnight.getTime() - offsetMs);
 
     // Active visitors still uses 10-min sliding window (real-time indicator)
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
